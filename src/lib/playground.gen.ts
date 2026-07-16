@@ -3,6 +3,7 @@
 import type { PreviewModule } from "./types";
 
 export const previewModules: Record<string, () => Promise<PreviewModule>> = {
+  "agents/OmniAgentBar": () => import("../playground/agents/OmniAgentBar/preview.tsx"),
   "buttons/PrimaryButton": () => import("../playground/buttons/PrimaryButton/preview.tsx"),
   "feedback/PulseDot": () => import("../playground/feedback/PulseDot/preview.tsx"),
 };
