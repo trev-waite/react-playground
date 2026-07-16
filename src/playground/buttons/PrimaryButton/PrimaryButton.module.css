@@ -1,0 +1,40 @@
+.button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 1.15rem;
+  border: 0;
+  border-radius: 10px;
+  background: #1c2430;
+  color: #f7f8fa;
+  font: 600 0.9375rem/1.2 system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    transform 100ms ease-out,
+    background 120ms ease-out,
+    box-shadow 120ms ease-out;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 6px 16px rgba(28, 36, 48, 0.18);
+}
+
+.button:hover:not(:disabled) {
+  background: #2a3342;
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.button:focus-visible {
+  outline: 2px solid #2a5cff;
+  outline-offset: 3px;
+}

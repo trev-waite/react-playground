@@ -1,0 +1,12 @@
+.missing,
+.loading {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--shell-ink-muted);
+}
+
+.frame {
+  display: grid;
+  place-items: center;
+  max-width: 100%;
+}

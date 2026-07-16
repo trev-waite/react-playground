@@ -1,0 +1,60 @@
+:root {
+  /* Shell tokens — cool neutral canvas, not purple / cream cliché */
+  --shell-bg: #e8eaee;
+  --shell-bg-deep: #dde0e6;
+  --shell-dot: rgba(40, 48, 64, 0.14);
+  --shell-ink: #1c2430;
+  --shell-ink-muted: #5c6678;
+  --shell-ink-faint: #8b93a3;
+  --shell-accent: #2a5cff;
+  --shell-accent-soft: rgba(42, 92, 255, 0.12);
+  --shell-surface: rgba(255, 255, 255, 0.62);
+  --shell-surface-solid: #f4f5f7;
+  --shell-border: rgba(255, 255, 255, 0.55);
+  --shell-border-subtle: rgba(28, 36, 48, 0.08);
+  --shell-shadow: 0 12px 40px rgba(28, 36, 48, 0.12);
+  --shell-sidebar-width: 260px;
+  --shell-hotzone: 56px;
+  --shell-radius: 14px;
+  --shell-font: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+
+  color-scheme: light;
+  font-family: var(--shell-font);
+  font-size: 100%;
+  line-height: 1.5;
+  color: var(--shell-ink);
+  background-color: var(--shell-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  min-width: 320px;
+}
+
+button,
+a {
+  font: inherit;
+  color: inherit;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --shell-surface: var(--shell-surface-solid);
+  }
+}

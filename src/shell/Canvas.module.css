@@ -1,0 +1,40 @@
+.canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 10% 0%, #f0f2f6 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, #dce1ea 0%, transparent 50%),
+    var(--shell-bg);
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--shell-dot) 1px, transparent 1px);
+  background-size: 20px 20px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 35%, transparent 85%);
+}
+
+.stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 2.5rem;
+}
+
+.hint {
+  margin: 0;
+  max-width: 22rem;
+  text-align: center;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: var(--shell-ink-muted);
+}
