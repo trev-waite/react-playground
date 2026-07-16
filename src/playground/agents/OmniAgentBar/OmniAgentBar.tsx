@@ -9,29 +9,14 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import styles from "./OmniAgentBar.module.css";
 
-export type Message = {
+type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
 };
 
-export type ModelId = "omni-1" | "omni-fast" | "omni-max";
-export type ResponseMode = "concise" | "balanced" | "creative";
-
-export type OmniAgentBarProps = {
-  /** Force an initial visual state for demos / screenshots. */
-  initialExpanded?: boolean;
-  initialSettingsOpen?: boolean;
-  initialInput?: string;
-  initialLoading?: boolean;
-  initialModel?: ModelId;
-  initialMode?: ResponseMode;
-  initialMessages?: Message[];
-  /** Disable submit / collapse interactions (static preview frames). */
-  interactive?: boolean;
-  /** Stable attribute for screenshot targeting. */
-  previewId?: string;
-};
+type ModelId = "omni-1" | "omni-fast" | "omni-max";
+type ResponseMode = "concise" | "balanced" | "creative";
 
 const MODELS: { id: ModelId; label: string }[] = [
   { id: "omni-1", label: "Omni 1" },
@@ -45,32 +30,22 @@ const MODES: { id: ResponseMode; label: string }[] = [
   { id: "creative", label: "Creative" },
 ];
 
-export const FAKE_REPLY =
+const FAKE_REPLY =
   "Got it. I’ve sketched a clean path forward: keep the surface quiet, let motion carry the expand, and treat the send ring as the only color moment while thinking. Ready for the next instruction whenever you are.";
 
 /**
  * Portable Omni agent bar — copy with OmniAgentBar.module.css.
  * Collapses to a single input; expands to settings + transcript on send.
  */
-export function OmniAgentBar({
-  initialExpanded = false,
-  initialSettingsOpen = true,
-  initialInput = "",
-  initialLoading = false,
-  initialModel = "omni-1",
-  initialMode = "balanced",
-  initialMessages = [],
-  interactive = true,
-  previewId,
-}: OmniAgentBarProps = {}) {
+export function OmniAgentBar() {
   const formId = useId();
-  const [expanded, setExpanded] = useState(initialExpanded);
-  const [settingsOpen, setSettingsOpen] = useState(initialSettingsOpen);
-  const [input, setInput] = useState(initialInput);
-  const [loading, setLoading] = useState(initialLoading);
-  const [model, setModel] = useState<ModelId>(initialModel);
-  const [mode, setMode] = useState<ResponseMode>(initialMode);
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [expanded, setExpanded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(true);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [model, setModel] = useState<ModelId>("omni-1");
+  const [mode, setMode] = useState<ResponseMode>("balanced");
+  const [messages, setMessages] = useState<Message[]>([]);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,13 +55,12 @@ export function OmniAgentBar({
   }, [messages, loading]);
 
   function collapse() {
-    if (!interactive || loading) return;
+    if (loading) return;
     setExpanded(false);
   }
 
   async function handleSubmit(event?: FormEvent) {
     event?.preventDefault();
-    if (!interactive) return;
     const text = input.trim();
     if (!text || loading) return;
 
@@ -127,7 +101,6 @@ export function OmniAgentBar({
       className={styles.root}
       layout
       data-expanded={expanded}
-      data-preview={previewId}
       transition={{ type: "spring", stiffness: 380, damping: 34, mass: 0.85 }}
     >
       <AnimatePresence initial={false}>
@@ -135,7 +108,7 @@ export function OmniAgentBar({
           <motion.div
             key="panel"
             className={styles.panel}
-            initial={interactive ? { height: 0, opacity: 0 } : false}
+            initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ type: "spring", stiffness: 360, damping: 36 }}
@@ -151,10 +124,7 @@ export function OmniAgentBar({
                     type="button"
                     className={styles.ghostBtn}
                     aria-expanded={settingsOpen}
-                    onClick={() => {
-                      if (!interactive) return;
-                      setSettingsOpen(open => !open);
-                    }}
+                    onClick={() => setSettingsOpen(open => !open)}
                   >
                     Settings
                   </button>
@@ -162,7 +132,7 @@ export function OmniAgentBar({
                     type="button"
                     className={styles.ghostBtn}
                     onClick={collapse}
-                    disabled={!interactive || loading}
+                    disabled={loading}
                   >
                     Collapse
                   </button>
@@ -174,7 +144,7 @@ export function OmniAgentBar({
                   <motion.div
                     key="settings"
                     className={styles.settings}
-                    initial={interactive ? { height: 0, opacity: 0 } : false}
+                    initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -191,10 +161,7 @@ export function OmniAgentBar({
                               aria-checked={model === option.id}
                               className={styles.segmentBtn}
                               data-active={model === option.id}
-                              onClick={() => {
-                                if (!interactive) return;
-                                setModel(option.id);
-                              }}
+                              onClick={() => setModel(option.id)}
                             >
                               {option.label}
                             </button>
@@ -217,10 +184,7 @@ export function OmniAgentBar({
                               aria-checked={mode === option.id}
                               className={styles.segmentBtn}
                               data-active={mode === option.id}
-                              onClick={() => {
-                                if (!interactive) return;
-                                setMode(option.id);
-                              }}
+                              onClick={() => setMode(option.id)}
                             >
                               {option.label}
                             </button>
@@ -247,7 +211,7 @@ export function OmniAgentBar({
                           key={message.id}
                           className={styles.message}
                           data-role={message.role}
-                          initial={interactive ? { opacity: 0, y: 8 } : false}
+                          initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                         >
@@ -263,7 +227,7 @@ export function OmniAgentBar({
                           className={styles.message}
                           data-role="assistant"
                           data-pending="true"
-                          initial={interactive ? { opacity: 0, y: 8 } : false}
+                          initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.22 }}
@@ -298,23 +262,18 @@ export function OmniAgentBar({
           rows={1}
           placeholder="Ask Omni…"
           value={input}
-          onChange={event => {
-            if (!interactive) return;
-            setInput(event.target.value);
-          }}
+          onChange={event => setInput(event.target.value)}
           onFocus={() => {
-            if (!interactive) return;
             if (messages.length > 0) setExpanded(true);
           }}
           onKeyDown={onKeyDown}
-          disabled={!interactive || loading}
-          readOnly={!interactive}
+          disabled={loading}
         />
         <button
           type="submit"
           className={styles.send}
           data-loading={loading}
-          disabled={!interactive || loading || !input.trim()}
+          disabled={loading || !input.trim()}
           aria-label={loading ? "Sending" : "Send message"}
         >
           <span className={styles.sendRing} aria-hidden="true" />
