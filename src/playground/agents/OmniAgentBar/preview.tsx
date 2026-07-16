@@ -1,7 +1,7 @@
 import { OmniAgentBar } from "./OmniAgentBar";
 
 export const meta = {
-  title: "Omni Agent Bar",
+  title: "Agent Bar",
 };
 
 export default function OmniAgentBarPreview() {

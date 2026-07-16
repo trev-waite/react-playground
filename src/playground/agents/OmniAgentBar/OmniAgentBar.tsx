@@ -15,13 +15,13 @@ type Message = {
   content: string;
 };
 
-type ModelId = "omni-1" | "omni-fast" | "omni-max";
+type ModelId = "base" | "fast" | "max";
 type ResponseMode = "concise" | "balanced" | "creative";
 
 const MODELS: { id: ModelId; label: string }[] = [
-  { id: "omni-1", label: "Omni 1" },
-  { id: "omni-fast", label: "Omni Fast" },
-  { id: "omni-max", label: "Omni Max" },
+  { id: "base", label: "Base" },
+  { id: "fast", label: "Fast" },
+  { id: "max", label: "Max" },
 ];
 
 const MODES: { id: ResponseMode; label: string }[] = [
@@ -34,7 +34,7 @@ const FAKE_REPLY =
   "Got it. I’ve sketched a clean path forward: keep the surface quiet, let motion carry the expand, and treat the send ring as the only color moment while thinking. Ready for the next instruction whenever you are.";
 
 /**
- * Portable Omni agent bar — copy with OmniAgentBar.module.css.
+ * Portable agent bar — copy with OmniAgentBar.module.css.
  * Collapses to a single input; expands to settings + transcript on send.
  */
 export function OmniAgentBar() {
@@ -43,7 +43,7 @@ export function OmniAgentBar() {
   const [settingsOpen, setSettingsOpen] = useState(true);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState<ModelId>("omni-1");
+  const [model, setModel] = useState<ModelId>("base");
   const [mode, setMode] = useState<ResponseMode>("balanced");
   const [messages, setMessages] = useState<Message[]>([]);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -116,8 +116,7 @@ export function OmniAgentBar() {
             <div className={styles.panelInner}>
               <header className={styles.header}>
                 <div className={styles.brandBlock}>
-                  <span className={styles.brand}>Omni</span>
-                  <span className={styles.brandSub}>agent</span>
+                  <span className={styles.brand}>Agent</span>
                 </div>
                 <div className={styles.headerActions}>
                   <button
@@ -202,7 +201,7 @@ export function OmniAgentBar() {
                 aria-live="polite"
               >
                 {messages.length === 0 && !loading ? (
-                  <p className={styles.empty}>Send a message to see Omni respond.</p>
+                  <p className={styles.empty}>Send a message to see a response.</p>
                 ) : (
                   <ul className={styles.messageList}>
                     <AnimatePresence initial={false}>
@@ -216,7 +215,7 @@ export function OmniAgentBar() {
                           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                         >
                           <span className={styles.role}>
-                            {message.role === "user" ? "You" : "Omni"}
+                            {message.role === "user" ? "You" : "Agent"}
                           </span>
                           <p className={styles.messageBody}>{message.content}</p>
                         </motion.li>
@@ -232,7 +231,7 @@ export function OmniAgentBar() {
                           exit={{ opacity: 0 }}
                           transition={{ duration: 0.22 }}
                         >
-                          <span className={styles.role}>Omni</span>
+                          <span className={styles.role}>Agent</span>
                           <p className={styles.messageBody}>
                             <span className={styles.thinking}>Thinking</span>
                           </p>
@@ -252,15 +251,15 @@ export function OmniAgentBar() {
         className={styles.composer}
         onSubmit={event => void handleSubmit(event)}
       >
-        {!expanded && <span className={styles.compactBrand}>Omni</span>}
+        {!expanded && <span className={styles.compactBrand}>Agent</span>}
         <label className={styles.srOnly} htmlFor={`${formId}-input`}>
-          Message Omni
+          Message
         </label>
         <textarea
           id={`${formId}-input`}
           className={styles.input}
           rows={1}
-          placeholder="Ask Omni…"
+          placeholder="Ask…"
           value={input}
           onChange={event => setInput(event.target.value)}
           onFocus={() => {
