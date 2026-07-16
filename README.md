@@ -13,21 +13,43 @@ bun dev
 
 Open the URL printed in the terminal. Move the pointer to the **left edge** to open the component browser.
 
-| Script | Purpose |
-|--------|---------|
-| `bun dev` | Dev server (full page reload on save) |
-| `bun run build` | Static build → `dist/` |
-| `bun start` | Serve production build |
-
 ## Layout
 
 ```
-src/
-  playground/     ← your experiments (exportable)
-  shell/          ← playground chrome (not for export)
-  lib/discover.ts ← builds sidebar tree from playground.gen.ts
-  (scripts/sync-playground.ts scans folders → playground.gen.ts)
+.
+├── docs/                    # Project guidance and growth playbook
+├── scripts/                 # Dev tooling (registry sync + dev entry)
+├── src/
+│   ├── playground/          # Experiments — copy these into real apps
+│   ├── shell/               # Playground chrome (sidebar, canvas)
+│   └── lib/                 # Discovery + generated registry
+├── package.json
+└── tsconfig.json
 ```
+
+**`docs/`** — [BEST_PRACTICES.md](docs/BEST_PRACTICES.md): current stack conventions, how to add/export experiments, and a playbook for optional additions (routing, state, data fetching, tests).
+
+**`scripts/`** — Bun helpers that keep the sidebar in sync with the filesystem:
+
+| File | Purpose |
+|------|---------|
+| `sync-playground.ts` | Scans `src/playground/**/preview.tsx` and writes `src/lib/playground.gen.ts` |
+| `dev.ts` | Runs sync, watches for new previews, then starts the dev server |
+
+**`src/playground/`** — One folder per experiment: component + CSS Module + `preview.tsx`. Folder paths become sidebar groups and URL slugs.
+
+**`src/shell/`** — Figma-like stage, edge-reveal sidebar, routing glue. Not meant for export.
+
+**`src/lib/`** — `discover.ts` builds the sidebar tree; `playground.gen.ts` is auto-generated — don’t edit by hand.
+
+## Scripts
+
+| Command | Purpose |
+|---------|---------|
+| `bun dev` | Sync registry, watch for new `preview.tsx` files, start dev server |
+| `bun run sync:playground` | Regenerate `playground.gen.ts` once (useful if an experiment doesn’t appear) |
+| `bun run build` | Sync registry, then bundle static assets to `dist/` |
+| `bun start` | Serve the production build |
 
 Folder structure under `playground/` becomes the sidebar tree. Example:
 
