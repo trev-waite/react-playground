@@ -1,8 +1,8 @@
 # React Playground
 
-A minimal Bun + React playground for iterating on isolated web components and exporting them into real apps.
+A Bun + React workspace for building, previewing, and exporting isolated web components. Edit in code; the app renders your work on a full-bleed canvas with an edge-reveal sidebar for navigation.
 
-Edits are in code — this is not a WYSIWYG editor. The UI is a Figma-like stage with an edge-reveal sidebar so canvas space stays maximized.
+This is not a WYSIWYG editor. The shell provides a Figma-like preview surface; all component logic and styles live in source files under `src/playground/`.
 
 ## Quick start
 
@@ -11,66 +11,70 @@ bun install
 bun dev
 ```
 
-Open the URL printed in the terminal. Move the pointer to the **left edge** to open the component browser.
+Open the URL printed in the terminal. Move the pointer to the left edge of the screen to open the component browser.
 
-## Layout
+## Workflow
+
+### Add an experiment
+
+1. Create `src/playground/<group>/<Name>/`
+2. Add `Name.tsx` and `Name.module.css` (CSS Modules)
+3. Add `preview.tsx` with a default export
+
+With `bun dev` running, new `preview.tsx` files are registered automatically. If an experiment does not appear, run `bun run sync:playground`.
+
+Folder paths map directly to the sidebar and URL structure:
+
+- `src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+
+### Export to another app
+
+Copy the experiment folder into your target project. Keep the component file(s) and `*.module.css`; omit `preview.tsx` unless you want the demo harness. Do not import from `src/shell/` or `src/lib/` — those are playground-only.
+
+## Repository structure
 
 ```
 .
-├── docs/                    # Project guidance and growth playbook
-├── scripts/                 # Dev tooling (registry sync + dev entry)
+├── docs/                 # Conventions, export guide, growth playbook
+├── scripts/              # Registry sync and dev entry (invoked by local commands)
 ├── src/
-│   ├── playground/          # Experiments — copy these into real apps
-│   ├── shell/               # Playground chrome (sidebar, canvas)
-│   └── lib/                 # Discovery + generated registry
+│   ├── playground/       # Experiments — portable, exportable components
+│   ├── shell/            # Playground UI (sidebar, canvas, routing)
+│   └── lib/              # Discovery logic and generated registry
 ├── package.json
 └── tsconfig.json
 ```
 
-**`docs/`** — [BEST_PRACTICES.md](docs/BEST_PRACTICES.md): current stack conventions, how to add/export experiments, and a playbook for optional additions (routing, state, data fetching, tests).
+| Path | Description |
+|------|-------------|
+| [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) | Stack conventions, experiment patterns, and guidance for adding routing, state, data fetching, and tests later. |
+| `src/playground/` | One folder per experiment: component, CSS Module, and `preview.tsx`. |
+| `src/shell/` | Application chrome — not intended for export. |
+| `src/lib/discover.ts` | Builds the sidebar tree from the generated registry. |
+| `src/lib/playground.gen.ts` | Auto-generated lazy-import map. Do not edit manually. |
 
-**`scripts/`** — Bun helpers that keep the sidebar in sync with the filesystem:
+### `scripts/` internals
 
-| File | Purpose |
-|------|---------|
-| `sync-playground.ts` | Scans `src/playground/**/preview.tsx` and writes `src/lib/playground.gen.ts` |
-| `dev.ts` | Runs sync, watches for new previews, then starts the dev server |
+These files are called by [local commands](#local-commands), not run directly during normal development.
 
-**`src/playground/`** — One folder per experiment: component + CSS Module + `preview.tsx`. Folder paths become sidebar groups and URL slugs.
+| File | When it runs | What it does |
+|------|--------------|--------------|
+| `sync-playground.ts` | Start of `bun dev` and `bun run build`; on `preview.tsx` changes during dev; via `bun run sync:playground` | Scans `src/playground/**/preview.tsx` and writes `playground.gen.ts` |
+| `dev.ts` | `bun dev` only | Syncs the registry, watches for new previews, starts the dev server |
 
-**`src/shell/`** — Figma-like stage, edge-reveal sidebar, routing glue. Not meant for export.
+## Local commands
 
-**`src/lib/`** — `discover.ts` builds the sidebar tree; `playground.gen.ts` is auto-generated — don’t edit by hand.
-
-## Scripts
-
-| Command | Purpose |
-|---------|---------|
-| `bun dev` | Sync registry, watch for new `preview.tsx` files, start dev server |
-| `bun run sync:playground` | Regenerate `playground.gen.ts` once (useful if an experiment doesn’t appear) |
-| `bun run build` | Sync registry, then bundle static assets to `dist/` |
-| `bun start` | Serve the production build |
-
-Folder structure under `playground/` becomes the sidebar tree. Example:
-
-- `playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
-
-## Add an experiment
-
-1. Create `src/playground/<group>/<Name>/`
-2. Add `Name.tsx` + `Name.module.css` (CSS Modules)
-3. Add `preview.tsx` with a default export
-4. With `bun dev` running, new `preview.tsx` files are picked up automatically (or run `bun run sync:playground`)
-
-See [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md) for the full convention, export checklist, and “add later” playbook (Zustand, TanStack Query, tests, etc.).
-
-## Export
-
-Copy the experiment folder into another app. Keep the component + `.module.css`; drop `preview.tsx` if you don’t need the demo harness. Do not depend on `src/shell/`.
+| Command | Description |
+|---------|-------------|
+| `bun dev` | Development server with automatic registry sync |
+| `bun run sync:playground` | Regenerate `playground.gen.ts` once |
+| `bun run build` | Sync registry, then output a static build to `dist/` |
+| `bun start` | Serve the production build (`src/index.ts`) |
 
 ## Stack
 
-- React 19.2 + Bun
-- CSS Modules for experiments
-- React Router for shareable experiment URLs
-- Motion for the interruptible sidebar
+- **Runtime / bundler:** Bun
+- **UI:** React 19.2
+- **Experiment styles:** CSS Modules
+- **Routing:** React Router (shareable experiment URLs)
+- **Motion:** Motion (sidebar transitions)
