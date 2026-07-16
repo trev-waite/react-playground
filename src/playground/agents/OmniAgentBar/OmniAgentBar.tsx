@@ -1,4 +1,11 @@
-import { useId, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import styles from "./OmniAgentBar.module.css";
 
@@ -39,6 +46,13 @@ export function OmniAgentBar() {
   const [model, setModel] = useState<ModelId>("omni-1");
   const [mode, setMode] = useState<ResponseMode>("balanced");
   const [messages, setMessages] = useState<Message[]>([]);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = transcriptRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  }, [messages, loading]);
 
   function collapse() {
     if (loading) return;
@@ -182,31 +196,49 @@ export function OmniAgentBar() {
                 )}
               </AnimatePresence>
 
-              <div className={styles.transcript} aria-live="polite">
+              <div
+                ref={transcriptRef}
+                className={styles.transcript}
+                aria-live="polite"
+              >
                 {messages.length === 0 && !loading ? (
                   <p className={styles.empty}>Send a message to see Omni respond.</p>
                 ) : (
                   <ul className={styles.messageList}>
-                    {messages.map(message => (
-                      <li
-                        key={message.id}
-                        className={styles.message}
-                        data-role={message.role}
-                      >
-                        <span className={styles.role}>
-                          {message.role === "user" ? "You" : "Omni"}
-                        </span>
-                        <p className={styles.messageBody}>{message.content}</p>
-                      </li>
-                    ))}
-                    {loading && (
-                      <li className={styles.message} data-role="assistant" data-pending="true">
-                        <span className={styles.role}>Omni</span>
-                        <p className={styles.messageBody}>
-                          <span className={styles.thinking}>Thinking</span>
-                        </p>
-                      </li>
-                    )}
+                    <AnimatePresence initial={false}>
+                      {messages.map(message => (
+                        <motion.li
+                          key={message.id}
+                          className={styles.message}
+                          data-role={message.role}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <span className={styles.role}>
+                            {message.role === "user" ? "You" : "Omni"}
+                          </span>
+                          <p className={styles.messageBody}>{message.content}</p>
+                        </motion.li>
+                      ))}
+                      {loading && (
+                        <motion.li
+                          key="pending"
+                          className={styles.message}
+                          data-role="assistant"
+                          data-pending="true"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.22 }}
+                        >
+                          <span className={styles.role}>Omni</span>
+                          <p className={styles.messageBody}>
+                            <span className={styles.thinking}>Thinking</span>
+                          </p>
+                        </motion.li>
+                      )}
+                    </AnimatePresence>
                   </ul>
                 )}
               </div>
