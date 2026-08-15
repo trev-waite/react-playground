@@ -15,7 +15,6 @@
 .ghost {
   font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
   font-size: 92px;
-  dominant-baseline: alphabetic;
 }
 
 .fill {
@@ -31,13 +30,4 @@
   stroke: #111113;
   stroke-width: 0.7;
   opacity: 0.22;
-}
-
-.caption {
-  fill: #6e6e73;
-  font-family: "SF Pro Text", system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
 }

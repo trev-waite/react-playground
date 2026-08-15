@@ -34,10 +34,19 @@ export function ResetIcon(props: IconProps) {
   );
 }
 
-export function HeartIcon({ filled = false, ...props }: IconProps & { filled?: boolean }) {
+export function CopyIcon(props: IconProps) {
   return (
-    <svg {...base} fill={filled ? "currentColor" : "none"} {...props}>
-      <path d="M8 13.15S2.6 9.7 2.6 6.35A2.85 2.85 0 0 1 8 5.1a2.85 2.85 0 0 1 5.4 1.25C13.4 9.7 8 13.15 8 13.15Z" />
+    <svg {...base} {...props}>
+      <rect x="5.4" y="5.4" width="8" height="8" rx="1.5" />
+      <path d="M10.6 5.2V4.2A1.4 1.4 0 0 0 9.2 2.8H4.2A1.4 1.4 0 0 0 2.8 4.2v5a1.4 1.4 0 0 0 1.4 1.4h1" />
+    </svg>
+  );
+}
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.2 8.2 6.4 11.3 12.8 4.7" />
     </svg>
   );
 }

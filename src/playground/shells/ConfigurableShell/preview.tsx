@@ -1,7 +1,14 @@
+/**
+ * Demo harness. To experiment with a different component:
+ * 1. Render it as children of ConfigurableShell
+ * 2. Drive it with `controls` / `actions`
+ * 3. Pass `getExportCode` that returns that component's source at the current values
+ */
 import { useMemo, useState } from "react";
 import { ConfigurableShell, linearScale } from "./ConfigurableShell";
-import { HeartIcon, ResetIcon, SlidersIcon } from "./icons";
-import { TypeSpecimen } from "./TypeSpecimen";
+import { ExamplePreview } from "./ExamplePreview";
+import { exportExampleCode } from "./exportExample";
+import { ResetIcon, SlidersIcon } from "./icons";
 
 export const meta = {
   title: "Configurable Shell",
@@ -17,7 +24,6 @@ export default function ConfigurableShellPreview() {
   const [tracking, setTracking] = useState(DEFAULTS.tracking);
   const [weight, setWeight] = useState(DEFAULTS.weight);
   const [shift, setShift] = useState(DEFAULTS.shift);
-  const [saved, setSaved] = useState(false);
   const [panning, setPanning] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -32,7 +38,6 @@ export default function ConfigurableShellPreview() {
           setTracking(8 + Math.round(Math.random() * 84));
           setWeight(20 + Math.round(Math.random() * 70));
           setShift(8 + Math.round(Math.random() * 60));
-          setSaved(false);
         },
       },
       {
@@ -44,18 +49,10 @@ export default function ConfigurableShellPreview() {
           setWeight(DEFAULTS.weight);
           setShift(DEFAULTS.shift);
           setOffset({ x: 0, y: 0 });
-          setSaved(false);
         },
       },
-      {
-        id: "save",
-        label: "Save",
-        icon: <HeartIcon filled={saved} />,
-        pressed: saved,
-        onClick: () => setSaved(value => !value),
-      },
     ],
-    [saved],
+    [],
   );
 
   const controls = useMemo(
@@ -89,13 +86,14 @@ export default function ConfigurableShellPreview() {
     <ConfigurableShell
       actions={actions}
       controls={controls}
+      getExportCode={() => exportExampleCode(tracking, weight, shift, offset)}
       onMove={() => setPanning(value => !value)}
       movePressed={panning}
       onExpand={() => setExpanded(value => !value)}
       expandPressed={expanded}
       expanded={expanded}
     >
-      <TypeSpecimen
+      <ExamplePreview
         tracking={tracking}
         weight={weight}
         shift={shift}

@@ -1,9 +1,11 @@
-import type { ReactNode } from "react";
-import { ExpandIcon, MoveIcon } from "./icons";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CheckIcon, CopyIcon, ExpandIcon, MoveIcon } from "./icons";
+import { exportControlValues } from "./exportControlValues";
 import { ProximityControl, type ShellControl } from "./ProximityControl";
 import styles from "./ConfigurableShell.module.css";
 
 const DEFAULT_BAR_COUNT = 39;
+const COPIED_MS = 1600;
 
 export type ShellAction = {
   id: string;
@@ -19,6 +21,11 @@ export type ConfigurableShellProps = {
   actions?: readonly ShellAction[];
   controls?: readonly ShellControl[];
   barCount?: number;
+  /**
+   * Returns source for whatever is currently in the preview.
+   * The shell copies this string; it has no knowledge of the preview component.
+   */
+  getExportCode?: () => string;
   onMove?: () => void;
   movePressed?: boolean;
   onExpand?: () => void;
@@ -31,16 +38,45 @@ export type { ShellControl };
 export type { ValueScale } from "./scales";
 export { linearScale, logScale } from "./scales";
 export { ProximityControl } from "./ProximityControl";
+export { exportControlValues };
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to execCommand.
+  }
+
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.setAttribute("readonly", "");
+    el.style.position = "fixed";
+    el.style.left = "-9999px";
+    document.body.append(el);
+    el.select();
+    const ok = document.execCommand("copy");
+    el.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Portable configurator card — copy this folder (omit preview.tsx / TypeSpecimen.*)
- * into another app. Preview content, actions, and controls are all passed in.
+ * Portable configurator. Pass preview children, actions, controls, and
+ * `getExportCode`. Copy is built in. Omit preview.tsx / ExamplePreview.* /
+ * exportExample.* when taking the shell into another app.
  */
 export function ConfigurableShell({
   children,
   actions = [],
   controls = [],
   barCount = DEFAULT_BAR_COUNT,
+  getExportCode,
   onMove,
   movePressed,
   onExpand,
@@ -49,6 +85,23 @@ export function ConfigurableShell({
   className,
 }: ConfigurableShellProps) {
   const rootClass = className ? `${styles.root} ${className}` : styles.root;
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  async function onCopy() {
+    const code = getExportCode ? getExportCode() : exportControlValues(controls);
+    const ok = await copyToClipboard(code);
+    if (!ok) return;
+    setCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
+  }
 
   return (
     <section
@@ -93,23 +146,29 @@ export function ConfigurableShell({
       </div>
 
       <div className={styles.body}>
-        {actions.length > 0 ? (
-          <div className={styles.actions}>
-            {actions.map(action => (
-              <button
-                key={action.id}
-                type="button"
-                className={styles.action}
-                onClick={action.onClick}
-                disabled={action.disabled}
-                aria-pressed={action.pressed}
-              >
-                {action.icon ? <span className={styles.actionIcon}>{action.icon}</span> : null}
-                <span>{action.label}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
+        <div className={styles.actions}>
+          {actions.map(action => (
+            <button
+              key={action.id}
+              type="button"
+              className={styles.action}
+              onClick={action.onClick}
+              disabled={action.disabled}
+              aria-pressed={action.pressed}
+            >
+              {action.icon ? <span className={styles.actionIcon}>{action.icon}</span> : null}
+              <span>{action.label}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className={styles.copy}
+            aria-label={copied ? "Copied component" : "Copy component"}
+            onClick={onCopy}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+          </button>
+        </div>
 
         {controls.length > 0 ? (
           <div className={styles.controls}>

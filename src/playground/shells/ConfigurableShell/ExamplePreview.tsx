@@ -1,10 +1,12 @@
 /**
- * Demo-only preview visual. Omit this file when exporting ConfigurableShell.
+ * Demo-only preview content. Replace this file when experimenting with a
+ * different component inside ConfigurableShell.
  */
 import { useRef, type PointerEvent } from "react";
-import styles from "./TypeSpecimen.module.css";
+import { exampleMetrics } from "./exportExample";
+import styles from "./ExamplePreview.module.css";
 
-export type TypeSpecimenProps = {
+type ExamplePreviewProps = {
   tracking: number;
   weight: number;
   shift: number;
@@ -13,24 +15,20 @@ export type TypeSpecimenProps = {
   onOffsetChange: (offset: { x: number; y: number }) => void;
 };
 
-export function TypeSpecimen({
+export function ExamplePreview({
   tracking,
   weight,
   shift,
   panEnabled = false,
   offset,
   onOffsetChange,
-}: TypeSpecimenProps) {
+}: ExamplePreviewProps) {
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
-
-  const letterSpacing = -0.09 + (tracking / 100) * 0.32;
-  const fontWeight = 400 + Math.round((weight / 100) * 400);
-  const stroke = 0.7 + (weight / 100) * 2.1;
-  const ghostX = (shift / 100) * 14;
-  const ghostY = (shift / 100) * 5.5;
-  const panX = offset.x * 0.35;
-  const panY = offset.y * 0.35;
-  const rule = 52 + (tracking / 100) * 86;
+  const m = exampleMetrics(tracking, weight, shift, offset);
+  const typeStyle = {
+    letterSpacing: `${m.letterSpacing}em`,
+    fontWeight: m.fontWeight,
+  };
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!panEnabled || event.button !== 0) return;
@@ -60,39 +58,36 @@ export function TypeSpecimen({
       onPointerCancel={onPointerUp}
     >
       <svg className={styles.svg} viewBox="0 0 420 280" aria-hidden="true">
-        <g transform={`translate(${panX} ${panY})`}>
+        <g transform={`translate(${m.panX} ${m.panY})`}>
           <text
             className={styles.ghost}
             x="210"
-            y="142"
+            y="152"
             textAnchor="middle"
             fill="none"
             stroke="#111113"
-            strokeWidth={stroke}
-            transform={`translate(${ghostX} ${ghostY})`}
-            style={{ letterSpacing: `${letterSpacing}em`, fontWeight }}
+            strokeWidth={m.stroke}
+            transform={`translate(${m.ghostX} ${m.ghostY})`}
+            style={typeStyle}
           >
-            Quiet
+            Aa
           </text>
           <text
             className={styles.fill}
             x="210"
-            y="142"
+            y="152"
             textAnchor="middle"
-            style={{ letterSpacing: `${letterSpacing}em`, fontWeight }}
+            style={typeStyle}
           >
-            Quiet
+            Aa
           </text>
           <line
             className={styles.rule}
-            x1={210 - rule / 2}
-            y1="168"
-            x2={210 + rule / 2}
-            y2="168"
+            x1={210 - m.rule / 2}
+            y1="178"
+            x2={210 + m.rule / 2}
+            y2="178"
           />
-          <text className={styles.caption} x="210" y="192" textAnchor="middle">
-            Specimen
-          </text>
         </g>
       </svg>
     </div>

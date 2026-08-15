@@ -14,13 +14,19 @@ const DEFAULT_MAX = 100;
 const MIN_BAR_SCALE = 0.12;
 const SIGMA_RATIO = 0.085;
 
-export type ShellControl = ValueScale & {
+export type ShellControl = {
   id: string;
   label: string;
   value: number;
   onChange: (value: number) => void;
   barCount?: number;
   disabled?: boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  toValue?: ValueScale["toValue"];
+  fromValue?: ValueScale["fromValue"];
+  format?: ValueScale["format"];
 };
 
 type ProximityControlProps = {

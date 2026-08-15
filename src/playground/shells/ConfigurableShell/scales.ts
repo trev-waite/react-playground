@@ -9,15 +9,15 @@ export type ValueScale = {
   format?: (value: number) => string;
 };
 
-export function clamp(n: number, min: number, max: number): number {
+function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-export function lerp(a: number, b: number, t: number): number {
+function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-export function unlerp(a: number, b: number, value: number): number {
+function unlerp(a: number, b: number, value: number): number {
   if (a === b) return 0;
   return (value - a) / (b - a);
 }
@@ -29,11 +29,11 @@ export function applyStep(value: number, min: number, max: number, step?: number
   return clamp(stepped, min, max);
 }
 
-export function defaultToValue(min: number, max: number, t: number): number {
+function defaultToValue(min: number, max: number, t: number): number {
   return lerp(min, max, clamp(t, 0, 1));
 }
 
-export function defaultFromValue(min: number, max: number, value: number): number {
+function defaultFromValue(min: number, max: number, value: number): number {
   return clamp(unlerp(min, max, value), 0, 1);
 }
 
