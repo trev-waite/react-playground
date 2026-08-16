@@ -67,3 +67,11 @@ export function ExpandIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function CollapseIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M13 6.3H9.7V3.2M3.2 9.7H6.5v3.1M9.7 6.3 13.2 2.8M6.5 9.7 2.8 13.2" />
+    </svg>
+  );
+}

@@ -15,15 +15,15 @@ export const meta = {
 };
 
 const DEFAULTS = {
-  tracking: 40,
-  weight: 62,
-  shift: 28,
+  form: 46,
+  soft: 58,
+  drift: 36,
 };
 
 export default function ConfigurableShellPreview() {
-  const [tracking, setTracking] = useState(DEFAULTS.tracking);
-  const [weight, setWeight] = useState(DEFAULTS.weight);
-  const [shift, setShift] = useState(DEFAULTS.shift);
+  const [form, setForm] = useState(DEFAULTS.form);
+  const [soft, setSoft] = useState(DEFAULTS.soft);
+  const [drift, setDrift] = useState(DEFAULTS.drift);
   const [panning, setPanning] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -35,9 +35,9 @@ export default function ConfigurableShellPreview() {
         label: "Randomize",
         icon: <SlidersIcon />,
         onClick: () => {
-          setTracking(8 + Math.round(Math.random() * 84));
-          setWeight(20 + Math.round(Math.random() * 70));
-          setShift(8 + Math.round(Math.random() * 60));
+          setForm(12 + Math.round(Math.random() * 80));
+          setSoft(18 + Math.round(Math.random() * 70));
+          setDrift(8 + Math.round(Math.random() * 72));
         },
       },
       {
@@ -45,9 +45,9 @@ export default function ConfigurableShellPreview() {
         label: "Reset",
         icon: <ResetIcon />,
         onClick: () => {
-          setTracking(DEFAULTS.tracking);
-          setWeight(DEFAULTS.weight);
-          setShift(DEFAULTS.shift);
+          setForm(DEFAULTS.form);
+          setSoft(DEFAULTS.soft);
+          setDrift(DEFAULTS.drift);
           setOffset({ x: 0, y: 0 });
         },
       },
@@ -58,35 +58,35 @@ export default function ConfigurableShellPreview() {
   const controls = useMemo(
     () => [
       {
-        id: "tracking",
-        label: "Tracking",
-        value: tracking,
-        onChange: setTracking,
+        id: "form",
+        label: "Form",
+        value: form,
+        onChange: setForm,
         ...linearScale(0, 100, 1),
       },
       {
-        id: "weight",
-        label: "Weight",
-        value: weight,
-        onChange: setWeight,
+        id: "soft",
+        label: "Soft",
+        value: soft,
+        onChange: setSoft,
         ...linearScale(0, 100, 1),
       },
       {
-        id: "shift",
-        label: "Shift",
-        value: shift,
-        onChange: setShift,
+        id: "drift",
+        label: "Drift",
+        value: drift,
+        onChange: setDrift,
         ...linearScale(0, 100, 1),
       },
     ],
-    [tracking, weight, shift],
+    [form, soft, drift],
   );
 
   return (
     <ConfigurableShell
       actions={actions}
       controls={controls}
-      getExportCode={() => exportExampleCode(tracking, weight, shift, offset)}
+      getExportCode={() => exportExampleCode(form, soft, drift, offset)}
       onMove={() => setPanning(value => !value)}
       movePressed={panning}
       onExpand={() => setExpanded(value => !value)}
@@ -94,9 +94,9 @@ export default function ConfigurableShellPreview() {
       expanded={expanded}
     >
       <ExamplePreview
-        tracking={tracking}
-        weight={weight}
-        shift={shift}
+        form={form}
+        soft={soft}
+        drift={drift}
         panEnabled={panning}
         offset={offset}
         onOffsetChange={setOffset}

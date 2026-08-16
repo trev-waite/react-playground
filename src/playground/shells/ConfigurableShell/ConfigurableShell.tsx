@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CheckIcon, CopyIcon, ExpandIcon, MoveIcon } from "./icons";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { CheckIcon, CollapseIcon, CopyIcon, ExpandIcon, MoveIcon } from "./icons";
 import { exportControlValues } from "./exportControlValues";
 import { ProximityControl, type ShellControl } from "./ProximityControl";
 import styles from "./ConfigurableShell.module.css";
 
 const DEFAULT_BAR_COUNT = 39;
 const COPIED_MS = 1600;
+const SWIPE_DISTANCE = 28;
+const SWIPE_VELOCITY = 0.32;
+const TAP_DISTANCE = 10;
 
 export type ShellAction = {
   id: string;
@@ -39,6 +42,27 @@ export type { ValueScale } from "./scales";
 export { linearScale, logScale } from "./scales";
 export { ProximityControl } from "./ProximityControl";
 export { exportControlValues };
+
+function IconSwap({
+  state,
+  a,
+  b,
+}: {
+  state: "a" | "b";
+  a: ReactNode;
+  b: ReactNode;
+}) {
+  return (
+    <span className={styles.iconSwap} data-state={state}>
+      <span className={styles.icon} data-icon="a" aria-hidden="true">
+        {a}
+      </span>
+      <span className={styles.icon} data-icon="b" aria-hidden="true">
+        {b}
+      </span>
+    </span>
+  );
+}
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -87,6 +111,13 @@ export function ConfigurableShell({
   const rootClass = className ? `${styles.root} ${className}` : styles.root;
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipHandleClick = useRef(false);
+  const swipe = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startT: number;
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -103,12 +134,51 @@ export function ConfigurableShell({
     copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
   }
 
+  function onHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    if (!onExpand || event.button !== 0 || swipe.current) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    swipe.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startT: event.timeStamp,
+    };
+  }
+
+  function onHandlePointerUp(event: PointerEvent<HTMLButtonElement>) {
+    const gesture = swipe.current;
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    swipe.current = null;
+
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    const vy = dy / Math.max(event.timeStamp - gesture.startT, 1);
+    const tap = Math.abs(dx) < TAP_DISTANCE && Math.abs(dy) < TAP_DISTANCE;
+    const vertical = Math.abs(dy) >= Math.abs(dx);
+    const expandSwipe = !expanded && vertical && (dy <= -SWIPE_DISTANCE || vy <= -SWIPE_VELOCITY);
+    const collapseSwipe = expanded && vertical && (dy >= SWIPE_DISTANCE || vy >= SWIPE_VELOCITY);
+
+    if (tap || expandSwipe || collapseSwipe) {
+      skipHandleClick.current = true;
+      onExpand?.();
+    }
+  }
+
+  function onHandleClick() {
+    if (skipHandleClick.current) {
+      skipHandleClick.current = false;
+      return;
+    }
+    onExpand?.();
+  }
+
   return (
-    <section
-      className={rootClass}
-      data-expanded={expanded ? "true" : undefined}
-      aria-label="Component configurator"
-    >
+    <div className={styles.host}>
+      <section
+        className={rootClass}
+        data-expanded={expanded ? "true" : undefined}
+        aria-label="Component configurator"
+      >
       <div
         className={styles.preview}
         data-panning={movePressed ? "true" : undefined}
@@ -138,46 +208,74 @@ export function ConfigurableShell({
                 aria-pressed={expandPressed}
                 onClick={onExpand}
               >
-                <ExpandIcon />
+                <IconSwap
+                  state={expandPressed ? "b" : "a"}
+                  a={<ExpandIcon />}
+                  b={<CollapseIcon />}
+                />
               </button>
             ) : null}
           </div>
         )}
       </div>
 
-      <div className={styles.body}>
-        <div className={styles.actions}>
-          {actions.map(action => (
-            <button
-              key={action.id}
-              type="button"
-              className={styles.action}
-              onClick={action.onClick}
-              disabled={action.disabled}
-              aria-pressed={action.pressed}
-            >
-              {action.icon ? <span className={styles.actionIcon}>{action.icon}</span> : null}
-              <span>{action.label}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            className={styles.copy}
-            aria-label={copied ? "Copied component" : "Copy component"}
-            onClick={onCopy}
-          >
-            {copied ? <CheckIcon /> : <CopyIcon />}
-          </button>
-        </div>
+      {onExpand ? (
+        <button
+          type="button"
+          className={styles.handle}
+          aria-label={expanded ? "Show controls" : "Expand preview"}
+          aria-expanded={expanded}
+          onPointerDown={onHandlePointerDown}
+          onPointerUp={onHandlePointerUp}
+          onPointerCancel={() => {
+            swipe.current = null;
+          }}
+          onClick={onHandleClick}
+        >
+          <span className={styles.handleBar} />
+        </button>
+      ) : null}
 
-        {controls.length > 0 ? (
-          <div className={styles.controls}>
-            {controls.map(control => (
-              <ProximityControl key={control.id} control={control} barCount={barCount} />
+      <div className={styles.body} inert={expanded ? true : undefined} aria-hidden={expanded || undefined}>
+        <div className={styles.bodyInner}>
+          <div className={styles.actions}>
+            {actions.map(action => (
+              <button
+                key={action.id}
+                type="button"
+                className={styles.action}
+                onClick={action.onClick}
+                disabled={action.disabled}
+                aria-pressed={action.pressed}
+              >
+                {action.icon ? <span className={styles.actionIcon}>{action.icon}</span> : null}
+                <span>{action.label}</span>
+              </button>
             ))}
+            <button
+              type="button"
+              className={styles.copy}
+              aria-label={copied ? "Copied component" : "Copy component"}
+              onClick={onCopy}
+            >
+              <IconSwap
+                state={copied ? "b" : "a"}
+                a={<CopyIcon />}
+                b={<CheckIcon />}
+              />
+            </button>
           </div>
-        ) : null}
+
+          {controls.length > 0 ? (
+            <div className={styles.controls}>
+              {controls.map(control => (
+                <ProximityControl key={control.id} control={control} barCount={barCount} />
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }

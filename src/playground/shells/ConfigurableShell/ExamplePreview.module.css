@@ -11,23 +11,12 @@
   height: 100%;
 }
 
-.fill,
-.ghost {
-  font-family: "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
-  font-size: 92px;
-}
-
 .fill {
   fill: #111113;
 }
 
 .ghost {
-  opacity: 0.22;
+  opacity: 0.2;
   stroke-linejoin: round;
-}
-
-.rule {
-  stroke: #111113;
-  stroke-width: 0.7;
-  opacity: 0.22;
+  stroke-linecap: round;
 }
