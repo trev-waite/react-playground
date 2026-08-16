@@ -6,9 +6,31 @@
   overflow: hidden;
 }
 
-.main {
+.stack {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   height: 100%;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  /* Trap fixed descendants (sidebar) inside the masked Live layer */
+  transform: translateZ(0);
+  will-change: mask-image, -webkit-mask-image, opacity;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

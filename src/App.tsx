@@ -1,15 +1,15 @@
 import { BrowserRouter, Route, Routes } from "react-router";
 import { AppShell } from "./shell/AppShell";
-import { EmptyStage, ExperimentStage } from "./shell/ExperimentStage";
 
+/**
+ * View modes are full-page layers inside AppShell. Routes only drive URL ↔ mode
+ * and Live slug; both Live and Experimental stay mounted for the dissolve.
+ */
 export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<EmptyStage />} />
-          <Route path="*" element={<ExperimentStage />} />
-        </Route>
+        <Route path="*" element={<AppShell />} />
       </Routes>
     </BrowserRouter>
   );

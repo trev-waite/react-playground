@@ -142,11 +142,11 @@ export function Sidebar({ tree }: SidebarProps) {
         <span className={styles.handle} aria-hidden="true" />
         <header className={styles.header}>
           <p className={styles.brand}>Playground</p>
-          <p className={styles.caption}>Components</p>
+          <p className={styles.caption}>Live</p>
         </header>
-        <nav className={styles.nav} aria-label="Experiments">
+        <nav className={styles.nav} aria-label="Live components">
           {tree.length === 0 ? (
-            <p className={styles.empty}>No experiments yet.</p>
+            <p className={styles.empty}>No live components yet.</p>
           ) : (
             <Tree nodes={tree} onNavigate={() => setOpen(false)} />
           )}

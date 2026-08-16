@@ -1,0 +1,91 @@
+.wrap {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 80;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.track {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 1px 1px rgba(15, 15, 17, 0.04),
+    0 6px 18px rgba(15, 15, 17, 0.08);
+  pointer-events: auto;
+}
+
+.segment {
+  position: relative;
+  appearance: none;
+  margin: 0;
+  border: none;
+  cursor: pointer;
+  height: 1.75rem;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  background: transparent;
+  color: #5c6678;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.segment[data-active] {
+  color: #fff;
+}
+
+.label {
+  position: relative;
+  z-index: 1;
+}
+
+.pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #111113;
+  box-shadow:
+    0 1px 1px rgba(15, 15, 17, 0.12),
+    0 4px 12px rgba(15, 15, 17, 0.18);
+}
+
+.segment:focus-visible {
+  outline: 2px solid #111113;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .segment:not([data-active]):hover {
+    color: #1c2430;
+  }
+
+  .segment:active .label {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .track {
+    background: #f4f5f7;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: rgba(28, 36, 48, 0.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    transition: none;
+  }
+}

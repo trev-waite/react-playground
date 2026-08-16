@@ -1,0 +1,243 @@
+.studio {
+  --cs-ink: #111113;
+  --cs-surface: #ffffff;
+  --cs-ease: cubic-bezier(0.23, 1, 0.32, 1);
+
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 1rem;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--cs-ink);
+  font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+}
+
+.stage {
+  position: relative;
+  min-height: 0;
+  border-radius: 36px;
+  overflow: hidden;
+  background: var(--cs-surface);
+  box-shadow:
+    0 1px 1px rgba(15, 15, 17, 0.04),
+    0 10px 28px rgba(15, 15, 17, 0.06),
+    0 28px 64px rgba(15, 15, 17, 0.07);
+}
+
+.stageWell {
+  position: absolute;
+  inset: 0;
+  background: #ececee;
+}
+
+.stage[data-blank] .stageWell {
+  display: grid;
+  place-items: center;
+}
+
+.blankHint {
+  margin: 0;
+  max-width: 18rem;
+  padding: 0 1.25rem;
+  text-align: center;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: rgba(17, 17, 19, 0.45);
+}
+
+.stage[data-panning="true"],
+.stage[data-panning="true"] .stageWell {
+  cursor: grab;
+}
+
+.stage[data-panning="true"]:active,
+.stage[data-panning="true"]:active .stageWell {
+  cursor: grabbing;
+}
+
+.stageTools {
+  position: absolute;
+  z-index: 2;
+  top: 1rem;
+  left: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.tool {
+  pointer-events: auto;
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.7rem;
+  color: var(--cs-ink);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 17, 0.05),
+    0 2px 8px rgba(15, 15, 17, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition:
+    background 160ms var(--cs-ease),
+    color 160ms var(--cs-ease),
+    transform 140ms var(--cs-ease);
+}
+
+.tool[data-pressed] {
+  background: #111113;
+  color: #fff;
+}
+
+.tool:focus-visible {
+  outline: 2px solid #111113;
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tool:active {
+    transform: scale(0.97);
+  }
+}
+
+.stageFrost {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6.5rem;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.stageFrost::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 58%, #000 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 58%, #000 100%);
+}
+
+.stageFrost::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.42) 42%,
+    rgba(255, 255, 255, 0.88) 72%,
+    #fff 100%
+  );
+}
+
+.dock {
+  flex-shrink: 0;
+}
+
+.dockGlass {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 1rem;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 1px 1px rgba(15, 15, 17, 0.04),
+    0 10px 28px rgba(15, 15, 17, 0.06);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cs-ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 17, 0.05),
+    0 2px 8px rgba(15, 15, 17, 0.06);
+  transition: transform 140ms var(--cs-ease);
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .action:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+@media (max-width: 720px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .stage {
+    border-radius: 28px;
+  }
+
+  .dockGlass {
+    border-radius: 22px;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .tool {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .stageFrost::before {
+    display: none;
+  }
+
+  .dockGlass {
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: rgba(28, 36, 48, 0.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool,
+  .action {
+    transition: none;
+  }
+}

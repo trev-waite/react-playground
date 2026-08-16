@@ -1,5 +1,8 @@
 /**
- * Demo harness. To experiment with a different component:
+ * Live preview for the portable ConfigurableShell card.
+ * The Experimental page is a separate workbench — it does not replace this component.
+ *
+ * To wrap a different component in the card:
  * 1. Render it as children of ConfigurableShell
  * 2. Drive it with `controls` / `actions`
  * 3. Pass `getExportCode` that returns that component's source at the current values

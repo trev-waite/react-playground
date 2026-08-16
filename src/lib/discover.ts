@@ -1,5 +1,5 @@
-import type { PlaygroundEntry, TreeFolder, TreeLeaf, TreeNode } from "./types";
-import { previewModules } from "./playground.gen";
+import type { PlaygroundEntry, PlaygroundStatus, TreeFolder, TreeLeaf, TreeNode } from "./types";
+import { previewModules, previewStatuses } from "./playground.gen";
 
 function titleFromSlug(slug: string): string {
   const leaf = slug.split("/").pop() ?? slug;
@@ -11,6 +11,7 @@ function buildEntries(): PlaygroundEntry[] {
     .map(([slug, load]) => ({
       slug,
       title: titleFromSlug(slug),
+      status: (previewStatuses[slug] ?? "live") as PlaygroundStatus,
       load,
     }))
     .sort((a, b) => a.slug.localeCompare(b.slug));
@@ -20,6 +21,14 @@ export const playgroundEntries: PlaygroundEntry[] = buildEntries();
 
 export const entriesBySlug: Map<string, PlaygroundEntry> = new Map(
   playgroundEntries.map(e => [e.slug, e]),
+);
+
+export const liveEntries: PlaygroundEntry[] = playgroundEntries.filter(
+  e => e.status === "live",
+);
+
+export const experimentalEntries: PlaygroundEntry[] = playgroundEntries.filter(
+  e => e.status === "experimental",
 );
 
 type MutableFolder = {
@@ -84,3 +93,4 @@ export function buildTree(entries: PlaygroundEntry[] = playgroundEntries): TreeN
 }
 
 export const playgroundTree: TreeNode[] = buildTree();
+export const liveTree: TreeNode[] = buildTree(liveEntries);

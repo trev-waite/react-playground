@@ -48,3 +48,7 @@ Thumbs.db
 # misc
 *.local
 .vercel
+
+# Local experimental prototypes (published into the catalog via Make Live)
+src/playground/experimental/*
+!src/playground/experimental/.gitkeep

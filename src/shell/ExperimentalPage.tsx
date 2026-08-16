@@ -1,0 +1,448 @@
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { playgroundEntries } from "../lib/discover";
+import type { IdeaStudioSession, IdeaSummary, SavedIdea } from "../lib/idea";
+import { getIdeaDraft, getIdeaSource } from "../lib/ideaExport";
+import {
+  EXPERIMENTAL_FOLDER,
+  SHELLS_FOLDER,
+  normalizeFolder,
+  toComponentName,
+} from "../lib/promote";
+import { useView } from "./view/ViewController";
+import styles from "./ExperimentalPage.module.css";
+
+/**
+ * Experimental workbench — app chrome, not a playground catalog entry.
+ * Distinct from ConfigurableShell, which is a Live component of its own.
+ */
+const IdeaWorkbench = lazy(() => import("./IdeaWorkbench"));
+
+const DEFAULT_IDEA_NAME = "Untitled idea";
+const NEW_FOLDER_VALUE = "__new__";
+const UNSAVED_VALUE = "";
+
+function existingFolders(): string[] {
+  const folders = new Set<string>();
+  for (const entry of playgroundEntries) {
+    const [folder] = entry.slug.split("/");
+    if (folder && folder !== SHELLS_FOLDER && folder !== EXPERIMENTAL_FOLDER) {
+      folders.add(folder);
+    }
+  }
+  return [...folders].sort((a, b) => a.localeCompare(b));
+}
+
+function ideaNameFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/experimental\/([A-Za-z][A-Za-z0-9]*)\/?$/);
+  return match?.[1] ?? null;
+}
+
+export function ExperimentalPage() {
+  const { promote, promoting, promoteError } = useView();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const folders = useMemo(() => existingFolders(), []);
+  const [ideaName, setIdeaName] = useState(DEFAULT_IDEA_NAME);
+  const [folderChoice, setFolderChoice] = useState(
+    () => folders[0] ?? NEW_FOLDER_VALUE,
+  );
+  const [customFolder, setCustomFolder] = useState("");
+  const [studioKey, setStudioKey] = useState(0);
+  const [session, setSession] = useState<IdeaStudioSession>({ kind: "demo" });
+  const [ideas, setIdeas] = useState<IdeaSummary[]>([]);
+  const [activeComponentName, setActiveComponentName] = useState<string | null>(
+    null,
+  );
+  const [dirty, setDirty] = useState(false);
+  const [hasDraft, setHasDraft] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const initialPathRef = useRef(location.pathname);
+  const applyLoadedIdeaRef = useRef<(idea: SavedIdea) => void>(() => {});
+  const openingFromUrl = Boolean(ideaNameFromPath(initialPathRef.current));
+  const workbenchReady = hydrated || !openingFromUrl;
+
+  const usingNewFolder = folderChoice === NEW_FOLDER_VALUE;
+  const folderValue = usingNewFolder ? customFolder : folderChoice;
+  const folderSlug = normalizeFolder(folderValue);
+  const componentName = toComponentName(ideaName.trim() || DEFAULT_IDEA_NAME);
+  const experimentalPath =
+    componentName != null ? `${EXPERIMENTAL_FOLDER}/${componentName}/` : `${EXPERIMENTAL_FOLDER}/…/`;
+  const livePath =
+    folderSlug && componentName
+      ? `${folderSlug}/${componentName}/`
+      : "folder/ComponentName/";
+  const errorMessage = saveError ?? promoteError;
+
+  const applyFolder = useCallback(
+    (folder: string) => {
+      if (folder && folders.includes(folder)) {
+        setFolderChoice(folder);
+        setCustomFolder("");
+        return;
+      }
+      if (folder) {
+        setFolderChoice(NEW_FOLDER_VALUE);
+        setCustomFolder(folder);
+        return;
+      }
+      setFolderChoice(folders[0] ?? NEW_FOLDER_VALUE);
+      setCustomFolder("");
+    },
+    [folders],
+  );
+
+  const applyLoadedIdea = useCallback(
+    (idea: SavedIdea, remount = true) => {
+      setIdeaName(idea.name);
+      applyFolder(idea.folder);
+      setActiveComponentName(idea.componentName);
+      setSession(
+        idea.studio
+          ? { kind: "restore", studio: idea.studio }
+          : { kind: "blank" },
+      );
+      setHasDraft(Boolean(idea.studio));
+      setDirty(false);
+      setSaveError(null);
+      if (remount) setStudioKey(key => key + 1);
+    },
+    [applyFolder],
+  );
+  applyLoadedIdeaRef.current = applyLoadedIdea;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const listRes = await fetch("/api/ideas");
+        const listData = (await listRes.json()) as {
+          ok: boolean;
+          ideas?: IdeaSummary[];
+        };
+        if (cancelled) return;
+        if (listData.ok && listData.ideas) setIdeas(listData.ideas);
+
+        const fromUrl = ideaNameFromPath(initialPathRef.current);
+        if (!fromUrl) return;
+
+        const ideaRes = await fetch(`/api/ideas/${fromUrl}`);
+        const ideaData = (await ideaRes.json()) as {
+          ok: boolean;
+          idea?: SavedIdea;
+        };
+        if (cancelled || !ideaData.ok || !ideaData.idea) return;
+        applyLoadedIdeaRef.current(ideaData.idea);
+      } catch {
+        if (!cancelled) setSaveError("Could not load saved prototypes");
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function saveIdea(): Promise<boolean> {
+    const draft = getIdeaDraft();
+    if (!draft?.source.trim()) {
+      setSaveError("Nothing to save yet");
+      return false;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const res = await fetch("/api/ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: ideaName,
+          folder: folderValue,
+          source: draft.source,
+          studio: draft.studio,
+          previousComponentName: activeComponentName ?? undefined,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        idea?: IdeaSummary;
+        ideas?: IdeaSummary[];
+      };
+      if (!res.ok || !data.ok || !data.idea) {
+        throw new Error(data.error ?? "Save failed");
+      }
+      if (data.ideas) setIdeas(data.ideas);
+      setActiveComponentName(data.idea.componentName);
+      setDirty(false);
+      navigate(`/experimental/${data.idea.componentName}`, { replace: true });
+      return true;
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function persistIfDirty(): Promise<boolean> {
+    if (!dirty) return true;
+    const draft = getIdeaDraft();
+    if (!draft?.source.trim()) return true;
+    return saveIdea();
+  }
+
+  async function openIdea(componentNameToOpen: string) {
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/ideas/${componentNameToOpen}`);
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        idea?: SavedIdea;
+      };
+      if (!res.ok || !data.ok || !data.idea) {
+        throw new Error(data.error ?? "Could not open prototype");
+      }
+      applyLoadedIdea(data.idea);
+      navigate(`/experimental/${componentNameToOpen}`, { replace: true });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not open prototype");
+    }
+  }
+
+  async function onSelectPrototype(next: string) {
+    if (next === (activeComponentName ?? UNSAVED_VALUE)) return;
+    if (!(await persistIfDirty())) return;
+    if (!next) return;
+    await openIdea(next);
+  }
+
+  async function onNewIdea() {
+    if (!(await persistIfDirty())) return;
+    setIdeaName(DEFAULT_IDEA_NAME);
+    setActiveComponentName(null);
+    setSession({ kind: "blank" });
+    setDirty(false);
+    setHasDraft(false);
+    setSaveError(null);
+    setStudioKey(key => key + 1);
+    navigate("/experimental", { replace: true });
+  }
+
+  async function onDelete() {
+    if (!activeComponentName) return;
+    const confirmed = window.confirm(
+      `Delete experimental prototype “${ideaName}”? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/ideas/${activeComponentName}`, {
+        method: "DELETE",
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        ideas?: IdeaSummary[];
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? "Could not delete prototype");
+      }
+      if (data.ideas) setIdeas(data.ideas);
+      setIdeaName(DEFAULT_IDEA_NAME);
+      setActiveComponentName(null);
+      setSession({ kind: "blank" });
+      setDirty(false);
+      setHasDraft(false);
+      setStudioKey(key => key + 1);
+      navigate("/experimental", { replace: true });
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not delete prototype");
+    }
+  }
+
+  async function onMakeLive() {
+    const source = getIdeaSource();
+    if (!source) return;
+    await promote({
+      folder: folderValue,
+      name: ideaName,
+      source,
+      discardExperimental: activeComponentName ?? undefined,
+    });
+  }
+
+  const saveLabel = !dirty && activeComponentName ? "Saved" : "Save";
+  const switcherValue = activeComponentName ?? UNSAVED_VALUE;
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.atmosphere} aria-hidden="true" />
+
+      <header className={styles.topBar}>
+        <div className={styles.identity}>
+          <label className={styles.ideaField}>
+            <span className={styles.fieldLabel}>Idea</span>
+            <input
+              className={styles.ideaInput}
+              type="text"
+              value={ideaName}
+              onChange={event => {
+                setIdeaName(event.target.value);
+                setDirty(true);
+              }}
+              placeholder={DEFAULT_IDEA_NAME}
+              spellCheck={false}
+            />
+          </label>
+
+          {hydrated && ideas.length > 0 ? (
+            <label className={styles.folderField}>
+              <span className={styles.fieldLabel} id="prototype-label">
+                Prototype
+              </span>
+              <select
+                className={styles.folderSelect}
+                value={switcherValue}
+                onChange={event => void onSelectPrototype(event.target.value)}
+                aria-labelledby="prototype-label"
+              >
+                {activeComponentName == null ? (
+                  <option value={UNSAVED_VALUE}>Unsaved idea</option>
+                ) : null}
+                {ideas.map(idea => (
+                  <option key={idea.componentName} value={idea.componentName}>
+                    {idea.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          <div className={styles.folderField}>
+            <span className={styles.fieldLabel} id="folder-label">
+              Live folder
+            </span>
+            <div className={styles.folderRow}>
+              <select
+                className={styles.folderSelect}
+                value={folderChoice}
+                onChange={event => {
+                  setFolderChoice(event.target.value);
+                  setDirty(true);
+                }}
+                aria-labelledby="folder-label"
+              >
+                {folders.map(folder => (
+                  <option key={folder} value={folder}>
+                    {folder}
+                  </option>
+                ))}
+                <option value={NEW_FOLDER_VALUE}>New folder…</option>
+              </select>
+              <input
+                className={styles.folderInput}
+                type="text"
+                value={customFolder}
+                onChange={event => {
+                  setCustomFolder(event.target.value);
+                  setDirty(true);
+                }}
+                placeholder="e.g. shapes"
+                spellCheck={false}
+                aria-label="New folder name"
+                tabIndex={usingNewFolder ? 0 : -1}
+                data-visible={usingNewFolder || undefined}
+              />
+            </div>
+            <p
+              className={styles.pathHint}
+              title={`WIP src/playground/${experimentalPath} · Live src/playground/${livePath}`}
+            >
+              Saves to{" "}
+              <code className={styles.code}>
+                src/playground/{experimentalPath}
+              </code>
+              {" · "}
+              Live{" "}
+              <code className={styles.code}>src/playground/{livePath}</code>
+            </p>
+          </div>
+        </div>
+
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.clear}
+            onClick={() => void onNewIdea()}
+            disabled={!workbenchReady}
+          >
+            New idea
+          </button>
+          {activeComponentName ? (
+            <button
+              type="button"
+              className={styles.delete}
+              onClick={() => void onDelete()}
+              disabled={saving || promoting}
+            >
+              Delete
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={styles.save}
+            onClick={() => void saveIdea()}
+            disabled={saving || !workbenchReady || !hasDraft || (!dirty && Boolean(activeComponentName))}
+            data-saved={!dirty && activeComponentName ? true : undefined}
+          >
+            {saving ? "Saving…" : saveLabel}
+          </button>
+          <button
+            type="button"
+            className={styles.makeLive}
+            disabled={promoting || !workbenchReady || !hasDraft}
+            onClick={() => void onMakeLive()}
+          >
+            {promoting ? "Publishing…" : "Make Live"}
+          </button>
+          {errorMessage ? (
+            <p className={styles.error} role="alert">
+              {errorMessage}
+            </p>
+          ) : null}
+        </div>
+      </header>
+
+      <main className={styles.main} aria-label="Component workbench">
+        <Suspense
+          key={studioKey}
+          fallback={<p className={styles.status}>Loading…</p>}
+        >
+          <div className={styles.workbench}>
+            {workbenchReady ? (
+              <IdeaWorkbench
+                key={studioKey}
+                session={session}
+                onMutate={() => setDirty(true)}
+                onDraftChange={setHasDraft}
+              />
+            ) : (
+              <p className={styles.status}>Loading…</p>
+            )}
+          </div>
+        </Suspense>
+      </main>
+    </div>
+  );
+}

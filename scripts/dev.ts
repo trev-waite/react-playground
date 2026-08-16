@@ -3,6 +3,7 @@
  */
 import { watch } from "node:fs";
 import path from "node:path";
+import { EXPERIMENTAL_FOLDER } from "../src/lib/promote";
 import { syncPlaygroundRegistry } from "./sync-playground";
 
 const ROOT = path.join(import.meta.dir, "..");
@@ -19,8 +20,8 @@ function scheduleResync(reason: string) {
     if (syncing) return;
     syncing = true;
     try {
-      const slugs = await syncPlaygroundRegistry();
-      console.log(`[playground] synced ${slugs.length} experiment(s) (${reason})`);
+      const entries = await syncPlaygroundRegistry();
+      console.log(`[playground] synced ${entries.length} experiment(s) (${reason})`);
     } finally {
       syncing = false;
     }
@@ -30,6 +31,12 @@ function scheduleResync(reason: string) {
 watch(PLAYGROUND, { recursive: true }, (_event, filename) => {
   if (!filename) return;
   const normalized = filename.replace(/\\/g, "/");
+  if (
+    normalized === EXPERIMENTAL_FOLDER ||
+    normalized.startsWith(`${EXPERIMENTAL_FOLDER}/`)
+  ) {
+    return;
+  }
   if (normalized.endsWith("preview.tsx") || normalized.endsWith("preview.ts")) {
     scheduleResync(normalized);
   }

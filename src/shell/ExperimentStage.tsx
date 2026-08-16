@@ -1,6 +1,5 @@
-import { lazy, Suspense } from "react";
-import { useLocation } from "react-router";
-import { entriesBySlug, playgroundEntries } from "../lib/discover";
+import { lazy, Suspense, useMemo } from "react";
+import { playgroundEntries } from "../lib/discover";
 import { Canvas } from "./Canvas";
 import styles from "./ExperimentStage.module.css";
 
@@ -19,16 +18,27 @@ export function EmptyStage() {
   return <Canvas empty />;
 }
 
-export function ExperimentStage() {
-  const location = useLocation();
-  const slug = location.pathname.replace(/^\//, "").replace(/\/$/, "");
-  const entry = slug ? entriesBySlug.get(slug) : undefined;
-  const Preview = slug ? lazyPreviews.get(slug) : undefined;
+type ExperimentStageProps = {
+  /** When set, render this slug instead of reading the URL. */
+  slug?: string | null;
+};
+
+export function ExperimentStage({ slug: slugProp }: ExperimentStageProps) {
+  const slug = slugProp ?? null;
+  const entry = slug ? playgroundEntries.find(e => e.slug === slug) : undefined;
+  const Preview = useMemo(
+    () => (slug ? lazyPreviews.get(slug) : undefined),
+    [slug],
+  );
+
+  if (!slug) {
+    return <Canvas empty />;
+  }
 
   if (!entry || !Preview) {
     return (
       <Canvas>
-        <p className={styles.missing}>No experiment at “{slug || "/"}”.</p>
+        <p className={styles.missing}>No experiment at “{slug}”.</p>
       </Canvas>
     );
   }
