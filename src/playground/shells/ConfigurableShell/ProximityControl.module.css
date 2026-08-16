@@ -1,0 +1,94 @@
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.38rem 0.85rem 0.48rem;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 17, 0.04),
+    0 1px 2px rgba(15, 15, 17, 0.03),
+    0 6px 16px rgba(15, 15, 17, 0.05);
+}
+
+.block[data-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: #111113;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trackWrap {
+  position: relative;
+  padding-top: 1.12rem;
+}
+
+.badge {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  padding: 0.1rem 0.34rem 0.12rem;
+  border-radius: 6px;
+  background: #fff;
+  color: #111113;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 17, 0.05),
+    0 2px 8px rgba(15, 15, 17, 0.08);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.badge::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 1px 1px 0 rgba(15, 15, 17, 0.04);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.14rem;
+  height: 1.15rem;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+
+.track:focus-visible {
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(17, 17, 19, 0.16);
+}
+
+.bar {
+  flex: 1 1 0;
+  min-width: 1.5px;
+  max-width: 3px;
+  height: 100%;
+  border-radius: 999px;
+  background: #111113;
+  transform-origin: center bottom;
+  pointer-events: none;
+}

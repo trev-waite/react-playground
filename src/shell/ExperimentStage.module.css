@@ -8,5 +8,6 @@
 .frame {
   display: grid;
   place-items: center;
+  width: 100%;
   max-width: 100%;
 }

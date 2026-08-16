@@ -1,0 +1,22 @@
+.stage {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fill {
+  fill: #111113;
+}
+
+.ghost {
+  opacity: 0.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
