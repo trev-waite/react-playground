@@ -1,13 +1,27 @@
+/**
+ * Experimental workbench chrome — a full-bleed stage + dock, not ConfigurableShell.
+ *
+ * It echoes that component's visual language (glass, ink, proximity sliders) in
+ * its own layout. Do not render <ConfigurableShell> here. Do not import
+ * ConfigurableShell.module.css. The Live card stays a separate, portable unit.
+ */
 import { useEffect, useMemo, useState } from "react";
 import type { IdeaStudioSession } from "../lib/idea";
 import { registerIdeaExporter } from "../lib/ideaExport";
-import {
-  ConfigurableShell,
-  linearScale,
-} from "../playground/shells/ConfigurableShell/ConfigurableShell";
 import { ExamplePreview } from "../playground/shells/ConfigurableShell/ExamplePreview";
 import { exportExampleCode } from "../playground/shells/ConfigurableShell/exportExample";
-import { ResetIcon, SlidersIcon } from "../playground/shells/ConfigurableShell/icons";
+import {
+  CheckIcon,
+  CopyIcon,
+  MoveIcon,
+  ResetIcon,
+  SlidersIcon,
+} from "../playground/shells/ConfigurableShell/icons";
+import {
+  ProximityControl,
+  type ShellControl,
+} from "../playground/shells/ConfigurableShell/ProximityControl";
+import { linearScale } from "../playground/shells/ConfigurableShell/scales";
 import styles from "./IdeaWorkbench.module.css";
 
 const DEFAULTS = {
@@ -21,6 +35,17 @@ const REST = {
   soft: 0,
   drift: 0,
 };
+
+const COPIED_MS = 1600;
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function stateFromSession(session: IdeaStudioSession) {
   if (session.kind === "blank") {
@@ -56,7 +81,6 @@ type IdeaWorkbenchProps = {
   onDraftChange?: (hasDraft: boolean) => void;
 };
 
-/** Experimental chrome that composes ConfigurableShell without forking it. */
 export default function IdeaWorkbench({
   session = { kind: "demo" },
   onMutate,
@@ -68,8 +92,8 @@ export default function IdeaWorkbench({
   const [soft, setSoft] = useState(initial.soft);
   const [drift, setDrift] = useState(initial.drift);
   const [panning, setPanning] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [offset, setOffset] = useState(initial.offset);
+  const [copied, setCopied] = useState(false);
 
   function mutateForm(value: number) {
     setForm(value);
@@ -88,39 +112,7 @@ export default function IdeaWorkbench({
     onMutate?.();
   }
 
-  const actions = useMemo(
-    () => [
-      {
-        id: "randomize",
-        label: "Randomize",
-        icon: <SlidersIcon />,
-        onClick: () => {
-          setForm(12 + Math.round(Math.random() * 80));
-          setSoft(18 + Math.round(Math.random() * 70));
-          setDrift(8 + Math.round(Math.random() * 72));
-          setOffset({ x: 0, y: 0 });
-          setBlank(false);
-          onMutate?.();
-        },
-      },
-      {
-        id: "reset",
-        label: "Reset",
-        icon: <ResetIcon />,
-        disabled: blank,
-        onClick: () => {
-          setForm(DEFAULTS.form);
-          setSoft(DEFAULTS.soft);
-          setDrift(DEFAULTS.drift);
-          setOffset({ x: 0, y: 0 });
-          onMutate?.();
-        },
-      },
-    ],
-    [blank, onMutate],
-  );
-
-  const controls = useMemo(
+  const controls: ShellControl[] = useMemo(
     () => [
       {
         id: "form",
@@ -163,33 +155,108 @@ export default function IdeaWorkbench({
     return () => registerIdeaExporter(null);
   }, [blank, form, soft, drift, offset]);
 
+  async function onCopy() {
+    if (blank) return;
+    const ok = await copyToClipboard(exportExampleCode(form, soft, drift, offset));
+    if (!ok) return;
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), COPIED_MS);
+  }
+
   return (
-    <div className={styles.frame}>
-      <ConfigurableShell
-        actions={actions}
-        controls={controls}
-        getExportCode={
-          blank ? undefined : () => exportExampleCode(form, soft, drift, offset)
-        }
-        onMove={blank ? undefined : () => setPanning(value => !value)}
-        movePressed={panning}
-        onExpand={() => setExpanded(value => !value)}
-        expandPressed={expanded}
-        expanded={expanded}
+    <div className={styles.studio}>
+      <div
+        className={styles.stage}
+        data-panning={!blank && panning ? true : undefined}
+        data-blank={blank || undefined}
       >
-        {blank ? (
-          <p className={styles.blank}>Empty stage — randomize to start a new idea.</p>
-        ) : (
-          <ExamplePreview
-            form={form}
-            soft={soft}
-            drift={drift}
-            panEnabled={panning}
-            offset={offset}
-            onOffsetChange={mutateOffset}
-          />
-        )}
-      </ConfigurableShell>
+        <div className={styles.stageWell}>
+          {blank ? (
+            <p className={styles.blankHint}>
+              Empty stage — randomize to start a new idea.
+            </p>
+          ) : (
+            <ExamplePreview
+              form={form}
+              soft={soft}
+              drift={drift}
+              panEnabled={panning}
+              offset={offset}
+              onOffsetChange={mutateOffset}
+            />
+          )}
+        </div>
+
+        {!blank ? (
+          <div className={styles.stageTools}>
+            <button
+              type="button"
+              className={styles.tool}
+              aria-label="Pan preview"
+              aria-pressed={panning}
+              data-pressed={panning || undefined}
+              onClick={() => setPanning(value => !value)}
+            >
+              <MoveIcon />
+            </button>
+          </div>
+        ) : null}
+
+        <div className={styles.stageFrost} aria-hidden="true" />
+      </div>
+
+      <div className={styles.dock}>
+        <div className={styles.dockGlass}>
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.action}
+              onClick={() => {
+                setForm(12 + Math.round(Math.random() * 80));
+                setSoft(18 + Math.round(Math.random() * 70));
+                setDrift(8 + Math.round(Math.random() * 72));
+                setOffset({ x: 0, y: 0 });
+                setBlank(false);
+                onMutate?.();
+              }}
+            >
+              <SlidersIcon />
+              Randomize
+            </button>
+            <button
+              type="button"
+              className={styles.action}
+              disabled={blank}
+              onClick={() => {
+                setForm(DEFAULTS.form);
+                setSoft(DEFAULTS.soft);
+                setDrift(DEFAULTS.drift);
+                setOffset({ x: 0, y: 0 });
+                onMutate?.();
+              }}
+            >
+              <ResetIcon />
+              Reset
+            </button>
+            <button
+              type="button"
+              className={styles.action}
+              aria-label="Copy component"
+              disabled={blank}
+              onClick={() => void onCopy()}
+            >
+              {copied ? <CheckIcon /> : <CopyIcon />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+
+          <div className={styles.controls}>
+            {controls.map(control => (
+              <ProximityControl key={control.id} control={control} barCount={39} />
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

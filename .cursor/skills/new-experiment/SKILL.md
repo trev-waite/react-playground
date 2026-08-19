@@ -73,4 +73,4 @@ See `src/playground/shells/ConfigurableShell/preview.tsx` for the control patter
 
 With `bun dev` running, `preview.tsx` is picked up automatically. If it does not appear in the Live sidebar, run `bun run sync:playground`. URL: `/<folder>/<Name>`.
 
-Do not modify ConfigurableShell. Experimental save/switch/promote chrome is a separate surface — do not merge those concerns into the shell or into this experiment.
+Do not modify ConfigurableShell. Experimental is its own full-bleed workbench that only shares look and feel with the shell — do not mount ConfigurableShell there, and do not fold save/switch/promote into the shell.
