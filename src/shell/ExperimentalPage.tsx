@@ -2,6 +2,12 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useLocation, useNavigate } from "react-router";
 import { playgroundEntries } from "../lib/discover";
 import type { IdeaStudioSession, IdeaSummary, SavedIdea } from "../lib/idea";
+import {
+  deleteIdea,
+  listIdeas,
+  loadIdea,
+  saveIdea as persistIdea,
+} from "../lib/ideaClient";
 import { getIdeaDraft, getIdeaSource } from "../lib/ideaExport";
 import {
   EXPERIMENTAL_FOLDER,
@@ -12,10 +18,6 @@ import {
 import { useView } from "./view/ViewController";
 import styles from "./ExperimentalPage.module.css";
 
-/**
- * Experimental workbench — app chrome, not a playground catalog entry.
- * Distinct from ConfigurableShell, which is a Live component of its own.
- */
 const IdeaWorkbench = lazy(() => import("./IdeaWorkbench"));
 
 const DEFAULT_IDEA_NAME = "Untitled idea";
@@ -39,7 +41,7 @@ function ideaNameFromPath(pathname: string): string | null {
 }
 
 export function ExperimentalPage() {
-  const { promote, promoting, promoteError } = useView();
+  const { mode, promote, promoting, promoteError } = useView();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -62,6 +64,7 @@ export function ExperimentalPage() {
   const [hydrated, setHydrated] = useState(false);
   const initialPathRef = useRef(location.pathname);
   const applyLoadedIdeaRef = useRef<(idea: SavedIdea) => void>(() => {});
+  const saveIdeaRef = useRef<() => Promise<boolean>>(async () => false);
   const openingFromUrl = Boolean(ideaNameFromPath(initialPathRef.current));
   const workbenchReady = hydrated || !openingFromUrl;
 
@@ -70,12 +73,16 @@ export function ExperimentalPage() {
   const folderSlug = normalizeFolder(folderValue);
   const componentName = toComponentName(ideaName.trim() || DEFAULT_IDEA_NAME);
   const experimentalPath =
-    componentName != null ? `${EXPERIMENTAL_FOLDER}/${componentName}/` : `${EXPERIMENTAL_FOLDER}/…/`;
+    componentName != null
+      ? `${EXPERIMENTAL_FOLDER}/${componentName}/`
+      : `${EXPERIMENTAL_FOLDER}/…/`;
   const livePath =
     folderSlug && componentName
       ? `${folderSlug}/${componentName}/`
       : "folder/ComponentName/";
   const errorMessage = saveError ?? promoteError;
+  const canSave =
+    workbenchReady && hasDraft && (dirty || !activeComponentName) && !saving;
 
   const applyFolder = useCallback(
     (folder: string) => {
@@ -96,7 +103,7 @@ export function ExperimentalPage() {
   );
 
   const applyLoadedIdea = useCallback(
-    (idea: SavedIdea, remount = true) => {
+    (idea: SavedIdea) => {
       setIdeaName(idea.name);
       applyFolder(idea.folder);
       setActiveComponentName(idea.componentName);
@@ -108,35 +115,35 @@ export function ExperimentalPage() {
       setHasDraft(Boolean(idea.studio));
       setDirty(false);
       setSaveError(null);
-      if (remount) setStudioKey(key => key + 1);
+      setStudioKey(key => key + 1);
     },
     [applyFolder],
   );
   applyLoadedIdeaRef.current = applyLoadedIdea;
+
+  function resetToBlank() {
+    setIdeaName(DEFAULT_IDEA_NAME);
+    setActiveComponentName(null);
+    setSession({ kind: "blank" });
+    setDirty(false);
+    setHasDraft(false);
+    setSaveError(null);
+    setStudioKey(key => key + 1);
+    navigate("/experimental", { replace: true });
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
       try {
-        const listRes = await fetch("/api/ideas");
-        const listData = (await listRes.json()) as {
-          ok: boolean;
-          ideas?: IdeaSummary[];
-        };
+        const listed = await listIdeas();
         if (cancelled) return;
-        if (listData.ok && listData.ideas) setIdeas(listData.ideas);
+        setIdeas(listed);
 
         const fromUrl = ideaNameFromPath(initialPathRef.current);
         if (!fromUrl) return;
-
-        const ideaRes = await fetch(`/api/ideas/${fromUrl}`);
-        const ideaData = (await ideaRes.json()) as {
-          ok: boolean;
-          idea?: SavedIdea;
-        };
-        if (cancelled || !ideaData.ok || !ideaData.idea) return;
-        applyLoadedIdeaRef.current(ideaData.idea);
+        applyLoadedIdeaRef.current(await loadIdea(fromUrl));
       } catch {
         if (!cancelled) setSaveError("Could not load saved prototypes");
       } finally {
@@ -160,27 +167,14 @@ export function ExperimentalPage() {
     setSaveError(null);
 
     try {
-      const res = await fetch("/api/ideas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: ideaName,
-          folder: folderValue,
-          source: draft.source,
-          studio: draft.studio,
-          previousComponentName: activeComponentName ?? undefined,
-        }),
+      const data = await persistIdea({
+        name: ideaName,
+        folder: folderValue,
+        source: draft.source,
+        studio: draft.studio,
+        previousComponentName: activeComponentName ?? undefined,
       });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        idea?: IdeaSummary;
-        ideas?: IdeaSummary[];
-      };
-      if (!res.ok || !data.ok || !data.idea) {
-        throw new Error(data.error ?? "Save failed");
-      }
-      if (data.ideas) setIdeas(data.ideas);
+      setIdeas(data.ideas);
       setActiveComponentName(data.idea.componentName);
       setDirty(false);
       navigate(`/experimental/${data.idea.componentName}`, { replace: true });
@@ -192,6 +186,7 @@ export function ExperimentalPage() {
       setSaving(false);
     }
   }
+  saveIdeaRef.current = saveIdea;
 
   async function persistIfDirty(): Promise<boolean> {
     if (!dirty) return true;
@@ -200,42 +195,21 @@ export function ExperimentalPage() {
     return saveIdea();
   }
 
-  async function openIdea(componentNameToOpen: string) {
-    setSaveError(null);
+  async function onSelectPrototype(next: string) {
+    if (next === (activeComponentName ?? UNSAVED_VALUE)) return;
+    if (!(await persistIfDirty())) return;
+    if (!next) return;
     try {
-      const res = await fetch(`/api/ideas/${componentNameToOpen}`);
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        idea?: SavedIdea;
-      };
-      if (!res.ok || !data.ok || !data.idea) {
-        throw new Error(data.error ?? "Could not open prototype");
-      }
-      applyLoadedIdea(data.idea);
-      navigate(`/experimental/${componentNameToOpen}`, { replace: true });
+      applyLoadedIdea(await loadIdea(next));
+      navigate(`/experimental/${next}`, { replace: true });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not open prototype");
     }
   }
 
-  async function onSelectPrototype(next: string) {
-    if (next === (activeComponentName ?? UNSAVED_VALUE)) return;
-    if (!(await persistIfDirty())) return;
-    if (!next) return;
-    await openIdea(next);
-  }
-
   async function onNewIdea() {
     if (!(await persistIfDirty())) return;
-    setIdeaName(DEFAULT_IDEA_NAME);
-    setActiveComponentName(null);
-    setSession({ kind: "blank" });
-    setDirty(false);
-    setHasDraft(false);
-    setSaveError(null);
-    setStudioKey(key => key + 1);
-    navigate("/experimental", { replace: true });
+    resetToBlank();
   }
 
   async function onDelete() {
@@ -247,25 +221,8 @@ export function ExperimentalPage() {
 
     setSaveError(null);
     try {
-      const res = await fetch(`/api/ideas/${activeComponentName}`, {
-        method: "DELETE",
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        ideas?: IdeaSummary[];
-      };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.error ?? "Could not delete prototype");
-      }
-      if (data.ideas) setIdeas(data.ideas);
-      setIdeaName(DEFAULT_IDEA_NAME);
-      setActiveComponentName(null);
-      setSession({ kind: "blank" });
-      setDirty(false);
-      setHasDraft(false);
-      setStudioKey(key => key + 1);
-      navigate("/experimental", { replace: true });
+      setIdeas(await deleteIdea(activeComponentName));
+      resetToBlank();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not delete prototype");
     }
@@ -281,6 +238,32 @@ export function ExperimentalPage() {
       discardExperimental: activeComponentName ?? undefined,
     });
   }
+
+  useEffect(() => {
+    if (mode !== "experimental") return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") {
+        return;
+      }
+      event.preventDefault();
+      if (!canSave) return;
+      void saveIdeaRef.current();
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [mode, canSave]);
+
+  useEffect(() => {
+    if (!dirty || !hasDraft) return;
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty, hasDraft]);
 
   const saveLabel = !dirty && activeComponentName ? "Saved" : "Save";
   const switcherValue = activeComponentName ?? UNSAVED_VALUE;
@@ -403,7 +386,8 @@ export function ExperimentalPage() {
             type="button"
             className={styles.save}
             onClick={() => void saveIdea()}
-            disabled={saving || !workbenchReady || !hasDraft || (!dirty && Boolean(activeComponentName))}
+            disabled={!canSave}
+            title="Save (⌘S)"
             data-saved={!dirty && activeComponentName ? true : undefined}
           >
             {saving ? "Saving…" : saveLabel}
@@ -425,10 +409,7 @@ export function ExperimentalPage() {
       </header>
 
       <main className={styles.main} aria-label="Component workbench">
-        <Suspense
-          key={studioKey}
-          fallback={<p className={styles.status}>Loading…</p>}
-        >
+        <Suspense fallback={<p className={styles.status}>Loading…</p>}>
           <div className={styles.workbench}>
             {workbenchReady ? (
               <IdeaWorkbench

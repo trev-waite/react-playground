@@ -1,6 +1,5 @@
 /**
  * Live preview for the portable ConfigurableShell card.
- * The Experimental page is a separate workbench — it does not replace this component.
  *
  * To wrap a different component in the card:
  * 1. Render it as children of ConfigurableShell

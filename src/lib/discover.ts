@@ -27,10 +27,6 @@ export const liveEntries: PlaygroundEntry[] = playgroundEntries.filter(
   e => e.status === "live",
 );
 
-export const experimentalEntries: PlaygroundEntry[] = playgroundEntries.filter(
-  e => e.status === "experimental",
-);
-
 type MutableFolder = {
   name: string;
   folders: Map<string, MutableFolder>;
@@ -91,6 +87,3 @@ export function buildTree(entries: PlaygroundEntry[] = playgroundEntries): TreeN
 
   return finalize(root);
 }
-
-export const playgroundTree: TreeNode[] = buildTree();
-export const liveTree: TreeNode[] = buildTree(liveEntries);

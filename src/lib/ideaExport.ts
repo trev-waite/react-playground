@@ -1,6 +1,6 @@
 /**
- * Session bridge between the Experimental page and the active studio.
- * Studio harnesses (omit on export) register a draft; Save / Make Live read it.
+ * Session bridge between the Experimental page and the active workbench.
+ * The workbench registers a draft; Save / Make Live read it.
  */
 
 import type { IdeaDraft } from "./idea";

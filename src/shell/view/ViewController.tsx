@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { playgroundEntries } from "../../lib/discover";
-import type { PlaygroundEntry, PlaygroundStatus } from "../../lib/types";
+import { liveEntries } from "../../lib/discover";
+import type { PlaygroundEntry } from "../../lib/types";
 import {
   DEFAULT_DURATION_MS,
   REDUCED_MOTION_MS,
@@ -33,7 +33,6 @@ type ViewContextValue = {
   setMode: (mode: ViewMode) => void;
   /**
    * Publish the current idea as a new Live component.
-   * Does not modify ConfigurableShell or other experimental tooling.
    * When `discardExperimental` is set, that WIP folder is deleted after publish.
    */
   promote: (input: {
@@ -48,11 +47,16 @@ const ViewContext = createContext<ViewContextValue | null>(null);
 
 const EXPERIMENTAL_PATH = "/experimental";
 
+function isExperimentalPath(pathname: string): boolean {
+  return (
+    pathname === EXPERIMENTAL_PATH ||
+    pathname.startsWith(`${EXPERIMENTAL_PATH}/`)
+  );
+}
+
 function pathToSlug(pathname: string): string | null {
   const slug = pathname.replace(/^\//, "").replace(/\/$/, "");
-  if (!slug || slug === "experimental" || slug.startsWith("experimental/")) {
-    return null;
-  }
+  if (!slug || isExperimentalPath(`/${slug}`)) return null;
   return slug;
 }
 
@@ -70,9 +74,7 @@ function prefersReducedTransparency(): boolean {
   );
 }
 
-/** Parse cubic-bezier string for WAAPI-style easing samples. */
 function easeOutExpo(t: number): number {
-  // Approximate cubic-bezier(0.23, 1, 0.32, 1) with a smooth ease-out.
   return 1 - Math.pow(1 - t, 3.2);
 }
 
@@ -84,29 +86,20 @@ export function ViewProvider({ children }: ViewProviderProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [statusOverrides, setStatusOverrides] = useState<
-    Record<string, PlaygroundStatus>
-  >({});
   const [liveSlug, setLiveSlug] = useState<string | null>(() => {
     const fromUrl = pathToSlug(location.pathname);
     if (fromUrl) return fromUrl;
     return null;
   });
-  const [experimentalHref, setExperimentalHref] = useState(() => {
-    if (
-      location.pathname === EXPERIMENTAL_PATH ||
-      location.pathname.startsWith(`${EXPERIMENTAL_PATH}/`)
-    ) {
-      return location.pathname;
-    }
-    return EXPERIMENTAL_PATH;
-  });
+  const [experimentalHref, setExperimentalHref] = useState(() =>
+    isExperimentalPath(location.pathname)
+      ? location.pathname
+      : EXPERIMENTAL_PATH,
+  );
 
-  const urlMode: ViewMode =
-    location.pathname === EXPERIMENTAL_PATH ||
-    location.pathname.startsWith(`${EXPERIMENTAL_PATH}/`)
-      ? "experimental"
-      : "live";
+  const urlMode: ViewMode = isExperimentalPath(location.pathname)
+    ? "experimental"
+    : "live";
 
   const [progress, setProgress] = useState(() =>
     urlMode === "experimental" ? 1 : 0,
@@ -142,24 +135,11 @@ export function ViewProvider({ children }: ViewProviderProps) {
     };
   }, []);
 
-  const entriesWithOverrides = useMemo(() => {
-    return playgroundEntries.map(entry => {
-      const override = statusOverrides[entry.slug];
-      return override ? { ...entry, status: override } : entry;
-    });
-  }, [statusOverrides]);
-
-  const liveEntries = useMemo(
-    () => entriesWithOverrides.filter(e => e.status === "live"),
-    [entriesWithOverrides],
-  );
-  // Remember the experimental prototype URL so Live ↔ Experimental keeps it.
   useEffect(() => {
     if (urlMode !== "experimental") return;
     setExperimentalHref(location.pathname);
   }, [location.pathname, urlMode]);
 
-  // Sync Live slug from URL when browsing Live.
   useEffect(() => {
     if (urlMode !== "live") return;
     const slug = pathToSlug(location.pathname);
@@ -216,7 +196,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
     };
   }, []);
 
-  // URL → view mode (e.g. back/forward, direct load).
   useEffect(() => {
     if (urlMode === modeRef.current && !animating) {
       const expected = urlMode === "experimental" ? 1 : 0;

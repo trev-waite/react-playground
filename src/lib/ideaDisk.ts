@@ -31,9 +31,7 @@ export function resolveExperimentalDir(
   const root = experimentalRoot(playgroundRoot);
   const resolved = path.resolve(root, componentName);
   const rel = path.relative(root, resolved);
-  if (rel.startsWith("..") || path.isAbsolute(rel) || rel.includes("..")) {
-    return null;
-  }
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
   return resolved;
 }
 
