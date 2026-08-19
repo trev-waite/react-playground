@@ -40,29 +40,38 @@ async function readJsonBody(
   return { ok: true, value: body as Record<string, unknown> };
 }
 
-function ideaNameFromRequest(req: Request): string {
+function parseIdeaName(
+  req: Request,
+): { ok: true; name: string } | { ok: false; response: Response } {
   const url = new URL(req.url);
   const parts = url.pathname.split("/").filter(Boolean);
-  return decodeURIComponent(parts[2] ?? "");
+  const name = decodeURIComponent(parts[2] ?? "");
+  if (!isSafeComponentName(name)) {
+    return {
+      ok: false,
+      response: Response.json(
+        { ok: false, error: "Invalid prototype name" },
+        { status: 400 },
+      ),
+    };
+  }
+  return { ok: true, name };
+}
+
+function strField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
 }
 
 async function handlePromote(req: Request): Promise<Response> {
   const parsed = await readJsonBody(req);
   if (!parsed.ok) return parsed.response;
 
-  const folder = typeof parsed.value.folder === "string" ? parsed.value.folder : "";
-  const name = typeof parsed.value.name === "string" ? parsed.value.name : "";
-  const source = typeof parsed.value.source === "string" ? parsed.value.source : "";
-  const discardExperimental =
-    typeof parsed.value.discardExperimental === "string"
-      ? parsed.value.discardExperimental
-      : undefined;
-
   const result = await promoteIdeaToDisk(PLAYGROUND, {
-    folder,
-    name,
-    source,
-    discardExperimental,
+    folder: strField(parsed.value, "folder"),
+    name: strField(parsed.value, "name"),
+    source: strField(parsed.value, "source"),
+    discardExperimental: strField(parsed.value, "discardExperimental") || undefined,
   });
   if (!result.ok) {
     return Response.json(
@@ -84,20 +93,12 @@ async function handleSaveIdea(req: Request): Promise<Response> {
   const parsed = await readJsonBody(req);
   if (!parsed.ok) return parsed.response;
 
-  const name = typeof parsed.value.name === "string" ? parsed.value.name : "";
-  const folder = typeof parsed.value.folder === "string" ? parsed.value.folder : "";
-  const source = typeof parsed.value.source === "string" ? parsed.value.source : "";
-  const previousComponentName =
-    typeof parsed.value.previousComponentName === "string"
-      ? parsed.value.previousComponentName
-      : undefined;
-
   const result = await saveExperimentalIdea(PLAYGROUND, {
-    name,
-    folder,
-    source,
+    name: strField(parsed.value, "name"),
+    folder: strField(parsed.value, "folder"),
+    source: strField(parsed.value, "source"),
     studio: parsed.value.studio,
-    previousComponentName,
+    previousComponentName: strField(parsed.value, "previousComponentName") || undefined,
   });
   if (!result.ok) {
     return Response.json(
@@ -110,15 +111,10 @@ async function handleSaveIdea(req: Request): Promise<Response> {
 }
 
 async function handleLoadIdea(req: Request): Promise<Response> {
-  const componentName = ideaNameFromRequest(req);
-  if (!isSafeComponentName(componentName)) {
-    return Response.json(
-      { ok: false, error: "Invalid prototype name" },
-      { status: 400 },
-    );
-  }
+  const parsed = parseIdeaName(req);
+  if (!parsed.ok) return parsed.response;
 
-  const idea = await loadExperimentalIdea(PLAYGROUND, componentName);
+  const idea = await loadExperimentalIdea(PLAYGROUND, parsed.name);
   if (!idea) {
     return Response.json(
       { ok: false, error: "Prototype not found" },
@@ -130,15 +126,10 @@ async function handleLoadIdea(req: Request): Promise<Response> {
 }
 
 async function handleDeleteIdea(req: Request): Promise<Response> {
-  const componentName = ideaNameFromRequest(req);
-  if (!isSafeComponentName(componentName)) {
-    return Response.json(
-      { ok: false, error: "Invalid prototype name" },
-      { status: 400 },
-    );
-  }
+  const parsed = parseIdeaName(req);
+  if (!parsed.ok) return parsed.response;
 
-  const result = await deleteExperimentalIdea(PLAYGROUND, componentName);
+  const result = await deleteExperimentalIdea(PLAYGROUND, parsed.name);
   if (!result.ok) {
     return Response.json(
       { ok: false, error: result.error },

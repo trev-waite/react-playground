@@ -35,7 +35,7 @@ export async function promoteIdeaToDisk(
   if (await Bun.file(componentPath).exists()) {
     return {
       ok: false,
-      error: `${slug} already exists`,
+      error: `${slug} already exists. Rename the idea or choose a different Live folder.`,
       status: 409,
     };
   }

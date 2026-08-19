@@ -140,6 +140,27 @@ describe("Make Live discards the experimental copy", () => {
     expect(rejected.ok).toBe(false);
     expect(await loadExperimentalIdea(root, "MorphBlob")).not.toBeNull();
   });
+
+  test("rejects a Live path that already exists", async () => {
+    const root = await tempPlayground();
+    const first = await promoteIdeaToDisk(root, {
+      folder: "shapes",
+      name: "Morph Blob",
+      source,
+    });
+    expect(first.ok).toBe(true);
+
+    const conflict = await promoteIdeaToDisk(root, {
+      folder: "shapes",
+      name: "Morph Blob",
+      source,
+    });
+    expect(conflict.ok).toBe(false);
+    if (!conflict.ok) {
+      expect(conflict.status).toBe(409);
+      expect(conflict.error).toContain("already exists");
+    }
+  });
 });
 
 describe("deleteExperimentalIdea", () => {

@@ -18,7 +18,7 @@ export type PromoteRequest = {
   folder: string;
   /** Display / idea name, e.g. "Morph Blob" */
   name: string;
-  /** Portable component source (usually from the studio exporter) */
+  /** Portable component source from the Experimental workbench */
   source: string;
   /**
    * Saved experimental prototype to delete after a successful publish.

@@ -5,7 +5,7 @@
  * its own layout. Do not render <ConfigurableShell> here. Do not import
  * ConfigurableShell.module.css. The Live card stays a separate, portable unit.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { IdeaStudioSession } from "../lib/idea";
 import { registerIdeaExporter } from "../lib/ideaExport";
 import { ExamplePreview } from "../playground/shells/ConfigurableShell/ExamplePreview";
@@ -40,8 +40,25 @@ const COPIED_MS = 1600;
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through.
+  }
+
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.setAttribute("readonly", "");
+    el.style.position = "fixed";
+    el.style.left = "-9999px";
+    document.body.append(el);
+    el.select();
+    const ok = document.execCommand("copy");
+    el.remove();
+    return ok;
   } catch {
     return false;
   }
@@ -94,6 +111,29 @@ export default function IdeaWorkbench({
   const [panning, setPanning] = useState(false);
   const [offset, setOffset] = useState(initial.offset);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const baseline = useRef({
+    form: initial.blank ? DEFAULTS.form : initial.form,
+    soft: initial.blank ? DEFAULTS.soft : initial.soft,
+    drift: initial.blank ? DEFAULTS.drift : initial.drift,
+    offset: initial.blank ? { x: 0, y: 0 } : { ...initial.offset },
+  });
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!panning) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setPanning(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [panning]);
 
   function mutateForm(value: number) {
     setForm(value);
@@ -160,7 +200,8 @@ export default function IdeaWorkbench({
     const ok = await copyToClipboard(exportExampleCode(form, soft, drift, offset));
     if (!ok) return;
     setCopied(true);
-    window.setTimeout(() => setCopied(false), COPIED_MS);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
   }
 
   return (
@@ -228,10 +269,10 @@ export default function IdeaWorkbench({
               className={styles.action}
               disabled={blank}
               onClick={() => {
-                setForm(DEFAULTS.form);
-                setSoft(DEFAULTS.soft);
-                setDrift(DEFAULTS.drift);
-                setOffset({ x: 0, y: 0 });
+                setForm(baseline.current.form);
+                setSoft(baseline.current.soft);
+                setDrift(baseline.current.drift);
+                setOffset({ ...baseline.current.offset });
                 onMutate?.();
               }}
             >

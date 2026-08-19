@@ -62,9 +62,10 @@ export function ExperimentalPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [activated, setActivated] = useState(() => mode === "experimental");
   const initialPathRef = useRef(location.pathname);
   const applyLoadedIdeaRef = useRef<(idea: SavedIdea) => void>(() => {});
-  const saveIdeaRef = useRef<() => Promise<boolean>>(async () => false);
+  const saveIdeaRef = useRef<() => Promise<string | null>>(async () => null);
   const openingFromUrl = Boolean(ideaNameFromPath(initialPathRef.current));
   const workbenchReady = hydrated || !openingFromUrl;
 
@@ -83,6 +84,7 @@ export function ExperimentalPage() {
   const errorMessage = saveError ?? promoteError;
   const canSave =
     workbenchReady && hasDraft && (dirty || !activeComponentName) && !saving;
+  const markDirty = useCallback(() => setDirty(true), []);
 
   const applyFolder = useCallback(
     (folder: string) => {
@@ -121,6 +123,10 @@ export function ExperimentalPage() {
   );
   applyLoadedIdeaRef.current = applyLoadedIdea;
 
+  useEffect(() => {
+    if (mode === "experimental") setActivated(true);
+  }, [mode]);
+
   function resetToBlank() {
     setIdeaName(DEFAULT_IDEA_NAME);
     setActiveComponentName(null);
@@ -133,6 +139,7 @@ export function ExperimentalPage() {
   }
 
   useEffect(() => {
+    if (!activated) return;
     let cancelled = false;
 
     void (async () => {
@@ -154,13 +161,13 @@ export function ExperimentalPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activated]);
 
-  async function saveIdea(): Promise<boolean> {
+  async function saveIdea(): Promise<string | null> {
     const draft = getIdeaDraft();
     if (!draft?.source.trim()) {
       setSaveError("Nothing to save yet");
-      return false;
+      return null;
     }
 
     setSaving(true);
@@ -178,10 +185,10 @@ export function ExperimentalPage() {
       setActiveComponentName(data.idea.componentName);
       setDirty(false);
       navigate(`/experimental/${data.idea.componentName}`, { replace: true });
-      return true;
+      return data.idea.componentName;
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed");
-      return false;
+      return null;
     } finally {
       setSaving(false);
     }
@@ -192,7 +199,7 @@ export function ExperimentalPage() {
     if (!dirty) return true;
     const draft = getIdeaDraft();
     if (!draft?.source.trim()) return true;
-    return saveIdea();
+    return (await saveIdea()) != null;
   }
 
   async function onSelectPrototype(next: string) {
@@ -229,13 +236,38 @@ export function ExperimentalPage() {
   }
 
   async function onMakeLive() {
+    if (!folderSlug || !componentName) {
+      setSaveError("Choose or enter a folder");
+      return;
+    }
+
+    const dest = `src/playground/${livePath}`;
+    const willDiscard = Boolean(activeComponentName || dirty);
+    const confirmed = window.confirm(
+      willDiscard
+        ? `Publish “${ideaName}” to ${dest}? The experimental copy will be removed.`
+        : `Publish “${ideaName}” to ${dest}?`,
+    );
+    if (!confirmed) return;
+
+    let discard = activeComponentName ?? undefined;
+    if (dirty) {
+      const savedName = await saveIdea();
+      if (!savedName) return;
+      discard = savedName;
+    }
+
     const source = getIdeaSource();
-    if (!source) return;
+    if (!source) {
+      setSaveError("Nothing to publish yet");
+      return;
+    }
+
     await promote({
       folder: folderValue,
       name: ideaName,
       source,
-      discardExperimental: activeComponentName ?? undefined,
+      discardExperimental: discard,
     });
   }
 
@@ -395,7 +427,7 @@ export function ExperimentalPage() {
           <button
             type="button"
             className={styles.makeLive}
-            disabled={promoting || !workbenchReady || !hasDraft}
+            disabled={promoting || saving || !workbenchReady || !hasDraft}
             onClick={() => void onMakeLive()}
           >
             {promoting ? "Publishing…" : "Make Live"}
@@ -415,7 +447,7 @@ export function ExperimentalPage() {
               <IdeaWorkbench
                 key={studioKey}
                 session={session}
-                onMutate={() => setDirty(true)}
+                onMutate={markDirty}
                 onDraftChange={setHasDraft}
               />
             ) : (
