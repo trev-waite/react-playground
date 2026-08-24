@@ -47,6 +47,11 @@ Copy the experiment folder into your app. Keep the component and `*.module.css`;
 ```
 apps/web          UI (port 3000)
 apps/api          local HTTP API (port 3001)
+  src/config/     ports, paths, Live registry refresh
+  src/server/     Bun.serve routes + CORS
+  src/features/   business logic
+    ideas/        save / load Experimental WIP
+    promote/      Make Live
 packages/api      PlaygroundApi contract + HTTP client
 ```
 

@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { toComponentName, type PromoteInput } from "@react-playground/api";
-import { deleteExperimentalIdea } from "./ideaDisk";
+import { deleteExperimentalIdea } from "../ideas/ideaDisk";
 import { buildComponentModule, buildPreviewModule, validatePromoteRequest } from "./promote";
 
 export type PromoteToDiskResult =

@@ -14,16 +14,6 @@
 - Update or add tests when behavior changes.
 - Never hardcode, expose, log, or commit secrets or sensitive values.
 
-## Monorepo
-
-Turborepo with Bun workspaces. The UI never talks to disk; it depends on `PlaygroundApi`.
-
-- **`apps/web`** — React playground (Live + Experimental). Bind the backend in `apps/web/src/lib/playgroundApi.ts`.
-- **`apps/api`** — local TypeScript HTTP API. Writes `apps/web/src/playground` and refreshes the Live registry after Make Live.
-- **`packages/api` (`@react-playground/api`)** — shared types, naming helpers, `PlaygroundApi` interface, and `createHttpPlaygroundApi`.
-
-To swap the local API later, implement `PlaygroundApi` and change the single binding in `playgroundApi.ts`. Do not scatter `fetch("/api/...")` through the UI.
-
 ## Experimental view vs ConfigurableShell
 
 These are separate surfaces that share look and feel, not one component used twice.

@@ -16,7 +16,8 @@ export function parsePort(raw: string | undefined, fallback: number): number {
 
 export function resolveApiConfig(
   env: Record<string, string | undefined> = process.env,
-  srcDir = import.meta.dir,
+  // apps/api/src, so ../../web is the sibling web app
+  srcDir = path.join(import.meta.dir, ".."),
 ): ApiConfig {
   const webRoot = path.resolve(env.WEB_ROOT ?? path.join(srcDir, "../../web"));
   return {

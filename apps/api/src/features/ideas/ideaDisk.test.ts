@@ -9,7 +9,7 @@ import {
   resolveExperimentalDir,
   saveExperimentalIdea,
 } from "./ideaDisk";
-import { promoteIdeaToDisk } from "./promoteDisk";
+import { promoteIdeaToDisk } from "../promote/promoteDisk";
 import { isWipExperimentalSlug } from "@react-playground/api";
 
 const dirs: string[] = [];

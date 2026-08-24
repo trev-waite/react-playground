@@ -6,7 +6,7 @@ import {
   type SavedIdea,
   type IdeaStudioState,
 } from "@react-playground/api";
-import { buildComponentModule, buildPreviewModule } from "./promote";
+import { buildComponentModule, buildPreviewModule } from "../promote/promote";
 
 export type SaveIdeaValidated = {
   title: string;

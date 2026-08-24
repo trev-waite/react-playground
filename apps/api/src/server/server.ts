@@ -1,13 +1,13 @@
 import { isSafeComponentName } from "@react-playground/api";
-import { createHttp, strField } from "./http";
-import { parseIdeaStudio } from "./idea";
+import { parseIdeaStudio } from "../features/ideas/idea";
 import {
   deleteExperimentalIdea,
   listExperimentalIdeas,
   loadExperimentalIdea,
   saveExperimentalIdea,
-} from "./ideaDisk";
-import { promoteIdeaToDisk } from "./promoteDisk";
+} from "../features/ideas/ideaDisk";
+import { promoteIdeaToDisk } from "../features/promote/promoteDisk";
+import { createHttp, strField } from "./http";
 
 export type PlaygroundApiServerOptions = {
   playgroundRoot: string;
