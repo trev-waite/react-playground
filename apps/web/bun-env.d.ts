@@ -17,3 +17,11 @@ declare module "*.css" {
   const css: string;
   export default css;
 }
+
+interface ImportMetaEnv {
+  readonly BUN_PUBLIC_API_URL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

@@ -1,26 +1,20 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { toComponentName, type PromoteInput } from "@react-playground/api";
 import { deleteExperimentalIdea } from "./ideaDisk";
-import {
-  buildComponentModule,
-  buildPreviewModule,
-  toComponentName,
-  validatePromoteRequest,
-  type PromoteRequest,
-  type PromoteResponse,
-} from "./promote";
+import { buildComponentModule, buildPreviewModule, validatePromoteRequest } from "./promote";
 
 export type PromoteToDiskResult =
   | { ok: true; slug: string; dir: string }
   | { ok: false; error: string; status: number };
 
 /**
- * Write a new Live component under src/playground/<folder>/<Name>/.
- * Does not modify ConfigurableShell or any existing experimental tooling.
+ * Write a new Live component under apps/web/src/playground/<folder>/<Name>/.
+ * Does not modify ConfigurableShell or other experimental tooling.
  */
 export async function promoteIdeaToDisk(
   playgroundRoot: string,
-  request: PromoteRequest,
+  request: PromoteInput,
 ): Promise<PromoteToDiskResult> {
   const validated = validatePromoteRequest(request);
   if (!validated.ok) {
@@ -63,5 +57,3 @@ export async function promoteIdeaToDisk(
 
   return { ok: true, slug, dir };
 }
-
-export type { PromoteRequest, PromoteResponse };

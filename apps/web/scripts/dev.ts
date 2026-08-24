@@ -3,7 +3,7 @@
  */
 import { watch } from "node:fs";
 import path from "node:path";
-import { EXPERIMENTAL_FOLDER } from "../src/lib/promote";
+import { EXPERIMENTAL_FOLDER } from "@react-playground/api";
 import { syncPlaygroundRegistry } from "./sync-playground";
 
 const ROOT = path.join(import.meta.dir, "..");

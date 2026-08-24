@@ -1,23 +1,30 @@
 # React Playground
 
-A Bun + React workspace for building, previewing, and exporting isolated web components. Edit in code; the app renders your work on a full-bleed canvas with an edge-reveal sidebar for navigation.
+A Bun + React + Turborepo workspace for building, previewing, and exporting isolated web components. The UI is a local SPA; a dedicated TypeScript API writes experiment files on disk.
 
-This is not a WYSIWYG editor. The shell provides a Figma-like preview surface; all component logic and styles live in source files under `src/playground/`.
+This is not a WYSIWYG editor. The shell provides a Figma-like preview surface; all component logic and styles live in source files under `apps/web/src/playground/`.
 
 ## Quick start
 
 ```bash
 bun install
-bun dev
+bun run dev
 ```
 
-Open the URL printed in the terminal. Move the pointer to the left edge of the screen to open the component browser.
+`bun install` also drops **Bun 1.4.0** into `node_modules/.bin` for this repo only. It does not change your global Bun (`bun upgrade` would). After install, prefer `bun run …` so scripts pick up that local binary.
+
+Turbo starts both apps:
+
+- UI: [http://localhost:3000](http://localhost:3000)
+- API: [http://localhost:3001](http://localhost:3001)
+
+Move the pointer to the left edge of the screen to open the component browser.
 
 ## Workflow
 
 ### Add an experiment
 
-1. Create `src/playground/<group>/<Name>/`
+1. Create `apps/web/src/playground/<group>/<Name>/`
 2. Add `Name.tsx` and `Name.module.css` (CSS Modules)
 3. Add `preview.tsx` with a default export
 
@@ -25,56 +32,53 @@ With `bun dev` running, new `preview.tsx` files are registered automatically. If
 
 Folder paths map directly to the sidebar and URL structure:
 
-- `src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+- `apps/web/src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
 
 ### Export to another app
 
-Copy the experiment folder into your target project. Keep the component file(s) and `*.module.css`; omit `preview.tsx` unless you want the demo harness. Do not import from `src/shell/` or `src/lib/` — those are playground-only.
+Copy the experiment folder into your target project. Keep the component file(s) and `*.module.css`; omit `preview.tsx` unless you want the demo harness. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/` — those are playground-only.
 
 ## Repository structure
 
 ```
 .
-├── docs/                 # Conventions, export guide, growth playbook
-├── scripts/              # Registry sync and dev entry (invoked by local commands)
-├── src/
-│   ├── playground/       # Experiments — portable, exportable components
-│   ├── shell/            # Playground UI (sidebar, canvas, routing)
-│   └── lib/              # Discovery logic and generated registry
-├── package.json
-└── tsconfig.json
+├── apps/
+│   ├── web/              # React playground UI
+│   └── api/              # Local TypeScript API (disk persistence)
+├── packages/
+│   └── api/              # @react-playground/api — PlaygroundApi contract
+├── docs/
+├── package.json          # Bun workspaces + turbo
+└── turbo.json
 ```
 
 | Path | Description |
 |------|-------------|
-| [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) | Stack conventions, experiment patterns, and guidance for adding routing, state, data fetching, and tests later. |
-| `src/playground/` | One folder per experiment: component, CSS Module, and `preview.tsx`. |
-| `src/shell/` | Application chrome — not intended for export. |
-| `src/lib/discover.ts` | Builds the sidebar tree from the generated registry. |
-| `src/lib/playground.gen.ts` | Auto-generated lazy-import map. Do not edit manually. |
+| [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) | Stack conventions and experiment patterns |
+| `apps/web/src/playground/` | One folder per experiment: component, CSS Module, and `preview.tsx` |
+| `apps/web/src/shell/` | Application chrome — not intended for export |
+| `apps/web/src/lib/playgroundApi.ts` | Single backend binding (`PlaygroundApi`) |
+| `apps/api/` | HTTP server that writes playground files |
+| `packages/api/` | Types, interface, and HTTP client |
 
-### `scripts/` internals
-
-These files are called by [local commands](#local-commands), not run directly during normal development.
-
-| File | When it runs | What it does |
-|------|--------------|--------------|
-| `sync-playground.ts` | Start of `bun dev` and `bun run build`; on `preview.tsx` changes during dev; via `bun run sync:playground` | Scans `src/playground/**/preview.tsx` and writes `playground.gen.ts` |
-| `dev.ts` | `bun dev` only | Syncs the registry, watches for new previews, starts the dev server |
+The UI depends on `PlaygroundApi` only. Swap `createHttpPlaygroundApi` in `playgroundApi.ts` when replacing this local API.
 
 ## Local commands
 
 | Command | Description |
 |---------|-------------|
-| `bun dev` | Development server with automatic registry sync |
+| `bun run dev` | UI + API via Turbo |
 | `bun run sync:playground` | Regenerate `playground.gen.ts` once |
-| `bun run build` | Sync registry, then output a static build to `dist/` |
-| `bun start` | Serve the production build (`src/index.ts`) |
+| `bun run build` | Build all packages |
+| `bun run test` | Run all package tests |
+| `bun run start` | Production start (UI + API) |
 
 ## Stack
 
-- **Runtime / bundler:** Bun
+- **Monorepo:** Turborepo + Bun workspaces
+- **Runtime / bundler:** Bun 1.4 (pinned in `.bun-version` and the `bun` devDependency)
 - **UI:** React 19.2
+- **API:** Bun.serve TypeScript server
 - **Experiment styles:** CSS Modules
 - **Routing:** React Router (shareable experiment URLs)
 - **Motion:** Motion (sidebar transitions)

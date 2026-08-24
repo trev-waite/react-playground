@@ -10,7 +10,7 @@ import {
   saveExperimentalIdea,
 } from "./ideaDisk";
 import { promoteIdeaToDisk } from "./promoteDisk";
-import { isWipExperimentalSlug } from "./idea";
+import { isWipExperimentalSlug } from "@react-playground/api";
 
 const dirs: string[] = [];
 

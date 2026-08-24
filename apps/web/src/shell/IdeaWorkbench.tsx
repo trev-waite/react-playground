@@ -6,7 +6,7 @@
  * ConfigurableShell.module.css. The Live card stays a separate, portable unit.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { IdeaStudioSession } from "../lib/idea";
+import type { IdeaStudioSession } from "../lib/ideaSession";
 import { registerIdeaExporter } from "../lib/ideaExport";
 import { ExamplePreview } from "../playground/shells/ConfigurableShell/ExamplePreview";
 import { exportExampleCode } from "../playground/shells/ConfigurableShell/exportExample";

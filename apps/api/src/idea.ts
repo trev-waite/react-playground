@@ -1,47 +1,12 @@
 import {
-  EXPERIMENTAL_FOLDER,
-  buildComponentModule,
-  buildPreviewModule,
+  isSafeComponentName,
   normalizeFolder,
   toComponentName,
-} from "./promote";
-
-export type IdeaStudioState = {
-  form: number;
-  soft: number;
-  drift: number;
-  offset: { x: number; y: number };
-};
-
-export type IdeaStudioSession =
-  | { kind: "demo" }
-  | { kind: "blank" }
-  | { kind: "restore"; studio: IdeaStudioState };
-
-export type IdeaDraft = {
-  source: string;
-  studio?: IdeaStudioState | null;
-};
-
-export type IdeaSummary = {
-  name: string;
-  folder: string;
-  componentName: string;
-  savedAt: string;
-};
-
-export type SavedIdea = IdeaSummary & {
-  source: string;
-  studio: IdeaStudioState | null;
-};
-
-export type SaveIdeaRequest = {
-  name: string;
-  folder: string;
-  source: string;
-  studio?: unknown;
-  previousComponentName?: string;
-};
+  type SaveIdeaInput,
+  type SavedIdea,
+  type IdeaStudioState,
+} from "@react-playground/api";
+import { buildComponentModule, buildPreviewModule } from "./promote";
 
 export type SaveIdeaValidated = {
   title: string;
@@ -51,23 +16,6 @@ export type SaveIdeaValidated = {
   studio: IdeaStudioState | null;
   previousComponentName: string | null;
 };
-
-const COMPONENT_NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
-
-export function experimentalSlug(componentName: string): string {
-  return `${EXPERIMENTAL_FOLDER}/${componentName}`;
-}
-
-export function isWipExperimentalSlug(slug: string): boolean {
-  return (
-    slug === EXPERIMENTAL_FOLDER ||
-    slug.startsWith(`${EXPERIMENTAL_FOLDER}/`)
-  );
-}
-
-export function isSafeComponentName(input: string): boolean {
-  return COMPONENT_NAME_RE.test(input);
-}
 
 function clampControl(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -102,7 +50,7 @@ export function parseIdeaStudio(input: unknown): IdeaStudioState | null {
 }
 
 export function validateSaveRequest(
-  input: SaveIdeaRequest,
+  input: SaveIdeaInput,
 ): { ok: true; value: SaveIdeaValidated } | { ok: false; error: string } {
   const title = input.name.trim() || "Untitled idea";
   const componentName = toComponentName(title);

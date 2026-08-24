@@ -1,8 +1,8 @@
 # Best Practices
 
-> Generated **2026-07-15**. Reflects guidance and versions as of that date. Re-run the research pass (or regenerate this file) if the project sits untouched for a long time, or before adding a major dependency — versions and official guidance drift.
+> Generated **2026-08-23**. Reflects guidance and versions as of that date. Re-run the research pass (or regenerate this file) if the project sits untouched for a long time, or before adding a major dependency — versions and official guidance drift.
 
-This playground is intentionally minimal: Bun + React, CSS Modules for experiments, React Router for shareable URLs, and Motion for the edge-reveal sidebar. Everything under `src/playground/` is the exportable unit of work; `src/shell/` is chrome, not product.
+This playground is intentionally minimal: Bun + React, CSS Modules for experiments, React Router for shareable URLs, and Motion for the edge-reveal sidebar. Everything under `apps/web/src/playground/` is the exportable unit of work; `apps/web/src/shell/` is chrome, not product. Persistence goes through `PlaygroundApi` (`packages/api`) to `apps/api`.
 
 ---
 
@@ -10,7 +10,7 @@ This playground is intentionally minimal: Bun + React, CSS Modules for experimen
 
 ### React
 
-- **Version:** `react` / `react-dom` `^19.2.7` ([React versions](https://react.dev/versions))
+- **Version:** `react` / `react-dom` `^19.2.8` ([React versions](https://react.dev/versions))
 - Stable 19.2 line; use the Latest release channel for app work.
 
 ### `useEffect`
@@ -25,19 +25,20 @@ Official guidance ([You Might Not Need an Effect](https://react.dev/learn/you-mi
 
 - Scaffold: `bun init --react` ([Bun React guide](https://bun.com/docs/guides/ecosystem/react))
 - Scripts:
-  - `bun dev` — full-stack dev server with HMR (`bun --hot src/index.ts`)
+  - `bun run dev` — Turbo starts the UI (`apps/web`) and local API (`apps/api`)
   - `bun run build` — static assets to `dist/`
-  - `bun start` — production serve
+  - `bun run start` — production serve
 - CSS Modules (`.module.css`) are supported by Bun’s bundler with zero config ([CSS Modules](https://bun.com/docs/bundler/css#css-modules)).
-- **Dev note:** Bun’s browser HMR currently omits CSS Module export objects (`ReferenceError: import_*_module`). This project runs with `hmr: false` in [`src/index.ts`](../src/index.ts) so Modules work; saves still trigger a full page reload. Revisit when upgrading Bun.
+- **Dev note:** Bun’s browser HMR currently omits CSS Module export objects (`ReferenceError: import_*_module`). This project runs with `hmr: false` in [`apps/web/src/index.ts`](../apps/web/src/index.ts) so Modules work; saves still trigger a full page reload. Revisit when upgrading Bun.
 
 ### Libraries in this project
 
 | Library | Version (approx) | Role |
 |---------|------------------|------|
-| `react` / `react-dom` | ^19.2.7 | UI |
-| `react-router` | ^8.2.0 | SPA routes for experiments |
-| `motion` | ^12.42.2 | Interruptible sidebar springs (`motion/react`) |
+| `react` / `react-dom` | ^19.2.8 | UI |
+| `react-router` | ^8.3.0 | SPA routes for experiments |
+| `motion` | ^13.1.1 | Interruptible sidebar springs (`motion/react`) |
+| `bun` | 1.4.0 | Project-local runtime (does not replace a global Bun install) |
 
 ### Vercel React best practices
 
@@ -49,16 +50,17 @@ Vercel publishes performance-oriented React guidance as [react-best-practices](h
 
 ### Architecture conventions
 
-- **`src/playground/**`** — experiments. Folder tree = sidebar tree. Each leaf has `preview.tsx` (canvas entry) + co-located component + `.module.css`.
-- **`src/shell/**`** — playground chrome (canvas, sidebar). Do not export shell into product apps.
-- **`src/lib/discover.ts`** — builds the sidebar tree from the generated registry.
-- **`scripts/sync-playground.ts`** — scans `src/playground/**/preview.tsx` with `Bun.Glob` and writes `src/lib/playground.gen.ts` (explicit lazy imports). Runs on `bun dev` / `bun run build`. Bun’s HTML bundler in this setup does not expand `import.meta.glob`, so codegen is the portable auto-discovery path.
+- **`apps/web/src/playground/**`** — experiments. Folder tree = sidebar tree. Each leaf has `preview.tsx` (canvas entry) + co-located component + `.module.css`.
+- **`apps/web/src/shell/**`** — playground chrome (canvas, sidebar). Do not export shell into product apps.
+- **`apps/web/src/lib/discover.ts`** — builds the sidebar tree from the generated registry.
+- **`apps/web/src/lib/playgroundApi.ts`** — the only UI binding to the backend (`PlaygroundApi`).
+- **`apps/web/scripts/sync-playground.ts`** — scans `apps/web/src/playground/**/preview.tsx` with `Bun.Glob` and writes `playground.gen.ts` (explicit lazy imports). Runs on `bun dev` / `bun run build`. Bun’s HTML bundler in this setup does not expand `import.meta.glob`, so codegen is the portable auto-discovery path.
 
 ---
 
 ## Adding a new experiment
 
-1. Create a folder under `src/playground/`, e.g. `src/playground/forms/TextField/`.
+1. Create a folder under `apps/web/src/playground/`, e.g. `apps/web/src/playground/forms/TextField/`.
 2. Add the portable component + CSS Module:
    - `TextField.tsx`
    - `TextField.module.css`
@@ -82,11 +84,11 @@ If a brand-new experiment does not appear immediately, run `bun run sync:playgro
 
 ## Exporting an experiment
 
-1. Copy the experiment folder from `src/playground/...` into the target app.
+1. Copy the experiment folder from `apps/web/src/playground/...` into the target app.
 2. Keep the component file(s) and `*.module.css`.
 3. Drop `preview.tsx` unless the target app wants the same demo harness.
 4. Ensure the target bundler supports CSS Modules (Vite, Bun, webpack `css-loader` modules, etc.).
-5. Adjust any relative imports; there should be no imports from `src/shell/` or `src/lib/`.
+5. Adjust any relative imports; there should be no imports from `apps/web/src/shell/` or `apps/web/src/lib/`.
 
 ---
 
@@ -109,7 +111,7 @@ bun add zustand
 Check current version at install time. Minimal pattern:
 
 ```ts
-// src/state/ui.ts
+// apps/web/src/state/ui.ts
 import { create } from "zustand";
 
 type UiState = { theme: "light" | "dark"; setTheme: (t: "light" | "dark") => void };
@@ -142,17 +144,17 @@ Bun includes a test runner:
 bun test
 ```
 
-Suggested layout: co-locate `PrimaryButton.test.tsx` next to the component, or use `src/playground/**/__tests__/`. Add `@testing-library/react` + `happy-dom` / `jsdom` when you start writing component tests — look up current versions at that time.
+Suggested layout: co-locate `PrimaryButton.test.tsx` next to the component, or use `apps/web/src/playground/**/__tests__/`. Add `@testing-library/react` + `happy-dom` / `jsdom` when you start writing component tests — look up current versions at that time.
 
 ### Feature-folder structure
 
 **When warranted:** roughly 2+ distinct product features beyond the playground itself.
 
-Migrate gradually: move a domain into `src/features/<name>/` with its own components and styles. Keep `src/playground/` as the experiment surface that imports from features when you want demos of real modules.
+Migrate gradually: move a domain into `apps/web/src/features/<name>/` with its own components and styles. Keep `apps/web/src/playground/` as the experiment surface that imports from features when you want demos of real modules.
 
 ### Tailwind (shell only)
 
-**When warranted:** you want utility-speed styling for chrome only. Prefer keeping **experiments on CSS Modules** so export stays portable. If adding Tailwind, scope it to `src/shell/` and avoid requiring Tailwind inside `src/playground/` components you plan to export.
+**When warranted:** you want utility-speed styling for chrome only. Prefer keeping **experiments on CSS Modules** so export stays portable. If adding Tailwind, scope it to `apps/web/src/shell/` and avoid requiring Tailwind inside `apps/web/src/playground/` components you plan to export.
 
 ```bash
 # look up current Bun + Tailwind setup in Bun docs at the time

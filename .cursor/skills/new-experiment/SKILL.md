@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # New Experiment
 
-Create one portable experiment under `src/playground/`. Do not start writing files until you have asked the user what to build and how to control it.
+Create one portable experiment under `apps/web/src/playground/`. Do not start writing files until you have asked the user what to build and how to control it.
 
 ## Ask first
 
@@ -22,7 +22,7 @@ If they are unsure, propose 2–4 obvious controls from the idea and confirm bef
 ## Where
 
 ```
-src/playground/<folder>/<Name>/
+apps/web/src/playground/<folder>/<Name>/
   Name.tsx
   Name.module.css
   preview.tsx
@@ -32,11 +32,11 @@ src/playground/<folder>/<Name>/
 - `<Name>`: PascalCase, starts with a letter (`MorphBlob`).
 - Reserved: `shells` (ConfigurableShell), `experimental` (UI-saved WIP, gitignored, skipped by registry sync).
 
-Do not put files in `src/playground/experimental/` or `src/playground/shells/`. Do not set `meta.status` to `"experimental"` — that hides the component from Live and does not show it on the Experimental page.
+Do not put files in `apps/web/src/playground/experimental/` or `apps/web/src/playground/shells/`. Do not set `meta.status` to `"experimental"` — that hides the component from Live and does not show it on the Experimental page.
 
 ## Files
 
-**`Name.tsx`** — the portable component. Props match the confirmed sliders and options. Import only its CSS Module. No imports from `src/shell/`, `src/lib/`, or ConfigurableShell.
+**`Name.tsx`** — the portable component. Props match the confirmed sliders and options. Import only its CSS Module. No imports from `apps/web/src/shell/`, `apps/web/src/lib/`, or ConfigurableShell.
 
 **`Name.module.css`** — styles for that component only.
 
@@ -67,7 +67,7 @@ export default function NamePreview() {
 }
 ```
 
-See `src/playground/shells/ConfigurableShell/preview.tsx` for the control pattern and `src/playground/buttons/PrimaryButton/` for a simple portable component.
+See `apps/web/src/playground/shells/ConfigurableShell/preview.tsx` for the control pattern and `apps/web/src/playground/buttons/PrimaryButton/` for a simple portable component.
 
 ## After creating
 

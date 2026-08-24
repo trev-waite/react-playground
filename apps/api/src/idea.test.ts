@@ -1,29 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  experimentalSlug,
-  isSafeComponentName,
-  isWipExperimentalSlug,
-  parseIdeaStudio,
-  validateSaveRequest,
-} from "./idea";
-
-describe("isWipExperimentalSlug", () => {
-  test("matches the reserved experimental tree only", () => {
-    expect(isWipExperimentalSlug("experimental")).toBe(true);
-    expect(isWipExperimentalSlug(experimentalSlug("MorphBlob"))).toBe(true);
-    expect(isWipExperimentalSlug("shells/ConfigurableShell")).toBe(false);
-    expect(isWipExperimentalSlug("buttons/PrimaryButton")).toBe(false);
-  });
-});
-
-describe("isSafeComponentName", () => {
-  test("allows PascalCase names and rejects path traversal", () => {
-    expect(isSafeComponentName("MorphBlob")).toBe(true);
-    expect(isSafeComponentName("../shells")).toBe(false);
-    expect(isSafeComponentName("experimental/Foo")).toBe(false);
-    expect(isSafeComponentName("")).toBe(false);
-  });
-});
+import { parseIdeaStudio, validateSaveRequest } from "./idea";
 
 describe("parseIdeaStudio", () => {
   test("reads finite control values and clamps the sliders", () => {

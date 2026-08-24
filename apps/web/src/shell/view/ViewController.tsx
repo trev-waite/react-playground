@@ -10,7 +10,9 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { liveEntries } from "../../lib/discover";
+import { playgroundApi } from "../../lib/playgroundApi";
 import type { PlaygroundEntry } from "../../lib/types";
+import type { PromoteInput } from "@react-playground/api";
 import {
   DEFAULT_DURATION_MS,
   REDUCED_MOTION_MS,
@@ -35,12 +37,7 @@ type ViewContextValue = {
    * Publish the current idea as a new Live component.
    * When `discardExperimental` is set, that WIP folder is deleted after publish.
    */
-  promote: (input: {
-    folder: string;
-    name: string;
-    source: string;
-    discardExperimental?: string;
-  }) => Promise<void>;
+  promote: (input: PromoteInput) => Promise<void>;
 };
 
 const ViewContext = createContext<ViewContextValue | null>(null);
@@ -223,34 +220,17 @@ export function ViewProvider({ children }: ViewProviderProps) {
   );
 
   const promote = useCallback(
-    async (input: {
-      folder: string;
-      name: string;
-      source: string;
-      discardExperimental?: string;
-    }) => {
+    async (input: PromoteInput) => {
       if (promoting) return;
 
       setPromoting(true);
       setPromoteError(null);
 
       try {
-        const res = await fetch("/api/promote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(input),
-        });
-        const data = (await res.json()) as {
-          ok: boolean;
-          error?: string;
-          slug?: string;
-        };
-        if (!res.ok || !data.ok || !data.slug) {
-          throw new Error(data.error ?? "Promote failed");
-        }
-        setLiveSlug(data.slug);
+        const { slug } = await playgroundApi.promote(input);
+        setLiveSlug(slug);
         // Full reload so the regenerated registry can lazy-load the new module.
-        window.location.assign(`/${data.slug}`);
+        window.location.assign(`/${slug}`);
       } catch (err) {
         setPromoteError(err instanceof Error ? err.message : "Promote failed");
         setPromoting(false);

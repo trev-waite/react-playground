@@ -2,28 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildComponentModule,
   buildPreviewModule,
-  buildSlug,
-  normalizeFolder,
-  toComponentName,
   validatePromoteRequest,
 } from "./promote";
-import { statusFromPreviewSource } from "../../scripts/sync-playground";
-
-describe("normalizeFolder", () => {
-  test("normalizes display names", () => {
-    expect(normalizeFolder("Buttons")).toBe("buttons");
-    expect(normalizeFolder(" my shapes ")).toBe("my-shapes");
-    expect(normalizeFolder("")).toBeNull();
-  });
-});
-
-describe("toComponentName", () => {
-  test("builds PascalCase names", () => {
-    expect(toComponentName("morph blob")).toBe("MorphBlob");
-    expect(toComponentName("Untitled idea")).toBe("UntitledIdea");
-    expect(toComponentName("123 bad")).toBeNull();
-  });
-});
+import { buildSlug } from "@react-playground/api";
 
 describe("validatePromoteRequest", () => {
   test("accepts a normal idea", () => {
@@ -82,17 +63,5 @@ describe("buildComponentModule / buildPreviewModule", () => {
 
   test("buildSlug joins folder and name", () => {
     expect(buildSlug("feedback", "PulseMark")).toBe("feedback/PulseMark");
-  });
-});
-
-describe("statusFromPreviewSource", () => {
-  test("defaults to live", () => {
-    expect(statusFromPreviewSource("export const meta = {};")).toBe("live");
-  });
-
-  test("detects experimental", () => {
-    expect(statusFromPreviewSource(`status: "experimental"`)).toBe(
-      "experimental",
-    );
   });
 });

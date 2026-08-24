@@ -6,7 +6,7 @@ import { Glob } from "bun";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { PlaygroundStatus } from "../src/lib/types";
-import { isWipExperimentalSlug } from "../src/lib/idea";
+import { isWipExperimentalSlug } from "@react-playground/api";
 
 const ROOT = path.join(import.meta.dir, "..");
 const PLAYGROUND = path.join(ROOT, "src", "playground");

@@ -1,16 +1,18 @@
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import {
+  EXPERIMENTAL_FOLDER,
+  isSafeComponentName,
+  type IdeaSummary,
+  type SaveIdeaInput,
+  type SavedIdea,
+} from "@react-playground/api";
+import {
   buildIdeaFiles,
   ideaRecord,
-  isSafeComponentName,
   parseIdeaStudio,
   validateSaveRequest,
-  type IdeaSummary,
-  type SaveIdeaRequest,
-  type SavedIdea,
 } from "./idea";
-import { EXPERIMENTAL_FOLDER } from "./promote";
 
 export type IdeaDiskError = {
   ok: false;
@@ -37,7 +39,12 @@ export function resolveExperimentalDir(
 
 async function readIdeaMeta(
   dir: string,
-): Promise<{ name: string; folder: string; studio: SavedIdea["studio"]; savedAt: string } | null> {
+): Promise<{
+  name: string;
+  folder: string;
+  studio: SavedIdea["studio"];
+  savedAt: string;
+} | null> {
   const metaFile = Bun.file(path.join(dir, "idea.json"));
   if (!(await metaFile.exists())) return null;
   try {
@@ -123,14 +130,14 @@ export async function deleteExperimentalIdea(
   return { ok: true };
 }
 
-export type SaveIdeaResult =
+export type SaveIdeaDiskResult =
   | { ok: true; idea: IdeaSummary; ideas: IdeaSummary[] }
   | IdeaDiskError;
 
 export async function saveExperimentalIdea(
   playgroundRoot: string,
-  request: SaveIdeaRequest,
-): Promise<SaveIdeaResult> {
+  request: SaveIdeaInput,
+): Promise<SaveIdeaDiskResult> {
   const validated = validateSaveRequest(request);
   if (!validated.ok) {
     return { ok: false, error: validated.error, status: 400 };

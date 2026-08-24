@@ -3,7 +3,7 @@
  * The workbench registers a draft; Save / Make Live read it.
  */
 
-import type { IdeaDraft } from "./idea";
+import type { IdeaDraft } from "./ideaSession";
 
 let exporter: (() => IdeaDraft) | null = null;
 

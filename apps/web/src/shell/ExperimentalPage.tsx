@@ -1,20 +1,17 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { playgroundEntries } from "../lib/discover";
-import type { IdeaStudioSession, IdeaSummary, SavedIdea } from "../lib/idea";
-import {
-  deleteIdea,
-  listIdeas,
-  loadIdea,
-  saveIdea as persistIdea,
-} from "../lib/ideaClient";
-import { getIdeaDraft, getIdeaSource } from "../lib/ideaExport";
 import {
   EXPERIMENTAL_FOLDER,
   SHELLS_FOLDER,
   normalizeFolder,
   toComponentName,
-} from "../lib/promote";
+  type IdeaSummary,
+  type SavedIdea,
+} from "@react-playground/api";
+import { playgroundEntries } from "../lib/discover";
+import type { IdeaStudioSession } from "../lib/ideaSession";
+import { getIdeaDraft, getIdeaSource } from "../lib/ideaExport";
+import { playgroundApi } from "../lib/playgroundApi";
 import { useView } from "./view/ViewController";
 import styles from "./ExperimentalPage.module.css";
 
@@ -144,13 +141,13 @@ export function ExperimentalPage() {
 
     void (async () => {
       try {
-        const listed = await listIdeas();
+        const listed = await playgroundApi.listIdeas();
         if (cancelled) return;
         setIdeas(listed);
 
         const fromUrl = ideaNameFromPath(initialPathRef.current);
         if (!fromUrl) return;
-        applyLoadedIdeaRef.current(await loadIdea(fromUrl));
+        applyLoadedIdeaRef.current(await playgroundApi.loadIdea(fromUrl));
       } catch {
         if (!cancelled) setSaveError("Could not load saved prototypes");
       } finally {
@@ -174,7 +171,7 @@ export function ExperimentalPage() {
     setSaveError(null);
 
     try {
-      const data = await persistIdea({
+      const data = await playgroundApi.saveIdea({
         name: ideaName,
         folder: folderValue,
         source: draft.source,
@@ -207,7 +204,7 @@ export function ExperimentalPage() {
     if (!(await persistIfDirty())) return;
     if (!next) return;
     try {
-      applyLoadedIdea(await loadIdea(next));
+      applyLoadedIdea(await playgroundApi.loadIdea(next));
       navigate(`/experimental/${next}`, { replace: true });
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not open prototype");
@@ -228,7 +225,7 @@ export function ExperimentalPage() {
 
     setSaveError(null);
     try {
-      setIdeas(await deleteIdea(activeComponentName));
+      setIdeas(await playgroundApi.deleteIdea(activeComponentName));
       resetToBlank();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not delete prototype");
@@ -241,7 +238,7 @@ export function ExperimentalPage() {
       return;
     }
 
-    const dest = `src/playground/${livePath}`;
+    const dest = `apps/web/src/playground/${livePath}`;
     const willDiscard = Boolean(activeComponentName || dirty);
     const confirmed = window.confirm(
       willDiscard
@@ -382,15 +379,17 @@ export function ExperimentalPage() {
             </div>
             <p
               className={styles.pathHint}
-              title={`WIP src/playground/${experimentalPath} · Live src/playground/${livePath}`}
+              title={`WIP apps/web/src/playground/${experimentalPath} · Live apps/web/src/playground/${livePath}`}
             >
               Saves to{" "}
               <code className={styles.code}>
-                src/playground/{experimentalPath}
+                apps/web/src/playground/{experimentalPath}
               </code>
               {" · "}
               Live{" "}
-              <code className={styles.code}>src/playground/{livePath}</code>
+              <code className={styles.code}>
+                apps/web/src/playground/{livePath}
+              </code>
             </p>
           </div>
         </div>
