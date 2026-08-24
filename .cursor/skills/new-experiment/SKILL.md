@@ -71,6 +71,6 @@ See `apps/web/src/playground/shells/ConfigurableShell/preview.tsx` for the contr
 
 ## After creating
 
-With `bun dev` running, `preview.tsx` is picked up automatically. If it does not appear in the Live sidebar, run `bun run sync:playground`. URL: `/<folder>/<Name>`.
+With `bun run dev` running, `preview.tsx` is picked up automatically. If it does not appear in the Live sidebar, run `bun run sync:playground`. URL: `/<folder>/<Name>`.
 
 Do not modify ConfigurableShell. Experimental is its own full-bleed workbench that only shares look and feel with the shell — do not mount ConfigurableShell there, and do not fold save/switch/promote into the shell.

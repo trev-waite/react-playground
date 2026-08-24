@@ -1,8 +1,8 @@
 # React Playground
 
-A Bun + React + Turborepo workspace for building, previewing, and exporting isolated web components. The UI is a local SPA; a dedicated TypeScript API writes experiment files on disk.
+Local playground for isolated React components. **Live** is the published catalog. **Experimental** is a full-bleed studio for WIP — save, switch ideas, then Make Live.
 
-This is not a WYSIWYG editor. The shell provides a Figma-like preview surface; all component logic and styles live in source files under `apps/web/src/playground/`.
+This is not a WYSIWYG editor. Preview chrome lives in `apps/web/src/shell/`. Portable components live in `apps/web/src/playground/`.
 
 ## Quick start
 
@@ -11,74 +11,58 @@ bun install
 bun run dev
 ```
 
-`bun install` also drops **Bun 1.4.0** into `node_modules/.bin` for this repo only. It does not change your global Bun (`bun upgrade` would). After install, prefer `bun run …` so scripts pick up that local binary.
-
-Turbo starts both apps:
-
 - UI: [http://localhost:3000](http://localhost:3000)
-- API: [http://localhost:3001](http://localhost:3001)
+- API: [http://localhost:3001](http://localhost:3001) (writes experiment files)
 
-Move the pointer to the left edge of the screen to open the component browser.
+Hover the left edge for the component browser. Use the **Live / Experimental** toggle.
 
-## Workflow
+The repo pins **Bun 1.4** via `bun install` (project-local, does not change your global Bun). Prefer `bun run …` so scripts use that binary.
 
-### Add an experiment
+## Live vs Experimental
+
+**Live** — published experiments in the sidebar. Each one is a folder:
+
+`apps/web/src/playground/<group>/<Name>/`
+
+**Experimental** — playground chrome, not ConfigurableShell. Sketch in the studio, **Save** (`⌘S`) to `apps/web/src/playground/experimental/` (gitignored), switch saved ideas, then **Make Live** into a group. Make Live copies the files into Live and deletes the experimental copy.
+
+Do not create files by hand in `experimental/` or `shells/`.
+
+## Add a Live experiment
 
 1. Create `apps/web/src/playground/<group>/<Name>/`
-2. Add `Name.tsx` and `Name.module.css` (CSS Modules)
-3. Add `preview.tsx` with a default export
+2. Add `Name.tsx` and `Name.module.css`
+3. Add `preview.tsx` with a default export (wrap in ConfigurableShell if you want sliders)
 
-With `bun dev` running, new `preview.tsx` files are registered automatically. If an experiment does not appear, run `bun run sync:playground`.
+With `bun run dev`, new `preview.tsx` files register automatically. If one is missing, run `bun run sync:playground`.
 
-Folder paths map directly to the sidebar and URL structure:
+Example: `apps/web/src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
 
-- `apps/web/src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+## Export
 
-### Export to another app
+Copy the experiment folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/`.
 
-Copy the experiment folder into your target project. Keep the component file(s) and `*.module.css`; omit `preview.tsx` unless you want the demo harness. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/` — those are playground-only.
-
-## Repository structure
+## Layout
 
 ```
-.
-├── apps/
-│   ├── web/              # React playground UI
-│   └── api/              # Local TypeScript API (disk persistence)
-├── packages/
-│   └── api/              # @react-playground/api — PlaygroundApi contract
-├── docs/
-├── package.json          # Bun workspaces + turbo
-└── turbo.json
+apps/web          UI (port 3000)
+apps/api          local HTTP API (port 3001)
+packages/api      PlaygroundApi contract + HTTP client
 ```
 
-| Path | Description |
-|------|-------------|
-| [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) | Stack conventions and experiment patterns |
-| `apps/web/src/playground/` | One folder per experiment: component, CSS Module, and `preview.tsx` |
-| `apps/web/src/shell/` | Application chrome — not intended for export |
-| `apps/web/src/lib/playgroundApi.ts` | Single backend binding (`PlaygroundApi`) |
-| `apps/api/` | HTTP server that writes playground files |
-| `packages/api/` | Types, interface, and HTTP client |
+The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Swap that one binding to replace the local API.
 
-The UI depends on `PlaygroundApi` only. Swap `createHttpPlaygroundApi` in `playgroundApi.ts` when replacing this local API.
+More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
 
-## Local commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `bun run dev` | UI + API via Turbo |
-| `bun run sync:playground` | Regenerate `playground.gen.ts` once |
-| `bun run build` | Build all packages |
-| `bun run test` | Run all package tests |
-| `bun run start` | Production start (UI + API) |
+| `bun run dev` | UI + API |
+| `bun run sync:playground` | Rebuild the Live registry |
+| `bun run test` | All package tests |
+| `bun run build` / `bun run start` | Production |
 
 ## Stack
 
-- **Monorepo:** Turborepo + Bun workspaces
-- **Runtime / bundler:** Bun 1.4 (pinned in `.bun-version` and the `bun` devDependency)
-- **UI:** React 19.2
-- **API:** Bun.serve TypeScript server
-- **Experiment styles:** CSS Modules
-- **Routing:** React Router (shareable experiment URLs)
-- **Motion:** Motion (sidebar transitions)
+Turborepo + Bun 1.4 workspaces · React 19.2 · CSS Modules · React Router · Motion

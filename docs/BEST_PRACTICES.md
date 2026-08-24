@@ -2,7 +2,7 @@
 
 > Generated **2026-08-23**. Reflects guidance and versions as of that date. Re-run the research pass (or regenerate this file) if the project sits untouched for a long time, or before adding a major dependency — versions and official guidance drift.
 
-This playground is intentionally minimal: Bun + React, CSS Modules for experiments, React Router for shareable URLs, and Motion for the edge-reveal sidebar. Everything under `apps/web/src/playground/` is the exportable unit of work; `apps/web/src/shell/` is chrome, not product. Persistence goes through `PlaygroundApi` (`packages/api`) to `apps/api`.
+This playground is intentionally minimal: Bun + React, CSS Modules for experiments, React Router for shareable URLs, and Motion for the edge-reveal sidebar. Live experiments under `apps/web/src/playground/<group>/<Name>/` are the exportable unit of work. `apps/web/src/shell/` is chrome, not product. Persistence goes through `PlaygroundApi` (`packages/api`) to `apps/api`.
 
 ---
 
@@ -50,11 +50,11 @@ Vercel publishes performance-oriented React guidance as [react-best-practices](h
 
 ### Architecture conventions
 
-- **`apps/web/src/playground/**`** — experiments. Folder tree = sidebar tree. Each leaf has `preview.tsx` (canvas entry) + co-located component + `.module.css`.
-- **`apps/web/src/shell/**`** — playground chrome (canvas, sidebar). Do not export shell into product apps.
+- **`apps/web/src/playground/<group>/<Name>/`** — Live experiments. Folder tree = sidebar tree. Each leaf has `preview.tsx` (canvas entry) + co-located component + `.module.css`. Reserved: `shells/` (ConfigurableShell), `experimental/` (UI-saved WIP, gitignored, skipped by registry sync).
+- **`apps/web/src/shell/`** — playground chrome (Live canvas, Experimental studio, sidebar). Do not export it. Experimental and ConfigurableShell share look and feel only — do not render `<ConfigurableShell>` in Experimental.
 - **`apps/web/src/lib/discover.ts`** — builds the sidebar tree from the generated registry.
 - **`apps/web/src/lib/playgroundApi.ts`** — the only UI binding to the backend (`PlaygroundApi`).
-- **`apps/web/scripts/sync-playground.ts`** — scans `apps/web/src/playground/**/preview.tsx` with `Bun.Glob` and writes `playground.gen.ts` (explicit lazy imports). Runs on `bun dev` / `bun run build`. Bun’s HTML bundler in this setup does not expand `import.meta.glob`, so codegen is the portable auto-discovery path.
+- **`apps/web/scripts/sync-playground.ts`** — scans Live `preview.tsx` files with `Bun.Glob` and writes `playground.gen.ts`. Runs on `bun run dev` / `bun run build`.
 
 ---
 
@@ -76,9 +76,11 @@ export default function TextFieldPreview() {
 }
 ```
 
-4. Save — `bun dev` watches for new `preview.tsx` files and regenerates the registry. Open the left edge sidebar; the folder path appears as a collapsible group. URL: `/forms/TextField`.
+4. Save — `bun run dev` watches for new `preview.tsx` files and regenerates the registry. Open the left edge sidebar; the folder path appears as a collapsible group. URL: `/forms/TextField`.
 
-If a brand-new experiment does not appear immediately, run `bun run sync:playground` (or restart `bun dev`).
+If a brand-new experiment does not appear immediately, run `bun run sync:playground` (or restart `bun run dev`).
+
+For WIP in the Experimental view, use **Save** in the UI. Do not scaffold files into `experimental/` or `shells/`.
 
 ---
 
