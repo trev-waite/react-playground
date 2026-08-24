@@ -14,6 +14,15 @@
 - Update or add tests when behavior changes.
 - Never hardcode, expose, log, or commit secrets or sensitive values.
 
+## Experimental view vs ConfigurableShell
+
+These are separate surfaces that share look and feel, not one component used twice.
+
+- **ConfigurableShell** (`apps/web/src/playground/shells/ConfigurableShell/`) is a portable Live card. Keep it self-contained. Do not add save/switch/promote, idea exporters, or Experimental layout to it.
+- **Experimental view** (`apps/web/src/shell/ExperimentalPage.tsx`, `apps/web/src/shell/IdeaWorkbench.tsx`) is playground chrome: a full-bleed stage and dock, plus save / switch / Make Live. Echo the shell's visual language in Experimental's own CSS and layout. Do not render `<ConfigurableShell>` in Experimental, and do not import `ConfigurableShell.module.css`.
+
+Experimental may import `ProximityControl`, `linearScale`, and icons so the controls feel the same. It must not import the `ConfigurableShell` component. Live `preview.tsx` files may wrap a component in ConfigurableShell; Experimental chrome must not.
+
 ## Naming
 
 Follow the language and framework conventions used by the repository.

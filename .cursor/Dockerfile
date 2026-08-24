@@ -2,7 +2,7 @@
 # oven/bun ships the pinned Bun runtime + bundler at /usr/local/bin (globally on PATH).
 # git is added for Cloud Agent version-control operations; the repository is checked
 # out by Cursor separately, so nothing is copied into the image here.
-FROM oven/bun:1.3.14-debian
+FROM oven/bun:1.4.0-debian
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \

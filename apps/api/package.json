@@ -1,0 +1,17 @@
+{
+  "name": "@react-playground/local-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@react-playground/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.0"
+  }
+}

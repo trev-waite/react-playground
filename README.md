@@ -1,80 +1,73 @@
 # React Playground
 
-A Bun + React workspace for building, previewing, and exporting isolated web components. Edit in code; the app renders your work on a full-bleed canvas with an edge-reveal sidebar for navigation.
+Local playground for isolated React components. **Live** is the published catalog. **Experimental** is a full-bleed studio for WIP — save, switch ideas, then Make Live.
 
-This is not a WYSIWYG editor. The shell provides a Figma-like preview surface; all component logic and styles live in source files under `src/playground/`.
+This is not a WYSIWYG editor. Preview chrome lives in `apps/web/src/shell/`. Portable components live in `apps/web/src/playground/`.
 
 ## Quick start
 
 ```bash
 bun install
-bun dev
+bun run dev
 ```
 
-Open the URL printed in the terminal. Move the pointer to the left edge of the screen to open the component browser.
+- UI: [http://localhost:3000](http://localhost:3000)
+- API: [http://localhost:3001](http://localhost:3001) (writes experiment files)
 
-## Workflow
+Hover the left edge for the component browser. Use the **Live / Experimental** toggle.
 
-### Add an experiment
+The repo pins **Bun 1.4** via `bun install` (project-local, does not change your global Bun). Prefer `bun run …` so scripts use that binary.
 
-1. Create `src/playground/<group>/<Name>/`
-2. Add `Name.tsx` and `Name.module.css` (CSS Modules)
-3. Add `preview.tsx` with a default export
+## Live vs Experimental
 
-With `bun dev` running, new `preview.tsx` files are registered automatically. If an experiment does not appear, run `bun run sync:playground`.
+**Live** — published experiments in the sidebar. Each one is a folder:
 
-Folder paths map directly to the sidebar and URL structure:
+`apps/web/src/playground/<group>/<Name>/`
 
-- `src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+**Experimental** — playground chrome, not ConfigurableShell. Sketch in the studio, **Save** (`⌘S`) to `apps/web/src/playground/experimental/` (gitignored), switch saved ideas, then **Make Live** into a group. Make Live copies the files into Live and deletes the experimental copy.
 
-### Export to another app
+Do not create files by hand in `experimental/` or `shells/`.
 
-Copy the experiment folder into your target project. Keep the component file(s) and `*.module.css`; omit `preview.tsx` unless you want the demo harness. Do not import from `src/shell/` or `src/lib/` — those are playground-only.
+## Add a Live experiment
 
-## Repository structure
+1. Create `apps/web/src/playground/<group>/<Name>/`
+2. Add `Name.tsx` and `Name.module.css`
+3. Add `preview.tsx` with a default export (wrap in ConfigurableShell if you want sliders)
+
+With `bun run dev`, new `preview.tsx` files register automatically. If one is missing, run `bun run sync:playground`.
+
+Example: `apps/web/src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+
+## Export
+
+Copy the experiment folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/`.
+
+## Layout
 
 ```
-.
-├── docs/                 # Conventions, export guide, growth playbook
-├── scripts/              # Registry sync and dev entry (invoked by local commands)
-├── src/
-│   ├── playground/       # Experiments — portable, exportable components
-│   ├── shell/            # Playground UI (sidebar, canvas, routing)
-│   └── lib/              # Discovery logic and generated registry
-├── package.json
-└── tsconfig.json
+apps/web          UI (port 3000)
+apps/api          local HTTP API (port 3001)
+  src/config/     ports, paths, Live registry refresh
+  src/server/     Bun.serve routes + CORS
+  src/features/   business logic
+    ideas/        save / load Experimental WIP
+    promote/      Make Live
+packages/api      PlaygroundApi contract + HTTP client
 ```
 
-| Path | Description |
-|------|-------------|
-| [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md) | Stack conventions, experiment patterns, and guidance for adding routing, state, data fetching, and tests later. |
-| `src/playground/` | One folder per experiment: component, CSS Module, and `preview.tsx`. |
-| `src/shell/` | Application chrome — not intended for export. |
-| `src/lib/discover.ts` | Builds the sidebar tree from the generated registry. |
-| `src/lib/playground.gen.ts` | Auto-generated lazy-import map. Do not edit manually. |
+The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Swap that one binding to replace the local API.
 
-### `scripts/` internals
+More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
 
-These files are called by [local commands](#local-commands), not run directly during normal development.
-
-| File | When it runs | What it does |
-|------|--------------|--------------|
-| `sync-playground.ts` | Start of `bun dev` and `bun run build`; on `preview.tsx` changes during dev; via `bun run sync:playground` | Scans `src/playground/**/preview.tsx` and writes `playground.gen.ts` |
-| `dev.ts` | `bun dev` only | Syncs the registry, watches for new previews, starts the dev server |
-
-## Local commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
-| `bun dev` | Development server with automatic registry sync |
-| `bun run sync:playground` | Regenerate `playground.gen.ts` once |
-| `bun run build` | Sync registry, then output a static build to `dist/` |
-| `bun start` | Serve the production build (`src/index.ts`) |
+| `bun run dev` | UI + API |
+| `bun run sync:playground` | Rebuild the Live registry |
+| `bun run test` | All package tests |
+| `bun run build` / `bun run start` | Production |
 
 ## Stack
 
-- **Runtime / bundler:** Bun
-- **UI:** React 19.2
-- **Experiment styles:** CSS Modules
-- **Routing:** React Router (shareable experiment URLs)
-- **Motion:** Motion (sidebar transitions)
+Turborepo + Bun 1.4 workspaces · React 19.2 · CSS Modules · React Router · Motion
