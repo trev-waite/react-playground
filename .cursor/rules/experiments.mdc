@@ -1,0 +1,28 @@
+---
+description: Experiments are authored in Experimental view; Live is the portable component only. Never wrap ideas in ConfigurableShell.
+alwaysApply: true
+---
+
+# Experimental vs Live
+
+Author new ideas in **Experimental view** (`IdeaWorkbench`). Tweak with the Experimental dock (sliders, Build / Dissolve / Construct, Save). Then **Make Live** publishes just the component.
+
+## Never
+
+- Do not import or render `ConfigurableShell` for an experiment.
+- Do not import `ConfigurableShell.module.css` from Experimental.
+- Do not add Live `preview.tsx` files that wrap a component in ConfigurableShell, sliders, or shell chrome.
+- Do not put WIP by hand in `apps/web/src/playground/experimental/` or `apps/web/src/playground/shells/`.
+
+ConfigurableShell is its own Live catalog card. Experimental only echoes its visual language (`ProximityControl`, `linearScale`, icons).
+
+## Live (published)
+
+```
+apps/web/src/playground/<folder>/<Name>/
+  Name.tsx
+  Name.module.css   ← optional
+  preview.tsx       ← default export renders <Name /> only
+```
+
+See `apps/web/src/playground/buttons/PrimaryButton/preview.tsx`.

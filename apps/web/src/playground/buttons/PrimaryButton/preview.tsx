@@ -9,8 +9,12 @@ export default function PrimaryButtonPreview() {
   const [count, setCount] = useState(0);
 
   return (
-    <PrimaryButton onClick={() => setCount(c => c + 1)}>
-      Clicked {count}×
+    <PrimaryButton
+      count={count}
+      suffix="×"
+      onClick={() => setCount(current => current + 1)}
+    >
+      Clicked
     </PrimaryButton>
   );
 }

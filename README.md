@@ -20,23 +20,21 @@ The repo pins **Bun 1.4** via `bun install` (project-local, does not change your
 
 ## Live vs Experimental
 
-**Live** — published experiments in the sidebar. Each one is a folder:
+**Live** — published catalog in the sidebar. Each entry is a portable component folder:
 
 `apps/web/src/playground/<group>/<Name>/`
 
-**Experimental** — playground chrome, not ConfigurableShell. Sketch in the studio, **Save** (`⌘S`) to `apps/web/src/playground/experimental/` (gitignored), switch saved ideas, then **Make Live** into a group. Make Live copies the files into Live and deletes the experimental copy.
+Live `preview.tsx` only mounts the component. No sliders, no ConfigurableShell.
 
-Do not create files by hand in `experimental/` or `shells/`.
+**Experimental** — full-bleed studio for WIP, not ConfigurableShell. Sketch in the studio, **Save** (`⌘S`) to `apps/web/src/playground/experimental/` (gitignored), **Open** to switch saved projects, then **Make Live** into a group. Make Live writes the component (and a mount-only preview) into Live. The experimental copy stays so you can keep iterating.
 
-## Add a Live experiment
+Do not create files by hand in `experimental/` or `shells/`. Do not wrap new ideas in ConfigurableShell.
 
-1. Create `apps/web/src/playground/<group>/<Name>/`
-2. Add `Name.tsx` and `Name.module.css`
-3. Add `preview.tsx` with a default export (wrap in ConfigurableShell if you want sliders)
+## Add an experiment
 
-With `bun run dev`, new `preview.tsx` files register automatically. If one is missing, run `bun run sync:playground`.
+Work in **Experimental** (`/experimental`). Wire sliders and actions on the Experimental dock. When it is ready, **Make Live**.
 
-Example: `apps/web/src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+Do not add a Live folder with ConfigurableShell. Published Live examples: `apps/web/src/playground/buttons/PrimaryButton/preview.tsx`.
 
 ## Export
 

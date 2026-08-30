@@ -41,12 +41,16 @@ export function parseIdeaStudio(input: unknown): IdeaStudioState | null {
   const y = typeof offsetRec?.y === "number" ? offsetRec.y : 0;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
 
-  return {
+  const studio: IdeaStudioState = {
     form: clampControl(rec.form),
     soft: clampControl(rec.soft),
     drift: clampControl(rec.drift),
     offset: { x, y },
   };
+  if (typeof rec.variant === "string" && rec.variant.length > 0) {
+    studio.variant = rec.variant;
+  }
+  return studio;
 }
 
 export function validateSaveRequest(

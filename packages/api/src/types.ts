@@ -3,6 +3,7 @@ export type IdeaStudioState = {
   soft: number;
   drift: number;
   offset: { x: number; y: number };
+  variant?: string;
 };
 
 export type IdeaSummary = {

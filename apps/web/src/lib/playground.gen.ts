@@ -4,12 +4,10 @@ import type { PlaygroundStatus, PreviewModule } from "./types";
 
 export const previewModules: Record<string, () => Promise<PreviewModule>> = {
   "buttons/PrimaryButton": () => import("../playground/buttons/PrimaryButton/preview.tsx"),
-  "feedback/PulseDot": () => import("../playground/feedback/PulseDot/preview.tsx"),
   "shells/ConfigurableShell": () => import("../playground/shells/ConfigurableShell/preview.tsx"),
 };
 
 export const previewStatuses: Record<string, PlaygroundStatus> = {
   "buttons/PrimaryButton": "live",
-  "feedback/PulseDot": "live",
   "shells/ConfigurableShell": "live",
 };

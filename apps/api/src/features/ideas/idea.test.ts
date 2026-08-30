@@ -18,6 +18,24 @@ describe("parseIdeaStudio", () => {
     });
   });
 
+  test("keeps an optional construct variant", () => {
+    expect(
+      parseIdeaStudio({
+        form: 56,
+        soft: 58,
+        drift: 42,
+        offset: { x: 0.5, y: 0.5 },
+        variant: "stella",
+      }),
+    ).toEqual({
+      form: 56,
+      soft: 58,
+      drift: 42,
+      offset: { x: 0.5, y: 0.5 },
+      variant: "stella",
+    });
+  });
+
   test("rejects incomplete snapshots", () => {
     expect(parseIdeaStudio({ form: 1, soft: 2 })).toBeNull();
     expect(parseIdeaStudio(null)).toBeNull();

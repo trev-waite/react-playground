@@ -12,14 +12,14 @@ import { playgroundEntries } from "../lib/discover";
 import type { IdeaStudioSession } from "../lib/ideaSession";
 import { getIdeaDraft, getIdeaSource } from "../lib/ideaExport";
 import { playgroundApi } from "../lib/playgroundApi";
+import { IdeaProjects } from "./IdeaProjects";
+import { ideaNameFromPath, initialIdeaComponentName } from "./projectSwitch";
 import { useView } from "./view/ViewController";
 import styles from "./ExperimentalPage.module.css";
 
 const IdeaWorkbench = lazy(() => import("./IdeaWorkbench"));
 
 const DEFAULT_IDEA_NAME = "Untitled idea";
-const NEW_FOLDER_VALUE = "__new__";
-const UNSAVED_VALUE = "";
 
 function existingFolders(): string[] {
   const folders = new Set<string>();
@@ -32,11 +32,6 @@ function existingFolders(): string[] {
   return [...folders].sort((a, b) => a.localeCompare(b));
 }
 
-function ideaNameFromPath(pathname: string): string | null {
-  const match = pathname.match(/^\/experimental\/([A-Za-z][A-Za-z0-9]*)\/?$/);
-  return match?.[1] ?? null;
-}
-
 export function ExperimentalPage() {
   const { mode, promote, promoting, promoteError } = useView();
   const location = useLocation();
@@ -44,36 +39,30 @@ export function ExperimentalPage() {
 
   const folders = useMemo(() => existingFolders(), []);
   const [ideaName, setIdeaName] = useState(DEFAULT_IDEA_NAME);
-  const [folderChoice, setFolderChoice] = useState(
-    () => folders[0] ?? NEW_FOLDER_VALUE,
-  );
-  const [customFolder, setCustomFolder] = useState("");
+  const [folder, setFolder] = useState("");
   const [studioKey, setStudioKey] = useState(0);
-  const [session, setSession] = useState<IdeaStudioSession>({ kind: "demo" });
+  const [session, setSession] = useState<IdeaStudioSession>({ kind: "blank" });
   const [ideas, setIdeas] = useState<IdeaSummary[]>([]);
   const [activeComponentName, setActiveComponentName] = useState<string | null>(
     null,
   );
   const [dirty, setDirty] = useState(false);
-  const [hasDraft, setHasDraft] = useState(true);
+  const [hasDraft, setHasDraft] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingComponentName, setDeletingComponentName] = useState<string | null>(
+    null,
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [activated, setActivated] = useState(() => mode === "experimental");
   const initialPathRef = useRef(location.pathname);
   const applyLoadedIdeaRef = useRef<(idea: SavedIdea) => void>(() => {});
   const saveIdeaRef = useRef<() => Promise<string | null>>(async () => null);
-  const openingFromUrl = Boolean(ideaNameFromPath(initialPathRef.current));
-  const workbenchReady = hydrated || !openingFromUrl;
+  const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
+  const workbenchReady = hydrated;
 
-  const usingNewFolder = folderChoice === NEW_FOLDER_VALUE;
-  const folderValue = usingNewFolder ? customFolder : folderChoice;
-  const folderSlug = normalizeFolder(folderValue);
+  const folderSlug = normalizeFolder(folder);
   const componentName = toComponentName(ideaName.trim() || DEFAULT_IDEA_NAME);
-  const experimentalPath =
-    componentName != null
-      ? `${EXPERIMENTAL_FOLDER}/${componentName}/`
-      : `${EXPERIMENTAL_FOLDER}/…/`;
   const livePath =
     folderSlug && componentName
       ? `${folderSlug}/${componentName}/`
@@ -82,29 +71,20 @@ export function ExperimentalPage() {
   const canSave =
     workbenchReady && hasDraft && (dirty || !activeComponentName) && !saving;
   const markDirty = useCallback(() => setDirty(true), []);
-
-  const applyFolder = useCallback(
-    (folder: string) => {
-      if (folder && folders.includes(folder)) {
-        setFolderChoice(folder);
-        setCustomFolder("");
-        return;
-      }
-      if (folder) {
-        setFolderChoice(NEW_FOLDER_VALUE);
-        setCustomFolder(folder);
-        return;
-      }
-      setFolderChoice(folders[0] ?? NEW_FOLDER_VALUE);
-      setCustomFolder("");
-    },
-    [folders],
+  const displayedIdeas = useMemo(
+    () =>
+      ideas.map(idea =>
+        idea.componentName === activeComponentName
+          ? { ...idea, name: ideaName, folder }
+          : idea,
+      ),
+    [activeComponentName, folder, ideaName, ideas],
   );
 
   const applyLoadedIdea = useCallback(
     (idea: SavedIdea) => {
       setIdeaName(idea.name);
-      applyFolder(idea.folder);
+      setFolder(idea.folder);
       setActiveComponentName(idea.componentName);
       setSession(
         idea.studio
@@ -116,7 +96,7 @@ export function ExperimentalPage() {
       setSaveError(null);
       setStudioKey(key => key + 1);
     },
-    [applyFolder],
+    [],
   );
   applyLoadedIdeaRef.current = applyLoadedIdea;
 
@@ -124,8 +104,9 @@ export function ExperimentalPage() {
     if (mode === "experimental") setActivated(true);
   }, [mode]);
 
-  function resetToBlank() {
+  function resetToBlank(nextFolder = "") {
     setIdeaName(DEFAULT_IDEA_NAME);
+    setFolder(nextFolder);
     setActiveComponentName(null);
     setSession({ kind: "blank" });
     setDirty(false);
@@ -145,11 +126,18 @@ export function ExperimentalPage() {
         if (cancelled) return;
         setIdeas(listed);
 
-        const fromUrl = ideaNameFromPath(initialPathRef.current);
-        if (!fromUrl) return;
-        applyLoadedIdeaRef.current(await playgroundApi.loadIdea(fromUrl));
+        const componentToOpen = initialIdeaComponentName(
+          initialPathRef.current,
+          listed,
+        );
+        if (!componentToOpen) return;
+
+        const loadedIdea = await playgroundApi.loadIdea(componentToOpen);
+        if (cancelled) return;
+        applyLoadedIdeaRef.current(loadedIdea);
+        navigate(`/experimental/${loadedIdea.componentName}`, { replace: true });
       } catch {
-        if (!cancelled) setSaveError("Could not load saved prototypes");
+        if (!cancelled) setSaveError("Could not load saved projects");
       } finally {
         if (!cancelled) setHydrated(true);
       }
@@ -158,7 +146,7 @@ export function ExperimentalPage() {
     return () => {
       cancelled = true;
     };
-  }, [activated]);
+  }, [activated, navigate]);
 
   async function saveIdea(): Promise<string | null> {
     const draft = getIdeaDraft();
@@ -173,7 +161,7 @@ export function ExperimentalPage() {
     try {
       const data = await playgroundApi.saveIdea({
         name: ideaName,
-        folder: folderValue,
+        folder,
         source: draft.source,
         studio: draft.studio,
         previousComponentName: activeComponentName ?? undefined,
@@ -199,59 +187,67 @@ export function ExperimentalPage() {
     return (await saveIdea()) != null;
   }
 
-  async function onSelectPrototype(next: string) {
-    if (next === (activeComponentName ?? UNSAVED_VALUE)) return;
+  async function switchTo(next: string) {
+    if (next === activeComponentName) return;
     if (!(await persistIfDirty())) return;
-    if (!next) return;
     try {
       applyLoadedIdea(await playgroundApi.loadIdea(next));
       navigate(`/experimental/${next}`, { replace: true });
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Could not open prototype");
+      setSaveError(err instanceof Error ? err.message : "Could not open project");
     }
   }
+  switchToRef.current = switchTo;
 
-  async function onNewIdea() {
+  async function startNewIdea(nextFolder: string) {
     if (!(await persistIfDirty())) return;
-    resetToBlank();
+    resetToBlank(nextFolder);
   }
 
-  async function onDelete() {
-    if (!activeComponentName) return;
+  useEffect(() => {
+    if (!hydrated) return;
+    const fromUrl = ideaNameFromPath(location.pathname);
+    if (!fromUrl) return;
+    void switchToRef.current(fromUrl);
+  }, [hydrated, location.pathname]);
+
+  async function onDelete(componentNameToDelete: string) {
+    const idea = displayedIdeas.find(
+      item => item.componentName === componentNameToDelete,
+    );
+    if (!idea) return;
     const confirmed = window.confirm(
-      `Delete experimental prototype “${ideaName}”? This cannot be undone.`,
+      `Delete experimental project “${idea.name}”? This cannot be undone.`,
     );
     if (!confirmed) return;
 
     setSaveError(null);
+    setDeletingComponentName(componentNameToDelete);
     try {
-      setIdeas(await playgroundApi.deleteIdea(activeComponentName));
-      resetToBlank();
+      setIdeas(await playgroundApi.deleteIdea(componentNameToDelete));
+      if (componentNameToDelete === activeComponentName) resetToBlank();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Could not delete prototype");
+      setSaveError(err instanceof Error ? err.message : "Could not delete project");
+    } finally {
+      setDeletingComponentName(null);
     }
   }
 
   async function onMakeLive() {
     if (!folderSlug || !componentName) {
-      setSaveError("Choose or enter a folder");
+      setSaveError("Choose a Live folder from the ideas menu");
       return;
     }
 
     const dest = `apps/web/src/playground/${livePath}`;
-    const willDiscard = Boolean(activeComponentName || dirty);
     const confirmed = window.confirm(
-      willDiscard
-        ? `Publish “${ideaName}” to ${dest}? The experimental copy will be removed.`
-        : `Publish “${ideaName}” to ${dest}?`,
+      `Publish “${ideaName}” to ${dest}? It will show up in Live. This experimental copy stays so you can keep iterating.`,
     );
     if (!confirmed) return;
 
-    let discard = activeComponentName ?? undefined;
     if (dirty) {
       const savedName = await saveIdea();
       if (!savedName) return;
-      discard = savedName;
     }
 
     const source = getIdeaSource();
@@ -261,10 +257,9 @@ export function ExperimentalPage() {
     }
 
     await promote({
-      folder: folderValue,
+      folder,
       name: ideaName,
       source,
-      discardExperimental: discard,
     });
   }
 
@@ -295,142 +290,95 @@ export function ExperimentalPage() {
   }, [dirty, hasDraft]);
 
   const saveLabel = !dirty && activeComponentName ? "Saved" : "Save";
-  const switcherValue = activeComponentName ?? UNSAVED_VALUE;
 
   return (
     <div className={styles.page}>
       <div className={styles.atmosphere} aria-hidden="true" />
 
       <header className={styles.topBar}>
-        <div className={styles.identity}>
-          <label className={styles.ideaField}>
-            <span className={styles.fieldLabel}>Idea</span>
-            <input
-              className={styles.ideaInput}
-              type="text"
-              value={ideaName}
-              onChange={event => {
-                setIdeaName(event.target.value);
+        <div
+          className={styles.identity}
+          data-loading={!hydrated || undefined}
+          aria-busy={!hydrated}
+          inert={!hydrated ? true : undefined}
+        >
+          <div className={styles.toolbar}>
+            <IdeaProjects
+              ideas={displayedIdeas}
+              folders={folders}
+              ideaName={ideaName}
+              activeComponentName={activeComponentName}
+              disabled={!workbenchReady}
+              deletingComponentName={deletingComponentName}
+              onIdeaNameChange={name => {
+                setIdeaName(name);
                 setDirty(true);
               }}
-              placeholder={DEFAULT_IDEA_NAME}
-              spellCheck={false}
+              onFolderChange={nextFolder => {
+                setFolder(nextFolder);
+                setDirty(true);
+              }}
+              onOpen={name => void switchTo(name)}
+              onNew={nextFolder => void startNewIdea(nextFolder)}
+              onDelete={name => void onDelete(name)}
             />
-          </label>
 
-          {hydrated && ideas.length > 0 ? (
-            <label className={styles.folderField}>
-              <span className={styles.fieldLabel} id="prototype-label">
-                Prototype
-              </span>
-              <select
-                className={styles.folderSelect}
-                value={switcherValue}
-                onChange={event => void onSelectPrototype(event.target.value)}
-                aria-labelledby="prototype-label"
-              >
-                {activeComponentName == null ? (
-                  <option value={UNSAVED_VALUE}>Unsaved idea</option>
-                ) : null}
-                {ideas.map(idea => (
-                  <option key={idea.componentName} value={idea.componentName}>
-                    {idea.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-
-          <div className={styles.folderField}>
-            <span className={styles.fieldLabel} id="folder-label">
-              Live folder
-            </span>
-            <div className={styles.folderRow}>
-              <select
-                className={styles.folderSelect}
-                value={folderChoice}
-                onChange={event => {
-                  setFolderChoice(event.target.value);
-                  setDirty(true);
+            <div className={styles.editorActions}>
+              <button
+                type="button"
+                className={`${styles.iconButton} ${styles.delete}`}
+                onClick={() => {
+                  if (activeComponentName) void onDelete(activeComponentName);
                 }}
-                aria-labelledby="folder-label"
+                disabled={
+                  !activeComponentName ||
+                  saving ||
+                  promoting ||
+                  deletingComponentName != null
+                }
+                aria-label={deletingComponentName ? "Deleting idea" : "Delete idea"}
+                title="Delete idea"
               >
-                {folders.map(folder => (
-                  <option key={folder} value={folder}>
-                    {folder}
-                  </option>
-                ))}
-                <option value={NEW_FOLDER_VALUE}>New folder…</option>
-              </select>
-              <input
-                className={styles.folderInput}
-                type="text"
-                value={customFolder}
-                onChange={event => {
-                  setCustomFolder(event.target.value);
-                  setDirty(true);
-                }}
-                placeholder="e.g. shapes"
-                spellCheck={false}
-                aria-label="New folder name"
-                tabIndex={usingNewFolder ? 0 : -1}
-                data-visible={usingNewFolder || undefined}
-              />
+                {deletingComponentName ? (
+                  <span className={styles.spinner} aria-hidden="true" />
+                ) : (
+                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+                    <path d="M3.75 5.25h10.5M7 5.25V3.5h4v1.75M5.25 5.25l.65 9.25h6.2l.65-9.25M7.5 7.75v4.5M10.5 7.75v4.5" />
+                  </svg>
+                )}
+              </button>
+              <button
+                type="button"
+                className={`${styles.iconButton} ${styles.save}`}
+                onClick={() => void saveIdea()}
+                disabled={!canSave}
+                title="Save (⌘S)"
+                data-saved={!dirty && activeComponentName ? true : undefined}
+                aria-label={saving ? "Saving idea" : saveLabel}
+              >
+                {saving ? (
+                  <span className={styles.spinner} aria-hidden="true" />
+                ) : !dirty && activeComponentName ? (
+                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+                    <path d="M4 9.25l3.15 3.15L14 5.75" />
+                  </svg>
+                ) : (
+                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+                    <path d="M3.5 3.5h9l2 2v9h-11zM6 3.5v4h6v-4M6 14.5v-4h6v4" />
+                  </svg>
+                )}
+              </button>
+              <button
+                type="button"
+                className={styles.makeLive}
+                disabled={promoting || saving || !workbenchReady || !hasDraft}
+                onClick={() => void onMakeLive()}
+              >
+                {promoting ? "Publishing…" : "Make Live"}
+              </button>
             </div>
-            <p
-              className={styles.pathHint}
-              title={`WIP apps/web/src/playground/${experimentalPath} · Live apps/web/src/playground/${livePath}`}
-            >
-              Saves to{" "}
-              <code className={styles.code}>
-                apps/web/src/playground/{experimentalPath}
-              </code>
-              {" · "}
-              Live{" "}
-              <code className={styles.code}>
-                apps/web/src/playground/{livePath}
-              </code>
-            </p>
           </div>
-        </div>
 
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.clear}
-            onClick={() => void onNewIdea()}
-            disabled={!workbenchReady}
-          >
-            New idea
-          </button>
-          {activeComponentName ? (
-            <button
-              type="button"
-              className={styles.delete}
-              onClick={() => void onDelete()}
-              disabled={saving || promoting}
-            >
-              Delete
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={styles.save}
-            onClick={() => void saveIdea()}
-            disabled={!canSave}
-            title="Save (⌘S)"
-            data-saved={!dirty && activeComponentName ? true : undefined}
-          >
-            {saving ? "Saving…" : saveLabel}
-          </button>
-          <button
-            type="button"
-            className={styles.makeLive}
-            disabled={promoting || saving || !workbenchReady || !hasDraft}
-            onClick={() => void onMakeLive()}
-          >
-            {promoting ? "Publishing…" : "Make Live"}
-          </button>
           {errorMessage ? (
             <p className={styles.error} role="alert">
               {errorMessage}

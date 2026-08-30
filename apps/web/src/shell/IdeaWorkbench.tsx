@@ -1,42 +1,84 @@
 /**
  * Experimental workbench chrome — a full-bleed stage + dock, not ConfigurableShell.
  *
- * It echoes that component's visual language (glass, ink, proximity sliders) in
- * its own layout. Do not render <ConfigurableShell> here. Do not import
- * ConfigurableShell.module.css. The Live card stays a separate, portable unit.
+ * Author ideas here. Save / Make Live publish the portable component only.
+ * Do not render <ConfigurableShell>. Do not import ConfigurableShell.module.css.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type SVGProps } from "react";
 import type { IdeaStudioSession } from "../lib/ideaSession";
 import { registerIdeaExporter } from "../lib/ideaExport";
-import { ExamplePreview } from "../playground/shells/ConfigurableShell/ExamplePreview";
-import { exportExampleCode } from "../playground/shells/ConfigurableShell/exportExample";
 import {
   CheckIcon,
   CopyIcon,
-  MoveIcon,
-  ResetIcon,
-  SlidersIcon,
 } from "../playground/shells/ConfigurableShell/icons";
 import {
   ProximityControl,
   type ShellControl,
 } from "../playground/shells/ConfigurableShell/ProximityControl";
 import { linearScale } from "../playground/shells/ConfigurableShell/scales";
+import { EmeraldConstruct } from "./workbench/EmeraldConstruct/EmeraldConstruct";
+import {
+  type ConstructId,
+  detailToCount,
+  hueFromColor,
+  isConstructId,
+  nextConstruct,
+} from "./workbench/EmeraldConstruct/constructs";
+import { exportEmeraldConstructCode } from "./workbench/EmeraldConstruct/exportCode";
 import styles from "./IdeaWorkbench.module.css";
 
 const DEFAULTS = {
-  form: 46,
-  soft: 58,
-  drift: 36,
-};
-
-const REST = {
-  form: 0,
-  soft: 0,
-  drift: 0,
+  formationSpeed: 56,
+  detail: 58,
+  color: 42,
+  variant: "bird" as ConstructId,
+  origin: { x: 0.5, y: 0.68 },
 };
 
 const COPIED_MS = 1600;
+
+function reducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function originFromOffset(offset: { x: number; y: number }) {
+  if (offset.x === 0 && offset.y === 0) return { ...DEFAULTS.origin };
+  if (
+    offset.x >= 0 &&
+    offset.x <= 1 &&
+    offset.y >= 0 &&
+    offset.y <= 1
+  ) {
+    return offset;
+  }
+  return { ...DEFAULTS.origin };
+}
+
+function BuildIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" {...props}>
+      <path d="M3.2 12.6 8 3.4l4.8 9.2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5.1 9.1h5.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function DissolveIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" {...props}>
+      <path d="M3.4 4.2h9.2" strokeLinecap="round" />
+      <path d="M4.6 7.4h6.8M5.8 10.4h4.4M7 13h2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ConstructIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" {...props}>
+      <path d="M8 2.4 13.2 5.2v5.6L8 13.6 2.8 10.8V5.2Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 async function copyToClipboard(text: string): Promise<boolean> {
   try {
@@ -68,27 +110,31 @@ function stateFromSession(session: IdeaStudioSession) {
   if (session.kind === "blank") {
     return {
       blank: true,
-      form: REST.form,
-      soft: REST.soft,
-      drift: REST.drift,
-      offset: { x: 0, y: 0 },
+      formationSpeed: DEFAULTS.formationSpeed,
+      detail: DEFAULTS.detail,
+      color: DEFAULTS.color,
+      variant: DEFAULTS.variant,
+      origin: { ...DEFAULTS.origin },
     };
   }
   if (session.kind === "restore") {
+    const variant = session.studio.variant;
     return {
       blank: false,
-      form: session.studio.form,
-      soft: session.studio.soft,
-      drift: session.studio.drift,
-      offset: { ...session.studio.offset },
+      formationSpeed: session.studio.form,
+      detail: session.studio.soft,
+      color: session.studio.drift,
+      variant: variant && isConstructId(variant) ? variant : DEFAULTS.variant,
+      origin: originFromOffset(session.studio.offset),
     };
   }
   return {
     blank: false,
-    form: DEFAULTS.form,
-    soft: DEFAULTS.soft,
-    drift: DEFAULTS.drift,
-    offset: { x: 0, y: 0 },
+    formationSpeed: DEFAULTS.formationSpeed,
+    detail: DEFAULTS.detail,
+    color: DEFAULTS.color,
+    variant: DEFAULTS.variant,
+    origin: { ...DEFAULTS.origin },
   };
 }
 
@@ -105,18 +151,29 @@ export default function IdeaWorkbench({
 }: IdeaWorkbenchProps) {
   const initial = stateFromSession(session);
   const [blank, setBlank] = useState(initial.blank);
-  const [form, setForm] = useState(initial.form);
-  const [soft, setSoft] = useState(initial.soft);
-  const [drift, setDrift] = useState(initial.drift);
-  const [panning, setPanning] = useState(false);
-  const [offset, setOffset] = useState(initial.offset);
+  const [formationSpeed, setFormationSpeed] = useState(initial.formationSpeed);
+  const [detail, setDetail] = useState(initial.detail);
+  const [color, setColor] = useState(initial.color);
+  const [variant, setVariant] = useState<ConstructId>(initial.variant);
+  const [origin, setOrigin] = useState(initial.origin);
   const [copied, setCopied] = useState(false);
+  const [progress, setProgress] = useState(() =>
+    initial.blank ? 0 : reducedMotion() ? 1 : 0,
+  );
+  const [target, setTarget] = useState(() =>
+    initial.blank ? 0 : reducedMotion() ? 1 : 0,
+  );
+  const [motionNonce, setMotionNonce] = useState(0);
+  const pinnedRef = useRef(!initial.blank && reducedMotion());
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const baseline = useRef({
-    form: initial.blank ? DEFAULTS.form : initial.form,
-    soft: initial.blank ? DEFAULTS.soft : initial.soft,
-    drift: initial.blank ? DEFAULTS.drift : initial.drift,
-    offset: initial.blank ? { x: 0, y: 0 } : { ...initial.offset },
+    formationSpeed: initial.formationSpeed,
+    detail: initial.detail,
+    color: initial.color,
+    variant: initial.variant,
+    origin: { ...initial.origin },
   });
 
   useEffect(() => {
@@ -125,58 +182,88 @@ export default function IdeaWorkbench({
     };
   }, []);
 
-  useEffect(() => {
-    if (!panning) return;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      setPanning(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [panning]);
+  function markDraft() {
+    setBlank(false);
+    onMutate?.();
+  }
 
-  function mutateForm(value: number) {
-    setForm(value);
-    onMutate?.();
+  function mutateFormationSpeed(value: number) {
+    setFormationSpeed(value);
+    markDraft();
   }
-  function mutateSoft(value: number) {
-    setSoft(value);
-    onMutate?.();
+  function mutateDetail(value: number) {
+    setDetail(value);
+    markDraft();
   }
-  function mutateDrift(value: number) {
-    setDrift(value);
-    onMutate?.();
+  function mutateColor(value: number) {
+    setColor(value);
+    markDraft();
   }
-  function mutateOffset(next: { x: number; y: number }) {
-    setOffset(next);
-    onMutate?.();
-  }
+
+  useEffect(() => {
+    if (reducedMotion()) {
+      setProgress(target);
+      return;
+    }
+
+    let frame = 0;
+    let last = performance.now();
+    let current = progressRef.current;
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.048, (now - last) / 1000);
+      last = now;
+      const delta = target - current;
+      if (Math.abs(delta) < 0.002) {
+        current = target;
+        setProgress(target);
+        return;
+      }
+      const rate = 1.25 + (formationSpeed / 100) * 2.05;
+      current += Math.sign(delta) * Math.min(Math.abs(delta), rate * dt);
+      setProgress(current);
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, formationSpeed, motionNonce]);
 
   const controls: ShellControl[] = useMemo(
     () => [
       {
-        id: "form",
-        label: "Form",
-        value: form,
-        onChange: mutateForm,
+        id: "formationSpeed",
+        label: "Formation speed",
+        value: formationSpeed,
+        onChange: mutateFormationSpeed,
         ...linearScale(0, 100, 1),
       },
       {
-        id: "soft",
-        label: "Soft",
-        value: soft,
-        onChange: mutateSoft,
+        id: "detail",
+        label: "Detail",
+        value: detail,
+        onChange: mutateDetail,
+        format: (value: number) => String(detailToCount(value)),
         ...linearScale(0, 100, 1),
       },
       {
-        id: "drift",
-        label: "Drift",
-        value: drift,
-        onChange: mutateDrift,
+        id: "color",
+        label: "Color",
+        value: color,
+        onChange: mutateColor,
+        format: (value: number) => String(Math.round(hueFromColor(value))),
         ...linearScale(0, 100, 1),
       },
     ],
-    [form, soft, drift, onMutate],
+    [formationSpeed, detail, color, onMutate],
+  );
+
+  const source = exportEmeraldConstructCode(
+    formationSpeed,
+    detail,
+    color,
+    variant,
+    progress,
   );
 
   useEffect(() => {
@@ -189,59 +276,62 @@ export default function IdeaWorkbench({
       return () => registerIdeaExporter(null);
     }
     registerIdeaExporter(() => ({
-      source: exportExampleCode(form, soft, drift, offset),
-      studio: { form, soft, drift, offset },
+      source,
+      studio: {
+        form: formationSpeed,
+        soft: detail,
+        drift: color,
+        offset: { ...origin },
+        variant,
+      },
     }));
     return () => registerIdeaExporter(null);
-  }, [blank, form, soft, drift, offset]);
+  }, [blank, source, formationSpeed, detail, color, origin, variant]);
 
   async function onCopy() {
     if (blank) return;
-    const ok = await copyToClipboard(exportExampleCode(form, soft, drift, offset));
+    const ok = await copyToClipboard(source);
     if (!ok) return;
     setCopied(true);
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
     copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
   }
 
+  function playTo(next: number, pin: boolean) {
+    pinnedRef.current = pin;
+    setTarget(next);
+    setMotionNonce(value => value + 1);
+    markDraft();
+  }
+
   return (
     <div className={styles.studio}>
-      <div
-        className={styles.stage}
-        data-panning={!blank && panning ? true : undefined}
-        data-blank={blank || undefined}
-      >
+      <div className={styles.stage} data-blank={blank || undefined}>
         <div className={styles.stageWell}>
           {blank ? (
             <p className={styles.blankHint}>
-              Empty stage — randomize to start a new idea.
+              Empty stage — Build to start a new idea.
             </p>
           ) : (
-            <ExamplePreview
-              form={form}
-              soft={soft}
-              drift={drift}
-              panEnabled={panning}
-              offset={offset}
-              onOffsetChange={mutateOffset}
+            <EmeraldConstruct
+              formationSpeed={formationSpeed}
+              detail={detail}
+              color={color}
+              variant={variant}
+              progress={progress}
+              origin={origin}
+              onOriginChange={setOrigin}
+              onPressChange={(pressed, nextOrigin) => {
+                setOrigin(nextOrigin);
+                if (pressed) {
+                  playTo(1, false);
+                  return;
+                }
+                if (!pinnedRef.current) playTo(0, false);
+              }}
             />
           )}
         </div>
-
-        {!blank ? (
-          <div className={styles.stageTools}>
-            <button
-              type="button"
-              className={styles.tool}
-              aria-label="Pan preview"
-              aria-pressed={panning}
-              data-pressed={panning || undefined}
-              onClick={() => setPanning(value => !value)}
-            >
-              <MoveIcon />
-            </button>
-          </div>
-        ) : null}
 
         <div className={styles.stageFrost} aria-hidden="true" />
       </div>
@@ -252,32 +342,40 @@ export default function IdeaWorkbench({
             <button
               type="button"
               className={styles.action}
-              onClick={() => {
-                setForm(12 + Math.round(Math.random() * 80));
-                setSoft(18 + Math.round(Math.random() * 70));
-                setDrift(8 + Math.round(Math.random() * 72));
-                setOffset({ x: 0, y: 0 });
-                setBlank(false);
-                onMutate?.();
-              }}
+              aria-pressed={target >= 1 && progress >= 0.99}
+              data-pressed={target >= 1 && progress >= 0.99 ? true : undefined}
+              onClick={() => playTo(1, true)}
             >
-              <SlidersIcon />
-              Randomize
+              <BuildIcon />
+              Build
             </button>
             <button
               type="button"
               className={styles.action}
+              aria-pressed={target <= 0 && progress <= 0.01}
+              data-pressed={target <= 0 && progress <= 0.01 ? true : undefined}
               disabled={blank}
+              onClick={() => playTo(0, false)}
+            >
+              <DissolveIcon />
+              Dissolve
+            </button>
+            <button
+              type="button"
+              className={styles.action}
               onClick={() => {
-                setForm(baseline.current.form);
-                setSoft(baseline.current.soft);
-                setDrift(baseline.current.drift);
-                setOffset({ ...baseline.current.offset });
-                onMutate?.();
+                setVariant(current => nextConstruct(current));
+                if (progressRef.current > 0.04) {
+                  progressRef.current = 0;
+                  setProgress(0);
+                  playTo(1, true);
+                  return;
+                }
+                markDraft();
               }}
             >
-              <ResetIcon />
-              Reset
+              <ConstructIcon />
+              Construct
             </button>
             <button
               type="button"

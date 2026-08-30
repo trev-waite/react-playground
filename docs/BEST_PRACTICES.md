@@ -8,7 +8,7 @@ Use Effects only to synchronize with something outside React (browser APIs, subs
 
 ## Experiments
 
-CSS Modules on portable components. No imports from `apps/web/src/shell/` or `apps/web/src/lib/`. Do not put WIP by hand in `experimental/` or `shells/` — Save in Experimental, or add a Live folder with `preview.tsx`.
+CSS Modules on portable components. No imports from `apps/web/src/shell/` or `apps/web/src/lib/`. Author WIP in Experimental; Make Live publishes the component only. Do not put WIP by hand in `experimental/` or `shells/`. Do not wrap experiments in ConfigurableShell.
 
 ## Backend
 

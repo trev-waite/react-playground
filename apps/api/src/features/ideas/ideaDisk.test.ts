@@ -89,6 +89,27 @@ describe("save / load / switch experimental ideas", () => {
 });
 
 describe("Make Live discards the experimental copy", () => {
+  test("keeps the experimental copy when discard is omitted", async () => {
+    const root = await tempPlayground();
+    await saveExperimentalIdea(root, {
+      name: "Morph Blob",
+      folder: "shapes",
+      source,
+      studio: { form: 40, soft: 50, drift: 20, offset: { x: 0, y: 0 } },
+    });
+
+    const promoted = await promoteIdeaToDisk(root, {
+      folder: "shapes",
+      name: "Morph Blob",
+      source,
+    });
+    expect(promoted.ok).toBe(true);
+    expect(await loadExperimentalIdea(root, "MorphBlob")).not.toBeNull();
+    expect((await listExperimentalIdeas(root)).map(idea => idea.componentName)).toEqual([
+      "MorphBlob",
+    ]);
+  });
+
   test("publishes into the chosen folder and deletes the WIP files", async () => {
     const root = await tempPlayground();
 
