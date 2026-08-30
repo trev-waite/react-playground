@@ -1,76 +1,111 @@
 ---
 name: new-experiment
-description: Scaffolds a new playground experiment component with ConfigurableShell sliders and options. Use when creating a new experiment, prototype, playground component, or when the user wants a component they can configure with sliders.
+description: Create or edit a playground idea in Experimental, then optionally publish it as a portable Live component. Use for experiments, prototypes, saved ideas, or Experimental authoring controls.
 disable-model-invocation: true
 ---
 
 # New Experiment
 
-Create one portable experiment under `apps/web/src/playground/`. Do not start writing files until you have asked the user what to build and how to control it.
+Build ideas in Experimental. Keep Experimental, Live components, and ConfigurableShell separate.
 
-## Ask first
-
-Ask the user questions about what sliders and options they want to be able to configure about the component. Also ask anything still unknown from this list. Skip a question only if the user already answered it.
-
-1. **Idea name** — display title (becomes the PascalCase component name).
-2. **Folder** — existing Live group (`buttons`, `feedback`, …) or a new one. Never `shells` or `experimental`.
-3. **Sliders** — for each: label, what it changes, min, max, step, default.
-4. **Options** — toggles, variants, or actions (e.g. on/off, size, tone). For each: label and values.
-
-If they are unsure, propose 2–4 obvious controls from the idea and confirm before scaffolding.
-
-## Where
-
-```
-apps/web/src/playground/<folder>/<Name>/
-  Name.tsx
-  Name.module.css
-  preview.tsx
+```text
+apps/web/src/
+  app/                 # playground chrome (layout, Live catalog UI) — not ConfigurableShell
+  experimental/        # studio page, shared dock, and saved ideas
+    ideas/<Name>/      # switchable projects (source.tsx + project.json)
+  live/                # published catalog
 ```
 
-- `<folder>`: lowercase, digits, hyphens (`my-shapes`).
-- `<Name>`: PascalCase, starts with a letter (`MorphBlob`).
-- Reserved: `shells` (ConfigurableShell), `experimental` (UI-saved WIP, gitignored, skipped by registry sync).
+See [Experimental Projects](../../../docs/IDEA_PERSISTENCE.md).
 
-Do not put files in `apps/web/src/playground/experimental/` or `apps/web/src/playground/shells/`. Do not set `meta.status` to `"experimental"` — that hides the component from Live and does not show it on the Experimental page.
+Humans and agents both work in idea files. Save in the UI is one way to create a project. Creating the folder on disk is another. The app fills in `project.json` when it is missing.
 
-## Files
+## Choose the workflow
 
-**`Name.tsx`** — the portable component. Props match the confirmed sliders and options. Import only its CSS Module. No imports from `apps/web/src/shell/`, `apps/web/src/lib/`, or ConfigurableShell.
+### Create a new idea on disk
 
-**`Name.module.css`** — styles for that component only.
+Use this when starting a new experiment without going through Save first.
 
-**`preview.tsx`** — playground harness. Wrap the component in `ConfigurableShell`. Wire sliders as `controls` with `linearScale(min, max, step)`. Wire options as `actions` (toggles/pressed) or extra controls. Pass `getExportCode` that returns the component’s current source.
-
-Import the shell from the experiment folder:
-
-```tsx
-import { ConfigurableShell, linearScale } from "../../shells/ConfigurableShell/ConfigurableShell";
+```text
+apps/web/src/experimental/ideas/<IdeaName>/
+├── source.tsx      # required
+└── project.json    # optional; the app mints it on next Open or list
 ```
 
-```tsx
-export const meta = {
-  title: "Idea Title",
-};
+- `<IdeaName>` is a PascalCase component name (`QuietButton`). If that folder exists, use `QuietButton2`.
+- Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
+- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
+- After writing files, the next Experimental list or Open adopts the folder and writes `project.json`.
 
-export default function NamePreview() {
-  // one useState per slider / option
-  return (
-    <ConfigurableShell
-      controls={/* ShellControl[] from confirmed sliders */}
-      actions={/* optional option toggles */}
-      getExportCode={() => /* portable source at current values */}
-    >
-      <Name /* bind props */ />
-    </ConfigurableShell>
-  );
-}
+### Edit one saved idea
+
+Find the project by matching `id` in `project.json`, not by guessing the folder name. The directory is the idea's component name (`Study`, `Study2` on collision). The UUID and `sourceDigest` stay in JSON.
+
+```text
+apps/web/src/experimental/ideas/<IdeaName>/
+├── project.json    # identity + this idea’s dock settings
+└── source.tsx      # code
 ```
 
-See `apps/web/src/playground/shells/ConfigurableShell/preview.tsx` for the control pattern and `apps/web/src/playground/buttons/PrimaryButton/` for a simple portable component.
+- Edit `source.tsx`. That is the usual way you and agents tweak an idea.
+- Leave `id`, `revision`, and `sourceDigest` alone. The app reconciles them after a source edit.
+- Keep exactly one `export function Example` declaration. Play passes live slider numbers into `Example`; baked `SLIDERS` defaults are what Make Live ships.
+- Keep the source portable: no imports from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Do not rename the project directory by hand. The app names it from the idea and may rename it when the idea is renamed.
 
-## After creating
+The app adopts a valid direct source edit the next time it reads the project.
 
-With `bun run dev` running, `preview.tsx` is picked up automatically. If it does not appear in the Live sidebar, run `bun run sync:playground`. URL: `/<folder>/<Name>`.
+### Extend the Experimental authoring tool
 
-Do not modify ConfigurableShell. Experimental is its own full-bleed workbench that only shares look and feel with the shell — do not mount ConfigurableShell there, and do not fold save/switch/promote into the shell.
+Use this when adding or changing the stage, dock, controls, or generated source:
+
+- `apps/web/src/experimental/ExperimentalPage.tsx` — save, open, and Make Live (folder picker)
+- `apps/web/src/experimental/FolderEditor.tsx` — Live folder select used by Make Live
+- `apps/web/src/experimental/IdeaWorkbench.tsx` — shared play dock and stage harness for every idea
+- `apps/web/scripts/sync-playground.ts` — writes `ideas.gen.ts` lazy imports (Bun has no Vite glob)
+
+Report dock settings through `onDraftChange`. Bake current slider numbers into the `const SLIDERS` block in `portableSourceTemplate`. Do not put mock button logic or slider widgets in `source.tsx`. The dock is a fixed template (three actions, Copy, three sliders); this idea’s `project.json` fills labels, ranges, values, and optional `mock` (`none`, `scroll`, `form`, `unform`, or `replay`). Do not hand-edit `ideas.gen.ts`.
+
+Do not hand-edit `id`, `revision`, or `sourceDigest` in `project.json`.
+
+## Keep ConfigurableShell separate
+
+ConfigurableShell is a portable Live catalog card at `apps/web/src/live/shells/ConfigurableShell/`. It is not the Experimental host and is unrelated to `apps/web/src/app/`.
+
+- Do not render or import `ConfigurableShell` in Experimental.
+- Do not import `ConfigurableShell.module.css`.
+- Do not add Experimental save, open, switch, or Make Live behavior to ConfigurableShell.
+- Experimental may import `ProximityControl`, `linearScale`, and icons from that Live folder so the controls feel the same.
+
+## Define the idea
+
+Before implementation, determine any details the user has not supplied:
+
+- Idea name
+- Live destination folder only when publishing. Never `shells` or `experimental`; unsaved and saved ideas do not require a destination.
+- How this idea fills the shared dock: three slider labels/ranges/defaults, three action labels, and whether actions mock `scroll`, `form`, `unform`, or `replay` (otherwise `none`)
+
+Do not add a fourth slider, a custom action slot, or a per-idea `settings.tsx`. When details are open-ended, propose a small sensible set instead of blocking on every choice.
+
+## Make Live
+
+Only publish when the user asks or uses **Make Live**. The UI asks for a Live folder, then creates:
+
+```text
+apps/web/src/live/<folder>/<Name>/
+├── <Name>.tsx
+├── <Name>.module.css   ← optional
+└── preview.tsx
+```
+
+`<Name>.tsx` contains only the portable component. `preview.tsx` only renders `<Name />`. Neither file may contain Experimental controls, app chrome, or ConfigurableShell.
+
+Publishing keeps the saved Experimental project so it can continue evolving.
+
+## Verify
+
+- For authoring-tool changes, open `/experimental` and exercise the dock, including Make Live folder pick.
+- For a new on-disk idea, confirm it appears after reload and that `project.json` was minted.
+- For saved-source changes, confirm the placeholder export and portable imports.
+- Run the repository's relevant tests and build checks.

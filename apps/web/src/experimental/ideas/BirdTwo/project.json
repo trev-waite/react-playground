@@ -1,0 +1,57 @@
+{
+  "id": "9ebe8ee7-b865-4925-b46c-5aa99c1bfe8a",
+  "revision": 7,
+  "name": "Bird Two",
+  "componentName": "BirdTwo",
+  "updatedAt": "2026-08-30T23:16:26.286Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "build",
+        "label": "Build",
+        "mock": "form"
+      },
+      {
+        "id": "dissolve",
+        "label": "Dissolve",
+        "mock": "unform"
+      },
+      {
+        "id": "construct",
+        "label": "Construct",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "formationSpeed",
+        "label": "Formation speed",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 17
+      },
+      {
+        "id": "detail",
+        "label": "Detail",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 100
+      },
+      {
+        "id": "color",
+        "label": "Color",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 42
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "f1559f3ef957df64d5a23c114b55c5645c3f6ed31f871f2e18a992497cefe135",
+  "createdAt": "2026-08-30T00:31:19.595Z"
+}

@@ -1,11 +1,18 @@
 export type {
-  IdeaStudioState,
+  ApiErrorCode,
+  CatalogStatus,
+  CreateIdeaInput,
+  IdeaAction,
+  IdeaActionMock,
+  IdeaDocument,
+  IdeaDraft,
+  IdeaDraftState,
+  IdeaProject,
+  IdeaSlider,
   IdeaSummary,
-  SavedIdea,
-  SaveIdeaInput,
-  SaveIdeaResult,
-  PromoteInput,
-  PromoteResult,
+  PublishIdeaInput,
+  PublishIdeaResult,
+  UpdateIdeaInput,
 } from "./types";
 
 export {
@@ -15,8 +22,6 @@ export {
   normalizeFolder,
   toComponentName,
   buildSlug,
-  experimentalSlug,
-  isWipExperimentalSlug,
   isSafeComponentName,
 } from "./naming";
 
@@ -29,3 +34,23 @@ export {
   createHttpPlaygroundApi,
   type HttpPlaygroundApiOptions,
 } from "./httpPlaygroundApi";
+
+export {
+  isSafeIdeaId,
+  parseCreateIdeaInput,
+  parseIdeaDocument,
+  parseIdeaDraft,
+  parseIdeaDraftState,
+  parseIdeaProject,
+  parseIdeaSummary,
+  parsePublishIdeaInput,
+  parseUpdateIdeaInput,
+} from "./contracts";
+
+export {
+  IDEA_SCHEMA_VERSION,
+  defaultIdeaDraft,
+  defaultIdeaDraftState,
+  bakeSliders,
+  sliderRecord,
+} from "./ideaDraft";

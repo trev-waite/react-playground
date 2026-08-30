@@ -12,6 +12,10 @@
     "test": {
       "cache": false
     },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "outputs": []
+    },
     "start": {
       "cache": false,
       "persistent": true

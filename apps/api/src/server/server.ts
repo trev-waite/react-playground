@@ -1,144 +1,135 @@
-import { isSafeComponentName } from "@react-playground/api";
-import { parseIdeaStudio } from "../features/ideas/idea";
 import {
-  deleteExperimentalIdea,
-  listExperimentalIdeas,
-  loadExperimentalIdea,
-  saveExperimentalIdea,
-} from "../features/ideas/ideaDisk";
-import { promoteIdeaToDisk } from "../features/promote/promoteDisk";
-import { createHttp, strField } from "./http";
+  isSafeIdeaId,
+  parseCreateIdeaInput,
+  parsePublishIdeaInput,
+  parseUpdateIdeaInput,
+} from "@react-playground/api";
+import { IdeaError } from "../features/ideas/ideaError";
+import { createIdeaService } from "../features/ideas/ideaService";
+import { publishIdeaToDisk } from "../features/promote/promoteDisk";
+import { createHttp } from "./http";
 
 export type PlaygroundApiServerOptions = {
-  playgroundRoot: string;
+  experimentalRoot: string;
+  liveRoot: string;
   corsOrigin: string;
   port?: number;
   refreshRegistry?: () => Promise<void>;
 };
 
-export function startPlaygroundApi(options: PlaygroundApiServerOptions) {
-  const { playgroundRoot, corsOrigin, port = 0, refreshRegistry } = options;
+export function createPlaygroundApiHandler(
+  options: Omit<PlaygroundApiServerOptions, "port">,
+) {
+  const { experimentalRoot, liveRoot, corsOrigin, refreshRegistry } = options;
   const { json, handleOptions, readJsonBody } = createHttp(corsOrigin);
+  const ideas = createIdeaService(experimentalRoot);
 
-  function parseIdeaName(
-    req: Request,
-  ): { ok: true; name: string } | { ok: false; response: Response } {
-    const url = new URL(req.url);
-    const parts = url.pathname.split("/").filter(Boolean);
-    const name = decodeURIComponent(parts[2] ?? "");
-    if (!isSafeComponentName(name)) {
-      return {
-        ok: false,
-        response: json(req, { ok: false, error: "Invalid prototype name" }, 400),
-      };
-    }
-    return { ok: true, name };
+  function ideaId(req: Request): string {
+    const id = decodeURIComponent(new URL(req.url).pathname.split("/").filter(Boolean)[2] ?? "");
+    if (!isSafeIdeaId(id)) throw new IdeaError("invalid_request", "Invalid idea id", 400);
+    return id;
   }
 
-  async function handlePromote(req: Request): Promise<Response> {
-    const parsed = await readJsonBody(req);
-    if (!parsed.ok) return parsed.response;
-
-    const result = await promoteIdeaToDisk(playgroundRoot, {
-      folder: strField(parsed.value, "folder"),
-      name: strField(parsed.value, "name"),
-      source: strField(parsed.value, "source"),
-      discardExperimental:
-        strField(parsed.value, "discardExperimental") || undefined,
-    });
-    if (!result.ok) {
-      return json(req, { ok: false, error: result.error }, result.status);
-    }
-
-    if (refreshRegistry) {
+  function route(handler: (req: Request) => Promise<Response>) {
+    return async (req: Request): Promise<Response> => {
       try {
-        await refreshRegistry();
-      } catch (err) {
-        console.error("[promote] registry sync failed", err);
+        return await handler(req);
+      } catch (error) {
+        if (error instanceof IdeaError) {
+          return json(
+            req,
+            { ok: false, code: error.code, error: error.message },
+            error.status,
+          );
+        }
+        console.error("[playground-api] request failed", error);
         return json(
           req,
-          {
-            ok: false,
-            error: "Published files, but failed to refresh the Live catalog",
-          },
+          { ok: false, code: "io_failure", error: "Local file operation failed" },
           500,
         );
       }
+    };
+  }
+
+  const handleListIdeas = route(async req =>
+    json(req, { ok: true, ideas: await ideas.list() }),
+  );
+
+  const handleCreateIdea = route(async req => {
+    const body = await readJsonBody(req);
+    if (!body.ok) return body.response;
+    const input = parseCreateIdeaInput(body.value);
+    if (!input) {
+      throw new IdeaError("invalid_request", "Invalid idea document", 400);
     }
+    return json(req, { ok: true, idea: await ideas.create(input) }, 201);
+  });
 
-    return json(req, { ok: true, slug: result.slug });
-  }
+  const handleLoadIdea = route(async req =>
+    json(req, { ok: true, idea: await ideas.load(ideaId(req)) }),
+  );
 
-  async function handleListIdeas(req: Request): Promise<Response> {
-    const ideas = await listExperimentalIdeas(playgroundRoot);
-    return json(req, { ok: true, ideas });
-  }
+  const handleUpdateIdea = route(async req => {
+    const id = ideaId(req);
+    const body = await readJsonBody(req);
+    if (!body.ok) return body.response;
+    const input = parseUpdateIdeaInput(body.value);
+    if (!input) throw new IdeaError("invalid_request", "Invalid idea document", 400);
+    return json(req, { ok: true, idea: await ideas.update(id, input) });
+  });
 
-  async function handleSaveIdea(req: Request): Promise<Response> {
-    const parsed = await readJsonBody(req);
-    if (!parsed.ok) return parsed.response;
+  const handleDeleteIdea = route(async req => {
+    await ideas.delete(ideaId(req));
+    return json(req, { ok: true });
+  });
 
-    const result = await saveExperimentalIdea(playgroundRoot, {
-      name: strField(parsed.value, "name"),
-      folder: strField(parsed.value, "folder"),
-      source: strField(parsed.value, "source"),
-      studio: parseIdeaStudio(parsed.value.studio),
-      previousComponentName:
-        strField(parsed.value, "previousComponentName") || undefined,
-    });
-    if (!result.ok) {
-      return json(req, { ok: false, error: result.error }, result.status);
+  const handlePublishIdea = route(async req => {
+    const id = ideaId(req);
+    const body = await readJsonBody(req);
+    if (!body.ok) return body.response;
+    const input = parsePublishIdeaInput(body.value);
+    if (!input) throw new IdeaError("invalid_request", "Invalid publish request", 400);
+
+    const published = await ideas.withCurrent(
+      id,
+      input.expectedRevision,
+      idea => publishIdeaToDisk(liveRoot, idea, input.targetFolder),
+    );
+
+    let catalogStatus: "ready" | "refresh-failed" = "ready";
+    if (refreshRegistry) {
+      try {
+        await refreshRegistry();
+      } catch (error) {
+        catalogStatus = "refresh-failed";
+        console.error("[publish] registry sync failed", error);
+      }
     }
+    return json(req, { ok: true, slug: published.slug, catalogStatus });
+  });
 
-    return json(req, { ok: true, idea: result.idea, ideas: result.ideas });
-  }
-
-  async function handleLoadIdea(req: Request): Promise<Response> {
-    const parsed = parseIdeaName(req);
-    if (!parsed.ok) return parsed.response;
-
-    const idea = await loadExperimentalIdea(playgroundRoot, parsed.name);
-    if (!idea) {
-      return json(req, { ok: false, error: "Prototype not found" }, 404);
+  return async function handleRequest(req: Request): Promise<Response> {
+    if (req.method === "OPTIONS") return handleOptions(req);
+    const pathname = new URL(req.url).pathname;
+    if (pathname === "/api/ideas") {
+      if (req.method === "GET") return handleListIdeas(req);
+      if (req.method === "POST") return handleCreateIdea(req);
+    } else if (/^\/api\/ideas\/[^/]+\/publish$/.test(pathname)) {
+      if (req.method === "POST") return handlePublishIdea(req);
+    } else if (/^\/api\/ideas\/[^/]+$/.test(pathname)) {
+      if (req.method === "GET") return handleLoadIdea(req);
+      if (req.method === "PUT") return handleUpdateIdea(req);
+      if (req.method === "DELETE") return handleDeleteIdea(req);
     }
+    return json(req, { ok: false, code: "not_found", error: "Not found" }, 404);
+  };
+}
 
-    return json(req, { ok: true, idea });
-  }
-
-  async function handleDeleteIdea(req: Request): Promise<Response> {
-    const parsed = parseIdeaName(req);
-    if (!parsed.ok) return parsed.response;
-
-    const result = await deleteExperimentalIdea(playgroundRoot, parsed.name);
-    if (!result.ok) {
-      return json(req, { ok: false, error: result.error }, result.status);
-    }
-
-    const ideas = await listExperimentalIdeas(playgroundRoot);
-    return json(req, { ok: true, ideas });
-  }
-
+export function startPlaygroundApi(options: PlaygroundApiServerOptions) {
+  const { port = 0, ...handlerOptions } = options;
   return Bun.serve({
     port,
-    routes: {
-      "/api/promote": {
-        POST: handlePromote,
-        OPTIONS: handleOptions,
-      },
-      "/api/ideas": {
-        GET: handleListIdeas,
-        POST: handleSaveIdea,
-        OPTIONS: handleOptions,
-      },
-      "/api/ideas/:name": {
-        GET: handleLoadIdea,
-        DELETE: handleDeleteIdea,
-        OPTIONS: handleOptions,
-      },
-    },
-    fetch(req) {
-      if (req.method === "OPTIONS") return handleOptions(req);
-      return json(req, { ok: false, error: "Not found" }, 404);
-    },
+    fetch: createPlaygroundApiHandler(handlerOptions),
   });
 }

@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
-  experimentalSlug,
   isSafeComponentName,
-  isWipExperimentalSlug,
   normalizeFolder,
   toComponentName,
 } from "./naming";
@@ -20,15 +18,6 @@ describe("toComponentName", () => {
     expect(toComponentName("morph blob")).toBe("MorphBlob");
     expect(toComponentName("Untitled idea")).toBe("UntitledIdea");
     expect(toComponentName("123 bad")).toBeNull();
-  });
-});
-
-describe("isWipExperimentalSlug", () => {
-  test("matches the reserved experimental tree only", () => {
-    expect(isWipExperimentalSlug("experimental")).toBe(true);
-    expect(isWipExperimentalSlug(experimentalSlug("MorphBlob"))).toBe(true);
-    expect(isWipExperimentalSlug("shells/ConfigurableShell")).toBe(false);
-    expect(isWipExperimentalSlug("buttons/PrimaryButton")).toBe(false);
   });
 });
 

@@ -1,0 +1,36 @@
+---
+description: Experiments are authored in Experimental view; Live is the portable component only. Never wrap ideas in ConfigurableShell.
+alwaysApply: true
+---
+
+# Experimental vs Live
+
+This playground is a studio for inventing React components. Start an idea (`source.tsx` + `project.json`), play on the shared Experimental dock (sliders and buttons), then **Make Live** to publish a plain component configured as it looks now — no dock, no mocks, no playground chrome.
+
+Author ideas in **Experimental**, or add `apps/web/src/experimental/ideas/<Name>/source.tsx`. Every idea is equal; there are no experiment kinds. Dock labels and values live in that idea’s `project.json`. **Make Live** asks for a Live folder, then writes only the component.
+
+## Layout
+
+- `apps/web/src/app/` — playground chrome (layout, Live catalog UI). Not ConfigurableShell.
+- `apps/web/src/experimental/` — studio page, shared dock, and `ideas/` projects.
+- `apps/web/src/live/` — published catalog only.
+
+## Never
+
+- Do not import or render `ConfigurableShell` for an experiment.
+- Do not import `ConfigurableShell.module.css` from Experimental.
+- Do not add Live `preview.tsx` files that wrap a component in ConfigurableShell, sliders, or app chrome.
+- Do not put WIP in `apps/web/src/live/shells/`. Experimental projects belong in `apps/web/src/experimental/ideas/<Name>/`.
+
+ConfigurableShell is its own Live catalog card. Experimental only echoes its visual language (`ProximityControl`, `linearScale`, icons).
+
+## Live (published)
+
+```
+apps/web/src/live/<folder>/<Name>/
+  Name.tsx
+  Name.module.css   ← optional
+  preview.tsx       ← default export renders <Name /> only
+```
+
+See `apps/web/src/live/buttons/PrimaryButton/preview.tsx`.

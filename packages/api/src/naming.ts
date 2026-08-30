@@ -1,6 +1,4 @@
-/** Catalog group reserved for ConfigurableShell and other editing structure. */
 export const SHELLS_FOLDER = "shells";
-/** On-disk WIP prototypes. Skipped by the Live catalog; deleted on Make Live. */
 export const EXPERIMENTAL_FOLDER = "experimental";
 
 export const RESERVED_LIVE_FOLDERS = new Set([
@@ -10,7 +8,6 @@ export const RESERVED_LIVE_FOLDERS = new Set([
 
 const COMPONENT_NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
 
-/** Folder segment: lowercase letters, digits, and hyphens. */
 export function normalizeFolder(input: string): string | null {
   const cleaned = input
     .trim()
@@ -22,7 +19,6 @@ export function normalizeFolder(input: string): string | null {
   return cleaned.length > 0 ? cleaned : null;
 }
 
-/** PascalCase component name from an idea title. */
 export function toComponentName(input: string): string | null {
   const parts = input
     .trim()
@@ -39,16 +35,6 @@ export function toComponentName(input: string): string | null {
 
 export function buildSlug(folder: string, componentName: string): string {
   return `${folder}/${componentName}`;
-}
-
-export function experimentalSlug(componentName: string): string {
-  return `${EXPERIMENTAL_FOLDER}/${componentName}`;
-}
-
-export function isWipExperimentalSlug(slug: string): boolean {
-  return (
-    slug === EXPERIMENTAL_FOLDER || slug.startsWith(`${EXPERIMENTAL_FOLDER}/`)
-  );
 }
 
 export function isSafeComponentName(input: string): boolean {

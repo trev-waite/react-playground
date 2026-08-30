@@ -1,42 +1,75 @@
-export type IdeaStudioState = {
-  form: number;
-  soft: number;
-  drift: number;
-  offset: { x: number; y: number };
+export type IdeaActionMock = "none" | "scroll" | "form" | "unform" | "replay";
+
+export type IdeaSlider = {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+};
+
+export type IdeaAction = {
+  id: string;
+  label: string;
+  mock: IdeaActionMock;
+};
+
+export type IdeaDraftState = {
+  version: 1;
+  actions: [IdeaAction, IdeaAction, IdeaAction];
+  sliders: [IdeaSlider, IdeaSlider, IdeaSlider];
+};
+
+export type IdeaDraft = IdeaDraftState & {
+  portableSourceTemplate: string;
 };
 
 export type IdeaSummary = {
+  id: string;
+  revision: number;
   name: string;
-  folder: string;
   componentName: string;
-  savedAt: string;
+  updatedAt: string;
 };
 
-export type SavedIdea = IdeaSummary & {
-  source: string;
-  studio: IdeaStudioState | null;
+export type IdeaDocument = IdeaSummary & {
+  schemaVersion: 3;
+  draft: IdeaDraftState;
+  sourceFile: "source.tsx";
+  sourceDigest: string;
+  createdAt: string;
 };
 
-export type SaveIdeaInput = {
+export type IdeaProject = Omit<IdeaDocument, "draft"> & {
+  draft: IdeaDraft;
+};
+
+export type CreateIdeaInput = {
   name: string;
-  folder: string;
-  source: string;
-  studio?: IdeaStudioState | null;
-  previousComponentName?: string;
+  draft: IdeaDraft;
 };
 
-export type SaveIdeaResult = {
-  idea: IdeaSummary;
-  ideas: IdeaSummary[];
+export type UpdateIdeaInput = CreateIdeaInput & {
+  expectedRevision: number;
 };
 
-export type PromoteInput = {
-  folder: string;
-  name: string;
-  source: string;
-  discardExperimental?: string;
+export type PublishIdeaInput = {
+  expectedRevision: number;
+  targetFolder: string;
 };
 
-export type PromoteResult = {
+export type CatalogStatus = "ready" | "refresh-failed";
+
+export type PublishIdeaResult = {
   slug: string;
+  catalogStatus: CatalogStatus;
 };
+
+export type ApiErrorCode =
+  | "invalid_request"
+  | "invalid_document"
+  | "not_found"
+  | "revision_conflict"
+  | "destination_exists"
+  | "io_failure";

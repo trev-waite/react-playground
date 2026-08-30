@@ -1,48 +1,66 @@
-/**
- * Dev entry: keep playground.gen.ts in sync, watch for new previews, run HMR server.
- */
 import { watch } from "node:fs";
 import path from "node:path";
-import { EXPERIMENTAL_FOLDER } from "@react-playground/api";
-import { syncPlaygroundRegistry } from "./sync-playground";
+import { syncIdeaRegistry, syncPlaygroundRegistry } from "./sync-playground";
 
 const ROOT = path.join(import.meta.dir, "..");
-const PLAYGROUND = path.join(ROOT, "src", "playground");
+const LIVE = path.join(ROOT, "src", "live");
+const IDEAS = path.join(ROOT, "src", "experimental", "ideas");
 
-await syncPlaygroundRegistry();
+async function syncAll() {
+  const [live, ideas] = await Promise.all([
+    syncPlaygroundRegistry(),
+    syncIdeaRegistry(),
+  ]);
+  return { live: live.length, ideas: ideas.length };
+}
+
+const initial = await syncAll();
+console.log(
+  `[playground] synced ${initial.live} Live entries, ${initial.ideas} ideas`,
+);
 
 let syncing = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let pendingReason: string | null = null;
 
 function scheduleResync(reason: string) {
+  pendingReason = reason;
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
-    if (syncing) return;
+    timer = null;
+    if (syncing || !pendingReason) return;
+    const nextReason = pendingReason;
+    pendingReason = null;
     syncing = true;
     try {
-      const entries = await syncPlaygroundRegistry();
-      console.log(`[playground] synced ${entries.length} experiment(s) (${reason})`);
+      const next = await syncAll();
+      console.log(
+        `[playground] synced ${next.live} Live, ${next.ideas} ideas (${nextReason})`,
+      );
     } finally {
       syncing = false;
+      if (pendingReason) scheduleResync(pendingReason);
     }
   }, 80);
 }
 
-watch(PLAYGROUND, { recursive: true }, (_event, filename) => {
+watch(LIVE, { recursive: true }, (_event, filename) => {
   if (!filename) return;
   const normalized = filename.replace(/\\/g, "/");
-  if (
-    normalized === EXPERIMENTAL_FOLDER ||
-    normalized.startsWith(`${EXPERIMENTAL_FOLDER}/`)
-  ) {
-    return;
-  }
   if (normalized.endsWith("preview.tsx") || normalized.endsWith("preview.ts")) {
     scheduleResync(normalized);
   }
 });
 
-console.log("[playground] watching src/playground for preview.tsx changes");
+watch(IDEAS, { recursive: true }, (_event, filename) => {
+  if (!filename) return;
+  const normalized = filename.replace(/\\/g, "/");
+  if (normalized.endsWith("source.tsx")) {
+    scheduleResync(normalized);
+  }
+});
+
+console.log("[playground] watching Live previews and Experimental idea sources");
 
 const child = Bun.spawn(["bun", "--hot", path.join(ROOT, "src", "index.ts")], {
   cwd: ROOT,

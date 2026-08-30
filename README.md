@@ -1,8 +1,8 @@
 # React Playground
 
-Local playground for isolated React components. **Live** is the published catalog. **Experimental** is a full-bleed studio for WIP — save, switch ideas, then Make Live.
+Local playground for inventing isolated React components. **Experimental** is the studio: write an idea, play with it on a shared dock of sliders and buttons, then **Make Live**. **Live** is the published catalog — a plain component, configured as you last saw it, with no playground chrome.
 
-This is not a WYSIWYG editor. Preview chrome lives in `apps/web/src/shell/`. Portable components live in `apps/web/src/playground/`.
+This is not a WYSIWYG editor. Playground chrome lives in `apps/web/src/app/`. Portable Live components live in `apps/web/src/live/`. The Experimental studio and saved ideas live in `apps/web/src/experimental/`.
 
 ## Quick start
 
@@ -20,42 +20,46 @@ The repo pins **Bun 1.4** via `bun install` (project-local, does not change your
 
 ## Live vs Experimental
 
-**Live** — published experiments in the sidebar. Each one is a folder:
+**Live** is the published catalog. Each entry is a portable component folder:
 
-`apps/web/src/playground/<group>/<Name>/`
+`apps/web/src/live/<group>/<Name>/`
 
-**Experimental** — playground chrome, not ConfigurableShell. Sketch in the studio, **Save** (`⌘S`) to `apps/web/src/playground/experimental/` (gitignored), switch saved ideas, then **Make Live** into a group. Make Live copies the files into Live and deletes the experimental copy.
+Its `preview.tsx` only mounts the component. It has no sliders or ConfigurableShell.
 
-Do not create files by hand in `experimental/` or `shells/`.
+**Experimental** is the WIP studio. Play on the shared dock (three sliders, three actions, Copy). **Save** (`⌘S`) writes a named project directory containing:
 
-## Add a Live experiment
+- `project.json` for identity and this idea’s dock labels/values
+- `source.tsx` for the component (a `const SLIDERS` block is baked from the dock on Save / Copy / Make Live)
 
-1. Create `apps/web/src/playground/<group>/<Name>/`
-2. Add `Name.tsx` and `Name.module.css`
-3. Add `preview.tsx` with a default export (wrap in ConfigurableShell if you want sliders)
+Projects live under `apps/web/src/experimental/ideas/`. Use **Open** to switch projects. **Make Live** asks which Live folder to publish into, then writes the portable component. Humans and agents may edit `source.tsx` directly, or add a new `apps/web/src/experimental/ideas/<Name>/source.tsx` folder. The app writes `project.json` if it is missing. See [Experimental Projects](docs/IDEA_PERSISTENCE.md).
 
-With `bun run dev`, new `preview.tsx` files register automatically. If one is missing, run `bun run sync:playground`.
+## Add an experiment
 
-Example: `apps/web/src/playground/buttons/PrimaryButton/preview.tsx` → sidebar **buttons → Primary Button** → `/buttons/PrimaryButton`
+Work at `/experimental`. Play on the shared dock (this idea’s JSON fills the labels and values). When the component is ready, use **Make Live**.
+
+Do not put WIP in `apps/web/src/live/shells/`, render ConfigurableShell in Experimental, or include authoring controls in a Live component. See `apps/web/src/live/buttons/PrimaryButton/preview.tsx` for a Live preview.
 
 ## Export
 
-Copy the experiment folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/`.
+Copy the Live component folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/app/` or `apps/web/src/lib/`.
 
 ## Layout
 
 ```
 apps/web          UI (port 3000)
+  src/app/            playground chrome (layout, Live catalog UI)
+  src/experimental/   studio page, shared dock, ideas/
+  src/live/           published catalog
 apps/api          local HTTP API (port 3001)
   src/config/     ports, paths, Live registry refresh
   src/server/     Bun.serve routes + CORS
   src/features/   business logic
-    ideas/        save / load Experimental WIP
-    promote/      Make Live
+    ideas/        project validation, atomic storage, revisions, migration
+    promote/      atomic and retryable Make Live artifacts
 packages/api      PlaygroundApi contract + HTTP client
 ```
 
-The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Swap that one binding to replace the local API.
+The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Runtime parsers validate both sides. See [Experimental Projects](docs/IDEA_PERSISTENCE.md) for the storage and publishing rules.
 
 More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
 
@@ -66,6 +70,7 @@ More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
 | `bun run dev` | UI + API |
 | `bun run sync:playground` | Rebuild the Live registry |
 | `bun run test` | All package tests |
+| `bun run typecheck` | Strict TypeScript checks |
 | `bun run build` / `bun run start` | Production |
 
 ## Stack

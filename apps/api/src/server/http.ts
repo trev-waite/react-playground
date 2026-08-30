@@ -41,7 +41,7 @@ export function createHttp(corsOrigin: string): HttpHelpers {
 
     return {
       "Access-Control-Allow-Origin": allow,
-      "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
       Vary: "Origin",
     };
