@@ -1,23 +1,25 @@
-export type EmeraldConstructVariant = "bird" | "stella" | "octagram";
+export type IdeaActionMock = "none" | "scroll" | "form" | "unform" | "replay";
 
-export type EmeraldConstructState = {
-  formationSpeed: number;
-  detail: number;
-  color: number;
-  origin: { x: number; y: number };
-  variant: EmeraldConstructVariant;
+export type IdeaSlider = {
+  id: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
 };
 
-export type IdeaDraftState =
-  | {
-      kind: "emerald-construct";
-      version: 1;
-      editorState: EmeraldConstructState;
-    }
-  | {
-      kind: "source";
-      version: 1;
-    };
+export type IdeaAction = {
+  id: string;
+  label: string;
+  mock: IdeaActionMock;
+};
+
+export type IdeaDraftState = {
+  version: 1;
+  actions: [IdeaAction, IdeaAction, IdeaAction];
+  sliders: [IdeaSlider, IdeaSlider, IdeaSlider];
+};
 
 export type IdeaDraft = IdeaDraftState & {
   portableSourceTemplate: string;
@@ -27,13 +29,12 @@ export type IdeaSummary = {
   id: string;
   revision: number;
   name: string;
-  targetFolder: string;
   componentName: string;
   updatedAt: string;
 };
 
 export type IdeaDocument = IdeaSummary & {
-  schemaVersion: 2;
+  schemaVersion: 3;
   draft: IdeaDraftState;
   sourceFile: "source.tsx";
   sourceDigest: string;
@@ -46,7 +47,6 @@ export type IdeaProject = Omit<IdeaDocument, "draft"> & {
 
 export type CreateIdeaInput = {
   name: string;
-  targetFolder: string;
   draft: IdeaDraft;
 };
 
@@ -56,6 +56,7 @@ export type UpdateIdeaInput = CreateIdeaInput & {
 
 export type PublishIdeaInput = {
   expectedRevision: number;
+  targetFolder: string;
 };
 
 export type CatalogStatus = "ready" | "refresh-failed";

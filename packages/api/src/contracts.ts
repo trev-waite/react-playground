@@ -1,11 +1,14 @@
+import { IDEA_SCHEMA_VERSION, defaultIdeaDraftState } from "./ideaDraft";
 import { isSafeComponentName, normalizeFolder, toComponentName } from "./naming";
 import type {
   CreateIdeaInput,
-  EmeraldConstructState,
+  IdeaAction,
+  IdeaActionMock,
   IdeaDocument,
   IdeaDraft,
   IdeaDraftState,
   IdeaProject,
+  IdeaSlider,
   IdeaSummary,
   PublishIdeaInput,
   UpdateIdeaInput,
@@ -40,57 +43,137 @@ export function isSafeIdeaId(input: string): boolean {
   return /^[a-zA-Z0-9-]{8,64}$/.test(input);
 }
 
-export function parseEmeraldConstructState(input: unknown): EmeraldConstructState | null {
-  const value = record(input);
-  const origin = record(value?.origin);
-  if (!value || !origin) return null;
+function parseMock(input: unknown): IdeaActionMock | null {
+  return input === "none" ||
+    input === "scroll" ||
+    input === "form" ||
+    input === "unform" ||
+    input === "replay"
+    ? input
+    : null;
+}
 
-  const formationSpeed = finiteNumber(value.formationSpeed);
-  const detail = finiteNumber(value.detail);
-  const color = finiteNumber(value.color);
-  const x = finiteNumber(origin.x);
-  const y = finiteNumber(origin.y);
-  const variant = value.variant;
+function parseSlider(input: unknown): IdeaSlider | null {
+  const value = record(input);
+  const id = nonEmptyString(value?.id);
+  const label = typeof value?.label === "string" ? value.label : null;
+  const min = finiteNumber(value?.min);
+  const max = finiteNumber(value?.max);
+  const step = finiteNumber(value?.step);
+  const current = finiteNumber(value?.value);
   if (
-    formationSpeed == null || detail == null || color == null ||
-    x == null || y == null ||
-    (variant !== "bird" && variant !== "stella" && variant !== "octagram") ||
-    formationSpeed < 0 || formationSpeed > 100 ||
-    detail < 0 || detail > 100 || color < 0 || color > 100 ||
-    x < 0 || x > 1 || y < 0 || y > 1
+    !value ||
+    !id ||
+    label == null ||
+    min == null ||
+    max == null ||
+    step == null ||
+    current == null ||
+    min >= max ||
+    step <= 0 ||
+    current < min ||
+    current > max
   ) {
     return null;
   }
+  return { id, label, min, max, step, value: current };
+}
 
-  return { formationSpeed, detail, color, origin: { x, y }, variant };
+function parseAction(input: unknown): IdeaAction | null {
+  const value = record(input);
+  const id = nonEmptyString(value?.id);
+  const label = typeof value?.label === "string" ? value.label : null;
+  const mock = parseMock(value?.mock);
+  if (!value || !id || label == null || !mock) return null;
+  return { id, label, mock };
+}
+
+function triple<T>(
+  input: unknown,
+  parse: (value: unknown) => T | null,
+): [T, T, T] | null {
+  if (!Array.isArray(input) || input.length !== 3) return null;
+  const first = parse(input[0]);
+  const second = parse(input[1]);
+  const third = parse(input[2]);
+  return first && second && third ? [first, second, third] : null;
 }
 
 export function parseIdeaDraftState(input: unknown): IdeaDraftState | null {
   const value = record(input);
   if (!value || value.version !== 1) return null;
-  if (value.kind === "source") {
-    return { kind: "source", version: 1 };
-  }
-  if (value.kind !== "emerald-construct") return null;
-  const editorState = parseEmeraldConstructState(value.editorState);
-  return editorState
-    ? { kind: "emerald-construct", version: 1, editorState }
-    : null;
+  const actions = triple(value.actions, parseAction);
+  const sliders = triple(value.sliders, parseSlider);
+  if (!actions || !sliders) return null;
+  return { version: 1, actions, sliders };
+}
+
+function migrateEmeraldConstruct(input: unknown): IdeaDraftState | null {
+  const value = record(input);
+  const editor = record(value?.editorState);
+  if (!value || value.kind !== "emerald-construct" || !editor) return null;
+  const formationSpeed = finiteNumber(editor.formationSpeed);
+  const detail = finiteNumber(editor.detail);
+  const color = finiteNumber(editor.color);
+  if (formationSpeed == null || detail == null || color == null) return null;
+  return {
+    version: 1,
+    actions: [
+      { id: "build", label: "Build", mock: "form" },
+      { id: "dissolve", label: "Dissolve", mock: "unform" },
+      { id: "construct", label: "Construct", mock: "replay" },
+    ],
+    sliders: [
+      {
+        id: "formationSpeed",
+        label: "Formation speed",
+        min: 0,
+        max: 100,
+        step: 1,
+        value: Math.min(100, Math.max(0, formationSpeed)),
+      },
+      {
+        id: "detail",
+        label: "Detail",
+        min: 0,
+        max: 100,
+        step: 1,
+        value: Math.min(100, Math.max(0, detail)),
+      },
+      {
+        id: "color",
+        label: "Color",
+        min: 0,
+        max: 100,
+        step: 1,
+        value: Math.min(100, Math.max(0, color)),
+      },
+    ],
+  };
+}
+
+export function coerceIdeaDraftState(input: unknown): IdeaDraftState | null {
+  const modern = parseIdeaDraftState(input);
+  if (modern) return modern;
+  const value = record(input);
+  if (!value || value.version !== 1) return null;
+  if (value.kind === "source") return defaultIdeaDraftState();
+  return migrateEmeraldConstruct(input);
+}
+
+function hasOneExampleExport(source: string): boolean {
+  return (source.match(/export\s+function\s+Example\b/g)?.length ?? 0) === 1;
 }
 
 export function parseIdeaDraft(input: unknown): IdeaDraft | null {
   const value = record(input);
-  const draft = parseIdeaDraftState(input);
+  const draft = coerceIdeaDraftState(input);
   const source = value?.portableSourceTemplate;
-  const placeholderExports =
-    typeof source === "string"
-      ? source.match(/export\s+function\s+Example\b/g)?.length ?? 0
-      : 0;
   if (
     !draft ||
     typeof source !== "string" ||
     !source.trim() ||
-    placeholderExports !== 1
+    !hasOneExampleExport(source)
   ) {
     return null;
   }
@@ -106,10 +189,9 @@ function parseTargetFolder(input: unknown): string | undefined {
 export function parseCreateIdeaInput(input: unknown): CreateIdeaInput | null {
   const value = record(input);
   const name = nonEmptyString(value?.name);
-  const targetFolder = parseTargetFolder(value?.targetFolder);
   const draft = parseIdeaDraft(value?.draft);
-  if (!value || !name || !targetFolder || !draft) return null;
-  return { name, targetFolder, draft };
+  if (!value || !name || !draft) return null;
+  return { name, draft };
 }
 
 export function parseUpdateIdeaInput(input: unknown): UpdateIdeaInput | null {
@@ -122,7 +204,10 @@ export function parseUpdateIdeaInput(input: unknown): UpdateIdeaInput | null {
 export function parsePublishIdeaInput(input: unknown): PublishIdeaInput | null {
   const value = record(input);
   const expectedRevision = integer(value?.expectedRevision, 1);
-  return value && expectedRevision != null ? { expectedRevision } : null;
+  const targetFolder = parseTargetFolder(value?.targetFolder);
+  return value && expectedRevision != null && targetFolder
+    ? { expectedRevision, targetFolder }
+    : null;
 }
 
 export function parseIdeaSummary(input: unknown): IdeaSummary | null {
@@ -131,15 +216,14 @@ export function parseIdeaSummary(input: unknown): IdeaSummary | null {
   const id = nonEmptyString(value.id);
   const revision = integer(value.revision, 1);
   const name = nonEmptyString(value.name);
-  const targetFolder = parseTargetFolder(value.targetFolder);
   const componentName = nonEmptyString(value.componentName);
   const updatedAt = isoDate(value.updatedAt);
   if (!id || !isSafeIdeaId(id) || revision == null || !name ||
-      !targetFolder || !componentName ||
+      !componentName ||
       !isSafeComponentName(componentName) || !updatedAt) {
     return null;
   }
-  return { id, revision, name, targetFolder, componentName, updatedAt };
+  return { id, revision, name, componentName, updatedAt };
 }
 
 export function parseIdeaDocument(input: unknown): IdeaDocument | null {
@@ -150,7 +234,7 @@ export function parseIdeaDocument(input: unknown): IdeaDocument | null {
   const sourceDigest = nonEmptyString(value?.sourceDigest);
   if (
     !value ||
-    value.schemaVersion !== 2 ||
+    value.schemaVersion !== IDEA_SCHEMA_VERSION ||
     value.sourceFile !== "source.tsx" ||
     !summary ||
     !draft ||
@@ -163,7 +247,7 @@ export function parseIdeaDocument(input: unknown): IdeaDocument | null {
   if (toComponentName(summary.name) !== summary.componentName) return null;
   return {
     ...summary,
-    schemaVersion: 2,
+    schemaVersion: IDEA_SCHEMA_VERSION,
     draft,
     sourceFile: "source.tsx",
     sourceDigest,

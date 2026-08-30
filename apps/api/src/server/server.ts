@@ -94,7 +94,7 @@ export function createPlaygroundApiHandler(
     const published = await ideas.withCurrent(
       id,
       input.expectedRevision,
-      idea => publishIdeaToDisk(liveRoot, idea),
+      idea => publishIdeaToDisk(liveRoot, idea, input.targetFolder),
     );
 
     let catalogStatus: "ready" | "refresh-failed" = "ready";

@@ -8,22 +8,50 @@ disable-model-invocation: true
 
 Build ideas in Experimental. Keep Experimental, Live components, and ConfigurableShell separate.
 
+```text
+apps/web/src/
+  app/                 # playground chrome (layout, Live catalog UI) — not ConfigurableShell
+  experimental/        # studio page, shared dock, and saved ideas
+    ideas/<Name>/      # switchable projects (source.tsx + project.json)
+  live/                # published catalog
+```
+
+See [Experimental Projects](../../../docs/IDEA_PERSISTENCE.md).
+
+Humans and agents both work in idea files. Save in the UI is one way to create a project. Creating the folder on disk is another. The app fills in `project.json` when it is missing.
+
 ## Choose the workflow
+
+### Create a new idea on disk
+
+Use this when starting a new experiment without going through Save first.
+
+```text
+apps/web/src/experimental/ideas/<IdeaName>/
+├── source.tsx      # required
+└── project.json    # optional; the app mints it on next Open or list
+```
+
+- `<IdeaName>` is a PascalCase component name (`QuietButton`). If that folder exists, use `QuietButton2`.
+- Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
+- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
+- After writing files, the next Experimental list or Open adopts the folder and writes `project.json`.
 
 ### Edit one saved idea
 
-Use this when the project already exists under:
+Find the project by matching `id` in `project.json`, not by guessing the folder name. The directory is the idea's component name (`Study`, `Study2` on collision). The UUID and `sourceDigest` stay in JSON.
 
 ```text
-apps/web/src/experimental/<IdeaName>/
-├── project.json
-└── source.tsx
+apps/web/src/experimental/ideas/<IdeaName>/
+├── project.json    # identity + this idea’s dock settings
+└── source.tsx      # code
 ```
 
-- Edit `source.tsx`.
-- Let the app manage `project.json`, including its id, revision, and source digest.
-- Keep exactly one `export function Example` declaration.
-- Keep the source portable: no imports from `apps/web/src/shell/` or `apps/web/src/lib/`.
+- Edit `source.tsx`. That is the usual way you and agents tweak an idea.
+- Leave `id`, `revision`, and `sourceDigest` alone. The app reconciles them after a source edit.
+- Keep exactly one `export function Example` declaration. Play passes live slider numbers into `Example`; baked `SLIDERS` defaults are what Make Live ships.
+- Keep the source portable: no imports from `apps/web/src/app/` or `apps/web/src/lib/`.
 - Do not rename the project directory by hand. The app names it from the idea and may rename it when the idea is renamed.
 
 The app adopts a valid direct source edit the next time it reads the project.
@@ -32,51 +60,52 @@ The app adopts a valid direct source edit the next time it reads the project.
 
 Use this when adding or changing the stage, dock, controls, or generated source:
 
-- `apps/web/src/shell/ExperimentalPage.tsx` — save, open, and Make Live (folder picker)
-- `apps/web/src/shell/FolderEditor.tsx` — Live folder select used by Make Live
-- `apps/web/src/shell/IdeaWorkbench.tsx` — stage and dock controls
-- `apps/web/src/shell/workbench/<Name>/` — idea-specific rendering and source generation
+- `apps/web/src/experimental/ExperimentalPage.tsx` — save, open, and Make Live (folder picker)
+- `apps/web/src/experimental/FolderEditor.tsx` — Live folder select used by Make Live
+- `apps/web/src/experimental/IdeaWorkbench.tsx` — shared play dock and stage harness for every idea
+- `apps/web/scripts/sync-playground.ts` — writes `ideas.gen.ts` lazy imports (Bun has no Vite glob)
 
-Report a versioned `IdeaDraft` through `onDraftChange`. Its `portableSourceTemplate` must follow the same portable source rules as a saved `source.tsx`.
+Report dock settings through `onDraftChange`. Bake current slider numbers into the `const SLIDERS` block in `portableSourceTemplate`. Do not put mock button logic or slider widgets in `source.tsx`. The dock is a fixed template (three actions, Copy, three sliders); this idea’s `project.json` fills labels, ranges, values, and optional `mock` (`none`, `scroll`, `form`, `unform`, or `replay`). Do not hand-edit `ideas.gen.ts`.
 
-Do not create or hand-edit `project.json`. Let the running app create saved project directories.
+Do not hand-edit `id`, `revision`, or `sourceDigest` in `project.json`.
 
 ## Keep ConfigurableShell separate
 
-ConfigurableShell is a portable Live catalog card. It is not the Experimental host.
+ConfigurableShell is a portable Live catalog card at `apps/web/src/live/shells/ConfigurableShell/`. It is not the Experimental host and is unrelated to `apps/web/src/app/`.
 
 - Do not render or import `ConfigurableShell` in Experimental.
 - Do not import `ConfigurableShell.module.css`.
 - Do not add Experimental save, open, switch, or Make Live behavior to ConfigurableShell.
-- Experimental may reuse `ProximityControl`, `linearScale`, and icons to share its visual language.
+- Experimental may import `ProximityControl`, `linearScale`, and icons from that Live folder so the controls feel the same.
 
 ## Define the idea
 
 Before implementation, determine any details the user has not supplied:
 
 - Idea name
-- Live destination folder; never `shells` or `experimental`. The user picks this during Make Live.
-- Controls and their labels, ranges, steps, and defaults
-- Options, variants, and actions
+- Live destination folder only when publishing. Never `shells` or `experimental`; unsaved and saved ideas do not require a destination.
+- How this idea fills the shared dock: three slider labels/ranges/defaults, three action labels, and whether actions mock `scroll`, `form`, `unform`, or `replay` (otherwise `none`)
 
-When details are open-ended, propose a small sensible set instead of blocking on every choice.
+Do not add a fourth slider, a custom action slot, or a per-idea `settings.tsx`. When details are open-ended, propose a small sensible set instead of blocking on every choice.
 
 ## Make Live
 
-Only publish when the user asks or uses **Make Live**. Publishing creates:
+Only publish when the user asks or uses **Make Live**. The UI asks for a Live folder, then creates:
 
 ```text
 apps/web/src/live/<folder>/<Name>/
 ├── <Name>.tsx
+├── <Name>.module.css   ← optional
 └── preview.tsx
 ```
 
-`<Name>.tsx` contains only the portable component. `preview.tsx` only renders `<Name />`. Neither file may contain Experimental controls, shell chrome, or ConfigurableShell.
+`<Name>.tsx` contains only the portable component. `preview.tsx` only renders `<Name />`. Neither file may contain Experimental controls, app chrome, or ConfigurableShell.
 
 Publishing keeps the saved Experimental project so it can continue evolving.
 
 ## Verify
 
-- For authoring-tool changes, open `/experimental` and exercise the dock.
+- For authoring-tool changes, open `/experimental` and exercise the dock, including Make Live folder pick.
+- For a new on-disk idea, confirm it appears after reload and that `project.json` was minted.
 - For saved-source changes, confirm the placeholder export and portable imports.
 - Run the repository's relevant tests and build checks.

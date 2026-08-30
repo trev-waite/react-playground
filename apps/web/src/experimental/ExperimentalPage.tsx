@@ -3,20 +3,23 @@ import { useLocation, useNavigate } from "react-router";
 import {
   EXPERIMENTAL_FOLDER,
   SHELLS_FOLDER,
+  bakeSliders,
+  defaultIdeaDraft,
   normalizeFolder,
   toComponentName,
   type IdeaDraft,
   type IdeaProject,
   type IdeaSummary,
 } from "@react-playground/api";
-import { playgroundEntries } from "../lib/discover";
-import type { IdeaStudioSession } from "../lib/ideaSession";
+import { useView } from "../app/view/ViewController";
+import { liveEntries } from "../lib/discover";
+import { emptyIdeaDraft } from "../lib/ideaSession";
 import { playgroundApi } from "../lib/playgroundApi";
 import { EditSequence } from "./editSequence";
 import { FolderEditor } from "./FolderEditor";
 import { IdeaProjects } from "./IdeaProjects";
 import { ideaIdFromPath, initialIdeaId } from "./projectSwitch";
-import { useView } from "./view/ViewController";
+import { useIdeaPublishing } from "./useIdeaPublishing";
 import styles from "./ExperimentalPage.module.css";
 
 const IdeaWorkbench = lazy(() => import("./IdeaWorkbench"));
@@ -25,7 +28,7 @@ const DEFAULT_IDEA_NAME = "Untitled idea";
 
 function existingFolders(): string[] {
   const folders = new Set<string>();
-  for (const entry of playgroundEntries) {
+  for (const entry of liveEntries) {
     const [folder] = entry.slug.split("/");
     if (folder && folder !== SHELLS_FOLDER && folder !== EXPERIMENTAL_FOLDER) {
       folders.add(folder);
@@ -35,15 +38,20 @@ function existingFolders(): string[] {
 }
 
 export function ExperimentalPage() {
-  const { mode, promote, promoting, promoteError } = useView();
+  const { mode } = useView();
+  const {
+    publish,
+    publishing,
+    publishError,
+    clearPublishError,
+  } = useIdeaPublishing();
   const location = useLocation();
   const navigate = useNavigate();
 
   const folders = useMemo(() => existingFolders(), []);
   const [ideaName, setIdeaName] = useState(DEFAULT_IDEA_NAME);
-  const [folder, setFolder] = useState(() => existingFolders()[0] ?? "");
+  const [liveFolder, setLiveFolder] = useState(() => existingFolders()[0] ?? "");
   const [studioKey, setStudioKey] = useState(0);
-  const [session, setSession] = useState<IdeaStudioSession>({ kind: "blank" });
   const [ideas, setIdeas] = useState<IdeaSummary[]>([]);
   const [activeIdea, setActiveIdea] = useState<IdeaProject | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -61,15 +69,15 @@ export function ExperimentalPage() {
   const draftRef = useRef<IdeaDraft | null>(null);
   const editSequenceRef = useRef(new EditSequence());
   const savingRef = useRef(false);
-  const applyLoadedIdeaRef = useRef<(idea: IdeaProject) => void>(() => {});
+  const showIdeaRef = useRef<(idea: IdeaProject) => void>(() => {});
   const saveIdeaRef = useRef<() => Promise<IdeaProject | null>>(async () => null);
   const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
-  const workbenchReady = hydrated;
+  const activeIdRef = useRef<string | null>(null);
 
   const componentName = toComponentName(ideaName.trim() || DEFAULT_IDEA_NAME);
-  const errorMessage = saveError ?? promoteError;
+  const errorMessage = saveError ?? publishError;
   const canSave =
-    workbenchReady &&
+    hydrated &&
     hasDraft &&
     (dirty || !activeIdea) &&
     !saving;
@@ -85,44 +93,50 @@ export function ExperimentalPage() {
     [activeIdea?.id, ideaName, ideas],
   );
 
-  const applyLoadedIdea = useCallback(
-    (idea: IdeaProject) => {
-      setIdeaName(idea.name);
-      setFolder(idea.targetFolder);
-      setActiveIdea(idea);
-      draftRef.current = idea.draft;
-      editSequenceRef.current.reset();
-      setSession(
-        idea.draft.kind === "emerald-construct"
-          ? { kind: "restore", editorState: idea.draft.editorState }
-          : { kind: "blank" },
-      );
-      setHasDraft(true);
-      setDirty(false);
-      setSaveError(null);
-      setStudioKey(key => key + 1);
-    },
-    [],
-  );
-  applyLoadedIdeaRef.current = applyLoadedIdea;
+  function rememberIdea(idea: IdeaProject) {
+    setIdeas(current => [
+      {
+        id: idea.id,
+        revision: idea.revision,
+        name: idea.name,
+        componentName: idea.componentName,
+        updatedAt: idea.updatedAt,
+      },
+      ...current.filter(item => item.id !== idea.id),
+    ]);
+  }
 
-  useEffect(() => {
-    if (mode === "experimental") setActivated(true);
-  }, [mode]);
+  function showIdea(idea: IdeaProject) {
+    setIdeaName(idea.name);
+    setActiveIdea(idea);
+    activeIdRef.current = idea.id;
+    draftRef.current = idea.draft;
+    editSequenceRef.current.reset();
+    setHasDraft(true);
+    setDirty(false);
+    setSaveError(null);
+    setStudioKey(key => key + 1);
+    navigate(`/experimental/${idea.id}`, { replace: true });
+  }
+  showIdeaRef.current = showIdea;
 
-  function resetToBlank() {
+  function clearStudio() {
     setIdeaName(DEFAULT_IDEA_NAME);
-    setFolder(existingFolders()[0] ?? "");
+    setLiveFolder(existingFolders()[0] ?? "");
     setActiveIdea(null);
+    activeIdRef.current = null;
     draftRef.current = null;
     editSequenceRef.current.reset();
-    setSession({ kind: "blank" });
     setDirty(false);
     setHasDraft(false);
     setSaveError(null);
     setStudioKey(key => key + 1);
     navigate("/experimental", { replace: true });
   }
+
+  useEffect(() => {
+    if (mode === "experimental") setActivated(true);
+  }, [mode]);
 
   useEffect(() => {
     if (!activated) return;
@@ -133,17 +147,14 @@ export function ExperimentalPage() {
         const listed = await playgroundApi.listIdeas();
         if (cancelled) return;
         setIdeas(listed);
+        if (activeIdRef.current) return;
 
-        const ideaToOpen = initialIdeaId(
-          initialPathRef.current,
-          listed,
-        );
+        const ideaToOpen = initialIdeaId(initialPathRef.current, listed);
         if (!ideaToOpen) return;
 
         const loadedIdea = await playgroundApi.loadIdea(ideaToOpen);
-        if (cancelled) return;
-        applyLoadedIdeaRef.current(loadedIdea);
-        navigate(`/experimental/${loadedIdea.id}`, { replace: true });
+        if (cancelled || activeIdRef.current) return;
+        showIdeaRef.current(loadedIdea);
       } catch {
         if (!cancelled) setSaveError("Could not load saved projects");
       } finally {
@@ -154,29 +165,32 @@ export function ExperimentalPage() {
     return () => {
       cancelled = true;
     };
-  }, [activated, navigate]);
+  }, [activated]);
 
-  async function saveIdea(nextFolder = folder): Promise<IdeaProject | null> {
+  async function saveIdea(
+    options: { open?: boolean } = {},
+  ): Promise<IdeaProject | null> {
     if (savingRef.current) return null;
     const draft = draftRef.current;
     if (!draft?.portableSourceTemplate.trim()) {
       setSaveError("Nothing to save yet");
       return null;
     }
-    const targetFolder = normalizeFolder(nextFolder);
-    if (!targetFolder) {
-      setSaveError("Choose a Live folder");
-      return null;
-    }
-
+    const baked: IdeaDraft = {
+      ...draft,
+      portableSourceTemplate: bakeSliders(
+        draft.portableSourceTemplate,
+        draft.sliders,
+      ),
+    };
+    draftRef.current = baked;
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     const savedEditVersion = editSequenceRef.current.capture();
     const input = {
       name: ideaName,
-      targetFolder,
-      draft,
+      draft: baked,
     };
 
     try {
@@ -187,23 +201,15 @@ export function ExperimentalPage() {
           })
         : await playgroundApi.createIdea(input);
       setActiveIdea(saved);
-      setIdeas(current => [
-        {
-          id: saved.id,
-          revision: saved.revision,
-          name: saved.name,
-          targetFolder: saved.targetFolder,
-          componentName: saved.componentName,
-          updatedAt: saved.updatedAt,
-        },
-        ...current.filter(idea => idea.id !== saved.id),
-      ]);
+      activeIdRef.current = saved.id;
+      rememberIdea(saved);
       if (editSequenceRef.current.isCurrent(savedEditVersion)) {
         setIdeaName(saved.name);
-        setFolder(saved.targetFolder);
         setDirty(false);
       }
-      navigate(`/experimental/${saved.id}`, { replace: true });
+      if (options.open !== false) {
+        navigate(`/experimental/${saved.id}`, { replace: true });
+      }
       return saved;
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed");
@@ -213,42 +219,54 @@ export function ExperimentalPage() {
       setSaving(false);
     }
   }
-  saveIdeaRef.current = saveIdea;
+  saveIdeaRef.current = () => saveIdea();
 
   async function persistIfDirty(): Promise<boolean> {
     if (savingRef.current) return false;
     if (!dirty) return true;
-    const draft = draftRef.current;
-    if (!draft?.portableSourceTemplate.trim()) {
-      setSaveError("Nothing to save yet");
-      return false;
-    }
-    return (await saveIdea()) != null;
+    if (!draftRef.current?.portableSourceTemplate.trim()) return true;
+    return (await saveIdea({ open: false })) != null;
   }
 
   async function switchTo(next: string) {
     if (savingRef.current) return;
-    if (next === activeIdea?.id) return;
+    if (next === activeIdRef.current) return;
     if (!(await persistIfDirty())) return;
     try {
-      applyLoadedIdea(await playgroundApi.loadIdea(next));
-      navigate(`/experimental/${next}`, { replace: true });
+      showIdea(await playgroundApi.loadIdea(next));
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not open project");
     }
   }
   switchToRef.current = switchTo;
 
-  async function startNewIdea() {
-    if (savingRef.current) return;
+  async function startNewIdea(name: string) {
+    const nextName = name.trim();
+    if (!nextName || savingRef.current) return;
     if (!(await persistIfDirty())) return;
-    resetToBlank();
+
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const created = await playgroundApi.createIdea({
+        name: nextName,
+        draft: defaultIdeaDraft(),
+      });
+      rememberIdea(created);
+      showIdea(created);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not create idea");
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   useEffect(() => {
     if (!hydrated) return;
     const fromUrl = ideaIdFromPath(location.pathname);
-    if (!fromUrl) return;
+    if (!fromUrl || fromUrl === activeIdRef.current) return;
     void switchToRef.current(fromUrl);
   }, [hydrated, location.pathname]);
 
@@ -267,8 +285,12 @@ export function ExperimentalPage() {
     setDeletingIdeaId(ideaIdToDelete);
     try {
       await playgroundApi.deleteIdea(ideaIdToDelete);
-      setIdeas(current => current.filter(item => item.id !== ideaIdToDelete));
-      if (ideaIdToDelete === activeIdea?.id) resetToBlank();
+      const remaining = ideas.filter(item => item.id !== ideaIdToDelete);
+      setIdeas(remaining);
+      if (ideaIdToDelete !== activeIdea?.id) return;
+      const fallback = remaining[0];
+      if (fallback) showIdea(await playgroundApi.loadIdea(fallback.id));
+      else clearStudio();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not delete project");
     } finally {
@@ -282,6 +304,7 @@ export function ExperimentalPage() {
       return;
     }
     setSaveError(null);
+    clearPublishError();
     setIdeasMenuOpen(false);
     setPickingLiveFolder(true);
   }
@@ -293,13 +316,14 @@ export function ExperimentalPage() {
       return;
     }
 
-    const saved =
-      dirty || !activeIdea || folder !== targetFolder
-        ? await saveIdea(targetFolder)
-        : activeIdea;
+    const saved = dirty || !activeIdea ? await saveIdea() : activeIdea;
     if (!saved) return;
+    setLiveFolder(targetFolder);
     setPickingLiveFolder(false);
-    await promote(saved.id, { expectedRevision: saved.revision });
+    await publish(saved.id, {
+      expectedRevision: saved.revision,
+      targetFolder,
+    });
   }
 
   useEffect(() => {
@@ -358,7 +382,7 @@ export function ExperimentalPage() {
               activeIdeaId={activeIdea?.id ?? null}
               open={ideasMenuOpen}
               disabled={
-                !workbenchReady || saving || promoting || deletingIdeaId != null
+                !hydrated || saving || publishing || deletingIdeaId != null
               }
               deletingIdeaId={deletingIdeaId}
               onIdeaNameChange={name => {
@@ -367,7 +391,7 @@ export function ExperimentalPage() {
               }}
               onOpenChange={setIdeasMenuOpen}
               onOpen={name => void switchTo(name)}
-              onNew={() => void startNewIdea()}
+              onNew={name => void startNewIdea(name)}
               onDelete={name => void onDelete(name)}
             />
 
@@ -385,7 +409,7 @@ export function ExperimentalPage() {
                 disabled={
                   !activeIdea ||
                   saving ||
-                  promoting ||
+                  publishing ||
                   deletingIdeaId != null
                 }
                 aria-label={deletingIdeaId ? "Deleting idea" : "Delete idea"}
@@ -436,7 +460,7 @@ export function ExperimentalPage() {
                   >
                     <FolderEditor
                       folders={folders}
-                      initialFolder={folder}
+                      initialFolder={liveFolder}
                       submitLabel="Publish"
                       destinationHint={`apps/web/src/live/<folder>/${componentName}/`}
                       onCancel={() => setPickingLiveFolder(false)}
@@ -447,10 +471,10 @@ export function ExperimentalPage() {
                 <button
                   type="button"
                   className={styles.makeLive}
-                  disabled={promoting || saving || !workbenchReady || !hasDraft}
+                  disabled={publishing || saving || !hydrated || !hasDraft}
                   onClick={() => void onMakeLive()}
                 >
-                  {promoting ? "Publishing…" : "Make Live"}
+                  {publishing ? "Publishing…" : "Make Live"}
                 </button>
               </div>
             </div>
@@ -464,18 +488,18 @@ export function ExperimentalPage() {
         </div>
       </header>
 
-      <main className={styles.main} aria-label="Component workbench">
+      <main className={styles.main} aria-label="Idea studio">
         <Suspense fallback={<p className={styles.status}>Loading…</p>}>
           <div className={styles.workbench}>
-            {workbenchReady ? (
+            {hydrated ? (
               <IdeaWorkbench
                 key={studioKey}
-                session={session}
+                componentName={activeIdea?.componentName ?? null}
+                draft={draftRef.current ?? emptyIdeaDraft}
                 onMutate={markDirty}
-                onDraftChange={draft => {
-                  if (!draft && activeIdea?.draft.kind === "source") return;
-                  draftRef.current = draft;
-                  setHasDraft(Boolean(draft));
+                onDraftChange={next => {
+                  draftRef.current = next;
+                  setHasDraft(true);
                 }}
               />
             ) : (

@@ -1,6 +1,6 @@
 /**
  * Live preview for the portable ConfigurableShell card.
- * Experimental view is a separate full-bleed workbench; do not reuse this card there.
+ * Experimental view is a separate studio; do not reuse this card there.
  *
  * To wrap a different component in the card:
  * 1. Render it as children of ConfigurableShell

@@ -26,7 +26,7 @@ export function resolveApiConfig(
     corsOrigin: env.CORS_ORIGIN ?? "http://localhost:3000",
     webRoot,
     experimentalRoot: path.resolve(
-      env.EXPERIMENTAL_ROOT ?? path.join(webRoot, "src", "experimental"),
+      env.EXPERIMENTAL_ROOT ?? path.join(webRoot, "src", "experimental", "ideas"),
     ),
     liveRoot: path.resolve(env.LIVE_ROOT ?? path.join(webRoot, "src", "live")),
   };

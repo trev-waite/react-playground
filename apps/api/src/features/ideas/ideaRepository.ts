@@ -11,16 +11,16 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import {
-  RESERVED_LIVE_FOLDERS,
+  coerceIdeaDraftState,
+  defaultIdeaDraftState,
+  IDEA_SCHEMA_VERSION,
   isSafeComponentName,
   isSafeIdeaId,
-  normalizeFolder,
   parseIdeaDocument,
   parseIdeaDraft,
   parseIdeaProject,
   parseIdeaSummary,
   toComponentName,
-  type EmeraldConstructState,
   type IdeaDocument,
   type IdeaDraft,
   type IdeaDraftState,
@@ -70,13 +70,8 @@ export function sourceDigest(source: string): string {
 }
 
 function draftState(draft: IdeaDraft): IdeaDraftState {
-  return draft.kind === "emerald-construct"
-    ? {
-        kind: "emerald-construct",
-        version: 1,
-        editorState: draft.editorState,
-      }
-    : { kind: "source", version: 1 };
+  const { portableSourceTemplate: _source, ...state } = draft;
+  return state;
 }
 
 function documentFromProject(project: IdeaProject): IdeaDocument {
@@ -278,8 +273,8 @@ async function replaceProjectDirectory(
   }
 }
 
-function legacyEditorState(input: unknown): EmeraldConstructState | null {
-  if (typeof input !== "object" || input == null) return null;
+function legacyStudioToDraft(input: unknown): IdeaDraftState {
+  if (typeof input !== "object" || input == null) return defaultIdeaDraftState();
   const value = input as Record<string, unknown>;
   const offset =
     typeof value.offset === "object" && value.offset != null
@@ -292,25 +287,22 @@ function legacyEditorState(input: unknown): EmeraldConstructState | null {
     typeof offset?.x !== "number" ||
     typeof offset.y !== "number"
   ) {
-    return null;
+    return defaultIdeaDraftState();
   }
-  const variant =
-    value.variant === "stella" || value.variant === "octagram"
-      ? value.variant
-      : "bird";
   const clamp = (number: number) => Math.min(100, Math.max(0, number));
-  const clampOrigin = (number: number) => Math.min(1, Math.max(0, number));
-  const origin =
-    offset.x === 0 && offset.y === 0
-      ? { x: 0.5, y: 0.68 }
-      : { x: clampOrigin(offset.x), y: clampOrigin(offset.y) };
-  return {
-    formationSpeed: clamp(value.form),
-    detail: clamp(value.soft),
-    color: clamp(value.drift),
-    origin,
-    variant,
-  };
+  return (
+    coerceIdeaDraftState({
+      kind: "emerald-construct",
+      version: 1,
+      editorState: {
+        formationSpeed: clamp(value.form),
+        detail: clamp(value.soft),
+        color: clamp(value.drift),
+        origin: { x: 0.5, y: 0.68 },
+        variant: "bird",
+      },
+    }) ?? defaultIdeaDraftState()
+  );
 }
 
 function projectFromParts(
@@ -319,21 +311,12 @@ function projectFromParts(
   },
   source: string,
 ): IdeaProject {
-  const draft: IdeaDraft =
-    document.draft.kind === "emerald-construct"
-      ? { ...document.draft, portableSourceTemplate: source }
-      : {
-          kind: "source",
-          version: document.draft.version,
-          portableSourceTemplate: source,
-        };
-
   return {
     ...document,
-    schemaVersion: 2,
+    schemaVersion: IDEA_SCHEMA_VERSION,
     sourceFile: SOURCE_FILE,
     sourceDigest: sourceDigest(source),
-    draft,
+    draft: { ...document.draft, portableSourceTemplate: source },
   };
 }
 
@@ -389,28 +372,19 @@ async function migrateLegacyDirectory(
         : directoryName;
     const componentName = toComponentName(name);
     if (!componentName) throw new Error("invalid name");
-    const normalizedFolder =
-      typeof parsed.folder === "string" ? normalizeFolder(parsed.folder) : null;
-    const targetFolder =
-      normalizedFolder && !RESERVED_LIVE_FOLDERS.has(normalizedFolder)
-        ? normalizedFolder
-        : "components";
     const legacyDate =
       typeof parsed.savedAt === "string" && Number.isFinite(Date.parse(parsed.savedAt))
         ? parsed.savedAt
         : new Date().toISOString();
-    const editorState = legacyEditorState(parsed.studio);
+    const editorState = legacyStudioToDraft(parsed.studio);
     const id = crypto.randomUUID();
     const project = projectFromParts(
       {
         id,
         revision: 1,
         name,
-        targetFolder,
         componentName,
-        draft: editorState
-          ? { kind: "emerald-construct", version: 1, editorState }
-          : { kind: "source", version: 1 },
+        draft: editorState,
         createdAt: legacyDate,
         updatedAt: legacyDate,
       },
@@ -428,6 +402,92 @@ async function migrateLegacyDirectory(
   } catch (error) {
     console.warn(`[ideas] could not migrate ${legacyDir}`, error);
   }
+}
+
+function displayNameFromComponent(componentName: string): string {
+  return componentName
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2");
+}
+
+async function adoptHandCreatedDirectory(
+  ideasRoot: string,
+  directoryName: string,
+): Promise<void> {
+  if (!isSafeComponentName(directoryName)) return;
+  try {
+    const directory = path.join(path.resolve(ideasRoot), directoryName);
+    if (await readDirectoryIdeaId(directory)) return;
+
+    let source: string;
+    try {
+      source = await readFile(path.join(directory, SOURCE_FILE), "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+
+    const draft = parseIdeaDraft({
+      ...defaultIdeaDraftState(),
+      portableSourceTemplate: source,
+    });
+    if (!draft) return;
+
+    const now = new Date().toISOString();
+    const project = projectFromParts(
+      {
+        id: crypto.randomUUID(),
+        revision: 1,
+        name: displayNameFromComponent(directoryName),
+        componentName: directoryName,
+        draft: defaultIdeaDraftState(),
+        createdAt: now,
+        updatedAt: now,
+      },
+      source,
+    );
+    assertValidProject(project);
+    const staging = path.join(directory, `.${project.id}.project-stage`);
+    try {
+      await writeFile(
+        staging,
+        `${JSON.stringify(documentFromProject(project), null, 2)}\n`,
+        "utf8",
+      );
+      await rename(staging, path.join(directory, PROJECT_FILE));
+    } finally {
+      await rm(staging, { force: true });
+    }
+  } catch (error) {
+    console.warn(`[ideas] could not adopt ${directoryName}`, error);
+  }
+}
+
+async function migrateSchema2Document(
+  ideasRoot: string,
+  directory: string,
+  id: string,
+  input: unknown,
+): Promise<IdeaProject | null> {
+  if (typeof input !== "object" || input == null) return null;
+  const value = input as Record<string, unknown>;
+  if (value.schemaVersion !== 2) return null;
+  const summary = parseIdeaSummary(input);
+  const draft = coerceIdeaDraftState(value.draft);
+  const createdAt =
+    typeof value.createdAt === "string" && Number.isFinite(Date.parse(value.createdAt))
+      ? value.createdAt
+      : null;
+  if (!summary || summary.id !== id || !draft || !createdAt) return null;
+  let source: string;
+  try {
+    source = await readFile(path.join(directory, SOURCE_FILE), "utf8");
+  } catch {
+    return null;
+  }
+  const project = projectFromParts({ ...summary, createdAt, draft }, source);
+  await replaceProjectDirectory(ideasRoot, project);
+  return project;
 }
 
 export async function readIdeaProject(
@@ -454,6 +514,9 @@ export async function readIdeaProject(
 
   const migrated = await migrateEmbeddedSourceProject(ideasRoot, id, parsed);
   if (migrated) return migrated;
+
+  const schema2 = await migrateSchema2Document(ideasRoot, directory, id, parsed);
+  if (schema2) return schema2;
 
   const document = parseIdeaDocument(parsed);
   if (!document || document.id !== id) {
@@ -503,7 +566,10 @@ export async function listIdeaProjects(ideasRoot: string): Promise<IdeaProject[]
   }
 
   for (const entry of entries) {
-    if (entry.isDirectory()) await migrateLegacyDirectory(ideasRoot, entry.name);
+    if (entry.isDirectory()) {
+      await migrateLegacyDirectory(ideasRoot, entry.name);
+      await adoptHandCreatedDirectory(ideasRoot, entry.name);
+    }
   }
 
   const migratedEntries = await readdir(root, { withFileTypes: true });

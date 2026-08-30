@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createHttpPlaygroundApi, PlaygroundApiError } from "@react-playground/api";
+import { createHttpPlaygroundApi, PlaygroundApiError, defaultIdeaDraft } from "@react-playground/api";
 import { createPlaygroundApiHandler } from "./server";
 
 const directories: string[] = [];
@@ -39,8 +39,7 @@ afterEach(async () => {
 });
 
 const draft = {
-  kind: "source" as const,
-  version: 1 as const,
+  ...defaultIdeaDraft(),
   portableSourceTemplate: "export function Example() { return <div>blob</div>; }",
 };
 
@@ -51,7 +50,6 @@ describe("playground API handler", () => {
 
     const created = await api.createIdea({
       name: "Morph Blob",
-      targetFolder: "shapes",
       draft,
     });
     expect(created.id).not.toBe(created.componentName);
@@ -59,13 +57,12 @@ describe("playground API handler", () => {
 
     const updated = await api.updateIdea(created.id, {
       name: "Pulse Mark",
-      targetFolder: "feedback",
       draft,
       expectedRevision: created.revision,
     });
     expect(updated.componentName).toBe("PulseMark");
     expect(updated.revision).toBe(2);
-    expect((await api.loadIdea(created.id)).targetFolder).toBe("feedback");
+    expect(await api.loadIdea(created.id)).not.toHaveProperty("targetFolder");
 
     await api.deleteIdea(created.id);
     expect(await api.listIdeas()).toEqual([]);
@@ -76,12 +73,10 @@ describe("playground API handler", () => {
     const api = apiClient(root);
     const created = await api.createIdea({
       name: "Morph Blob",
-      targetFolder: "shapes",
       draft,
     });
     await api.updateIdea(created.id, {
       name: "First edit",
-      targetFolder: "shapes",
       draft,
       expectedRevision: 1,
     });
@@ -89,7 +84,6 @@ describe("playground API handler", () => {
     try {
       await api.updateIdea(created.id, {
         name: "Stale edit",
-        targetFolder: "shapes",
         draft,
         expectedRevision: 1,
       });
@@ -113,15 +107,15 @@ describe("playground API handler", () => {
     try {
       const created = await api.createIdea({
         name: "Morph Blob",
-        targetFolder: "shapes",
         draft,
       });
 
-      expect(await api.publishIdea(created.id, { expectedRevision: 1 })).toEqual({
+      const publishInput = { expectedRevision: 1, targetFolder: "shapes" };
+      expect(await api.publishIdea(created.id, publishInput)).toEqual({
         slug: "shapes/MorphBlob",
         catalogStatus: "refresh-failed",
       });
-      expect(await api.publishIdea(created.id, { expectedRevision: 1 })).toEqual({
+      expect(await api.publishIdea(created.id, publishInput)).toEqual({
         slug: "shapes/MorphBlob",
         catalogStatus: "ready",
       });

@@ -10,9 +10,7 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { liveEntries } from "../../lib/discover";
-import { playgroundApi } from "../../lib/playgroundApi";
 import type { PlaygroundEntry } from "../../lib/types";
-import type { PublishIdeaInput } from "@react-playground/api";
 import {
   DEFAULT_DURATION_MS,
   REDUCED_MOTION_MS,
@@ -28,12 +26,9 @@ type ViewContextValue = {
   animating: boolean;
   liveSlug: string | null;
   liveEntries: PlaygroundEntry[];
-  promoting: boolean;
-  promoteError: string | null;
   reducedMotion: boolean;
   reducedTransparency: boolean;
   setMode: (mode: ViewMode) => void;
-  promote: (id: string, input: PublishIdeaInput) => Promise<void>;
 };
 
 const ViewContext = createContext<ViewContextValue | null>(null);
@@ -99,8 +94,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
   );
   const [mode, setModeState] = useState<ViewMode>(urlMode);
   const [animating, setAnimating] = useState(false);
-  const [promoting, setPromoting] = useState(false);
-  const [promoteError, setPromoteError] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [reducedTransparency, setReducedTransparency] = useState(
     prefersReducedTransparency,
@@ -204,7 +197,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
 
   const setMode = useCallback(
     (next: ViewMode) => {
-      setPromoteError(null);
       if (next === "experimental") {
         navigate(experimentalHref);
       } else {
@@ -215,31 +207,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
     [navigate, liveSlug, experimentalHref],
   );
 
-  const promote = useCallback(
-    async (id: string, input: PublishIdeaInput) => {
-      if (promoting) return;
-
-      setPromoting(true);
-      setPromoteError(null);
-
-      try {
-        const { slug, catalogStatus } = await playgroundApi.publishIdea(id, input);
-        setLiveSlug(slug);
-        if (catalogStatus === "refresh-failed") {
-          setPromoteError("Published files, but the Live catalog refresh failed. Try Make Live again.");
-          setPromoting(false);
-          return;
-        }
-        // Full reload so the regenerated registry can lazy-load the new module.
-        window.location.assign(`/${slug}`);
-      } catch (err) {
-        setPromoteError(err instanceof Error ? err.message : "Promote failed");
-        setPromoting(false);
-      }
-    },
-    [promoting],
-  );
-
   const value = useMemo<ViewContextValue>(
     () => ({
       mode,
@@ -247,12 +214,9 @@ export function ViewProvider({ children }: ViewProviderProps) {
       animating,
       liveSlug,
       liveEntries,
-      promoting,
-      promoteError,
       reducedMotion,
       reducedTransparency,
       setMode,
-      promote,
     }),
     [
       mode,
@@ -260,12 +224,9 @@ export function ViewProvider({ children }: ViewProviderProps) {
       animating,
       liveSlug,
       liveEntries,
-      promoting,
-      promoteError,
       reducedMotion,
       reducedTransparency,
       setMode,
-      promote,
     ],
   );
 

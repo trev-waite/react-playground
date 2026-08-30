@@ -4,12 +4,14 @@ const SAMPLES = [{"x":1.62,"y":-0.28,"layer":"outline","edgeIndex":0,"order":0},
 const EDGES = [{"a":{"x":1.62,"y":-0.28},"b":{"x":0.78,"y":-0.22},"layer":"outline"},{"a":{"x":0.78,"y":-0.22},"b":{"x":0.52,"y":-0.42},"layer":"outline"},{"a":{"x":0.52,"y":-0.42},"b":{"x":0.28,"y":-0.3},"layer":"outline"},{"a":{"x":0.28,"y":-0.3},"b":{"x":0.16,"y":-0.2},"layer":"outline"},{"a":{"x":0.16,"y":-0.2},"b":{"x":-0.02,"y":-0.58},"layer":"outline"},{"a":{"x":-0.02,"y":-0.58},"b":{"x":-0.18,"y":-0.88},"layer":"outline"},{"a":{"x":-0.18,"y":-0.88},"b":{"x":-0.22,"y":-1.12},"layer":"outline"},{"a":{"x":-0.22,"y":-1.12},"b":{"x":-0.52,"y":-0.68},"layer":"outline"},{"a":{"x":-0.52,"y":-0.68},"b":{"x":-0.26,"y":-0.18},"layer":"outline"},{"a":{"x":-0.26,"y":-0.18},"b":{"x":-0.48,"y":-0.04},"layer":"outline"},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-0.88,"y":-0.12},"layer":"outline"},{"a":{"x":-0.88,"y":-0.12},"b":{"x":-1.42,"y":0.22},"layer":"outline"},{"a":{"x":-1.42,"y":0.22},"b":{"x":-0.98,"y":0.36},"layer":"outline"},{"a":{"x":-0.98,"y":0.36},"b":{"x":-0.58,"y":0.16},"layer":"outline"},{"a":{"x":-0.58,"y":0.16},"b":{"x":-0.36,"y":0.2},"layer":"outline"},{"a":{"x":-0.36,"y":0.2},"b":{"x":-0.02,"y":0.28},"layer":"outline"},{"a":{"x":-0.02,"y":0.28},"b":{"x":0.28,"y":0.16},"layer":"outline"},{"a":{"x":0.28,"y":0.16},"b":{"x":0.58,"y":0.1},"layer":"outline"},{"a":{"x":0.58,"y":0.1},"b":{"x":0.8,"y":-0.06},"layer":"outline"},{"a":{"x":0.8,"y":-0.06},"b":{"x":1.62,"y":-0.28},"layer":"outline"},{"a":{"x":0.78,"y":-0.22},"b":{"x":0.54,"y":-0.16},"layer":"wire"},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.8,"y":-0.06},"layer":"wire"},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.5,"y":-0.02},"layer":"wire"},{"a":{"x":0.5,"y":-0.02},"b":{"x":0.8,"y":-0.06},"layer":"wire"},{"a":{"x":0.5,"y":-0.02},"b":{"x":0.58,"y":0.1},"layer":"wire"},{"a":{"x":0.52,"y":-0.42},"b":{"x":0.54,"y":-0.16},"layer":"wire"},{"a":{"x":0.28,"y":-0.3},"b":{"x":0.54,"y":-0.16},"layer":"wire"},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.16,"y":-0.2},"layer":"wire"},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.18,"y":0},"layer":"wire"},{"a":{"x":0.5,"y":-0.02},"b":{"x":0.18,"y":0},"layer":"wire"},{"a":{"x":0.18,"y":0},"b":{"x":0.28,"y":0.16},"layer":"wire"},{"a":{"x":0.16,"y":-0.2},"b":{"x":0.18,"y":0},"layer":"wire"},{"a":{"x":0.16,"y":-0.2},"b":{"x":-0.26,"y":-0.18},"layer":"wire"},{"a":{"x":-0.26,"y":-0.18},"b":{"x":-0.48,"y":-0.04},"layer":"wire"},{"a":{"x":0.18,"y":0},"b":{"x":-0.48,"y":-0.04},"layer":"wire"},{"a":{"x":0.18,"y":0},"b":{"x":-0.36,"y":0.2},"layer":"wire"},{"a":{"x":-0.02,"y":-0.58},"b":{"x":-0.26,"y":-0.18},"layer":"wire"},{"a":{"x":-0.18,"y":-0.88},"b":{"x":-0.26,"y":-0.18},"layer":"wire"},{"a":{"x":-0.18,"y":-0.88},"b":{"x":-0.52,"y":-0.68},"layer":"wire"},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-0.58,"y":0.16},"layer":"wire"},{"a":{"x":0.28,"y":-0.3},"b":{"x":0.16,"y":-0.2},"layer":"wire"},{"a":{"x":0.58,"y":0.1},"b":{"x":0.28,"y":0.16},"layer":"wire"},{"a":{"x":0.28,"y":-0.3},"b":{"x":-0.02,"y":-0.58},"layer":"complete"},{"a":{"x":0.28,"y":0.16},"b":{"x":-0.02,"y":0.28},"layer":"complete"},{"a":{"x":-0.18,"y":-0.88},"b":{"x":-0.22,"y":-1.12},"layer":"complete"},{"a":{"x":-0.22,"y":-1.12},"b":{"x":-0.52,"y":-0.68},"layer":"complete"}];
 const RINGS = [[{"x":1.62,"y":-0.28},{"x":0.78,"y":-0.22},{"x":0.52,"y":-0.42},{"x":0.28,"y":-0.3},{"x":0.16,"y":-0.2},{"x":-0.02,"y":-0.58},{"x":-0.18,"y":-0.88},{"x":-0.22,"y":-1.12},{"x":-0.52,"y":-0.68},{"x":-0.26,"y":-0.18},{"x":-0.48,"y":-0.04},{"x":-0.88,"y":-0.12},{"x":-1.42,"y":0.22},{"x":-0.98,"y":0.36},{"x":-0.58,"y":0.16},{"x":-0.36,"y":0.2},{"x":-0.02,"y":0.28},{"x":0.28,"y":0.16},{"x":0.58,"y":0.1},{"x":0.8,"y":-0.06}]];
 const FACETS = [{"a":{"x":1.62,"y":-0.28},"b":{"x":0.78,"y":-0.22},"c":{"x":0.54,"y":-0.16},"shade":0.96},{"a":{"x":1.62,"y":-0.28},"b":{"x":0.54,"y":-0.16},"c":{"x":0.5,"y":-0.02},"shade":0.74},{"a":{"x":1.62,"y":-0.28},"b":{"x":0.5,"y":-0.02},"c":{"x":0.8,"y":-0.06},"shade":0.46},{"a":{"x":0.78,"y":-0.22},"b":{"x":0.52,"y":-0.42},"c":{"x":0.54,"y":-0.16},"shade":0.9},{"a":{"x":0.52,"y":-0.42},"b":{"x":0.28,"y":-0.3},"c":{"x":0.54,"y":-0.16},"shade":0.82},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.28,"y":-0.3},"c":{"x":0.16,"y":-0.2},"shade":0.7},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.16,"y":-0.2},"c":{"x":0.18,"y":0},"shade":0.62},{"a":{"x":0.54,"y":-0.16},"b":{"x":0.5,"y":-0.02},"c":{"x":0.18,"y":0},"shade":0.54},{"a":{"x":0.5,"y":-0.02},"b":{"x":0.58,"y":0.1},"c":{"x":0.18,"y":0},"shade":0.38},{"a":{"x":0.5,"y":-0.02},"b":{"x":0.8,"y":-0.06},"c":{"x":0.58,"y":0.1},"shade":0.3},{"a":{"x":0.58,"y":0.1},"b":{"x":0.28,"y":0.16},"c":{"x":0.18,"y":0},"shade":0.44},{"a":{"x":0.28,"y":0.16},"b":{"x":-0.02,"y":0.28},"c":{"x":0.18,"y":0},"shade":0.5},{"a":{"x":-0.02,"y":0.28},"b":{"x":-0.36,"y":0.2},"c":{"x":0.18,"y":0},"shade":0.34},{"a":{"x":-0.02,"y":-0.58},"b":{"x":-0.18,"y":-0.88},"c":{"x":-0.26,"y":-0.18},"shade":0.78},{"a":{"x":-0.18,"y":-0.88},"b":{"x":-0.22,"y":-1.12},"c":{"x":-0.52,"y":-0.68},"shade":0.92},{"a":{"x":-0.18,"y":-0.88},"b":{"x":-0.52,"y":-0.68},"c":{"x":-0.26,"y":-0.18},"shade":0.56},{"a":{"x":0.16,"y":-0.2},"b":{"x":-0.26,"y":-0.18},"c":{"x":0.18,"y":0},"shade":0.48},{"a":{"x":-0.26,"y":-0.18},"b":{"x":-0.48,"y":-0.04},"c":{"x":0.18,"y":0},"shade":0.4},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-0.36,"y":0.2},"c":{"x":0.18,"y":0},"shade":0.28},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-0.58,"y":0.16},"c":{"x":-0.36,"y":0.2},"shade":0.22},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-0.88,"y":-0.12},"c":{"x":-1.42,"y":0.22},"shade":0.64},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-1.42,"y":0.22},"c":{"x":-0.98,"y":0.36},"shade":0.3},{"a":{"x":-0.48,"y":-0.04},"b":{"x":-0.98,"y":0.36},"c":{"x":-0.58,"y":0.16},"shade":0.2},{"a":{"x":0.28,"y":-0.3},"b":{"x":0.16,"y":-0.2},"c":{"x":-0.26,"y":-0.18},"shade":0.52},{"a":{"x":0.28,"y":-0.3},"b":{"x":0.16,"y":-0.2},"c":{"x":-0.02,"y":-0.58},"shade":0.84},{"a":{"x":0.78,"y":-0.22},"b":{"x":0.54,"y":-0.16},"c":{"x":0.5,"y":-0.02},"shade":0.8}];
-const SPEED = 39;
-const HUE = 151;
+const SLIDERS = {"formationSpeed":39,"detail":93,"color":42};
 const ORIGIN = {"x":0.5426702281655786,"y":0.5605310132253527};
 
-export function Example({ progress = 1 }: { progress?: number } = {}) {
+export function Example({ sliders = SLIDERS, progress = 1 }: { sliders?: Record<string, number>; progress?: number } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const speed = sliders.formationSpeed ?? 39;
+  const detail = sliders.detail ?? 93;
+  const hue = Math.round(((sliders.color ?? 42) / 100) * 360);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,11 +29,22 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
     const cx = width / 2;
     const cy = height / 2;
     const scale = Math.min(width, height) * 0.36;
-    const origin = { x: width * ORIGIN.x, y: height * ORIGIN.y };
-    const count = Math.max(SAMPLES.length, 1);
-    const travel = 0.4 - Math.min(1, Math.max(0, SPEED / 100)) * 0.26;
+    const originPx = { x: width * ORIGIN.x, y: height * ORIGIN.y };
+    const taut = Math.min(1, Math.max(0, speed / 100));
+    const density = Math.min(1, Math.max(0, detail / 100));
+    const stride = Math.max(1, Math.round(1 + (1 - density) * 4));
+    const samples = SAMPLES.filter((_, index) => index % stride === 0);
+    const showBody = density > 0.28;
+    const showWires = density > 0.22;
+    const showComplete = density > 0.48;
+    const showFacets = density > 0.36;
+    const count = Math.max(samples.length, 1);
+    const travel = 0.4 - taut * 0.26;
     const amount = Math.min(1, Math.max(0, progress));
-    const project = (point: { x: number; y: number }) => ({ x: cx + point.x * scale, y: cy + point.y * scale });
+    const project = (point: { x: number; y: number }) => ({
+      x: cx + point.x * scale,
+      y: cy + point.y * scale,
+    });
     const localOf = (index: number) => {
       if (amount <= 0) return 0;
       if (amount >= 1) return 1;
@@ -45,16 +58,16 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
     };
     const hsl = (sat: number, light: number, alpha = 1) =>
       alpha >= 1
-        ? `hsl(${HUE} ${sat}% ${light}%)`
-        : `hsl(${HUE} ${sat}% ${light}% / ${alpha})`;
+        ? `hsl(${hue} ${sat}% ${light}%)`
+        : `hsl(${hue} ${sat}% ${light}% / ${alpha})`;
 
     ctx.clearRect(0, 0, width, height);
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
 
     const bodyReveal = ease(Math.max(0, (amount - 0.36) / 0.28));
-    if (bodyReveal > 0.02) {
-      ctx.fillStyle = hsl(40, 24, 0.92 * bodyReveal);
+    if (showBody && bodyReveal > 0.02) {
+      ctx.fillStyle = hsl(40, 24, 0.92 * bodyReveal * (0.18 + density * 0.82));
       for (const ring of RINGS) {
         ctx.beginPath();
         ring.forEach((point, index) => {
@@ -67,9 +80,9 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
       }
     }
 
-    if (FACETS.length) {
+    if (showFacets && FACETS.length) {
       FACETS.forEach((facet) => {
-        const reveal = ease(Math.max(0, (amount - 0.48) / 0.2));
+        const reveal = ease(Math.max(0, (amount - 0.48) / 0.2)) * density;
         if (reveal < 0.02) return;
         const light = 14 + facet.shade * 28;
         ctx.fillStyle = hsl(34 + facet.shade * 20, light, (0.18 + facet.shade * 0.34) * reveal);
@@ -87,34 +100,38 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
 
     const coverage = EDGES.map(() => 0);
     const coverageCount = EDGES.map(() => 0);
-    SAMPLES.forEach((sample, index) => {
+    samples.forEach((sample, index) => {
       const local = localOf(index);
-      coverage[sample.edgeIndex] += local;
-      coverageCount[sample.edgeIndex] += 1;
+      coverage[sample.edgeIndex] = (coverage[sample.edgeIndex] ?? 0) + local;
+      coverageCount[sample.edgeIndex] =
+        (coverageCount[sample.edgeIndex] ?? 0) + 1;
     });
 
+    const weight = 2.05 - density * 0.85;
     EDGES.forEach((edge, index) => {
+      if (edge.layer === "wire" && !showWires) return;
+      if (edge.layer === "complete" && !showComplete) return;
       const n = coverageCount[index];
       if (!n) return;
-      const cover = coverage[index] / n;
+      const cover = (coverage[index] ?? 0) / n;
       if (cover < 0.04) return;
-      const from = project(edge.a);
-      const to = mix(from, project(edge.b), cover);
+      const from = mix(originPx, project(edge.a), cover);
+      const to = mix(originPx, project(edge.b), cover);
       ctx.strokeStyle = hsl(edge.layer === "outline" ? 40 : 34, 26, 0.28 + cover * 0.5);
-      ctx.lineWidth = edge.layer === "outline" ? 1.35 : 1;
+      ctx.lineWidth = (edge.layer === "outline" ? 1.35 : 1) * weight;
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
       ctx.stroke();
     });
 
-  }, [progress]);
+  }, [progress, speed, hue, detail]);
 
   return (
     <canvas
       ref={canvasRef}
       role="img"
-      aria-label="Emerald construct"
+      aria-label="Bird two"
       style={{ display: "block", width: "100%", height: "100%" }}
     />
   );

@@ -49,12 +49,12 @@ Thumbs.db
 *.local
 .vercel
 
-# Experimental projects are reviewable source; only their two canonical files are tracked.
-apps/web/src/experimental/*
-!apps/web/src/experimental/.gitkeep
-!apps/web/src/experimental/*/
-apps/web/src/experimental/*/*
-!apps/web/src/experimental/*/project.json
-!apps/web/src/experimental/*/source.tsx
-apps/web/src/experimental/.*.stage-*/
-apps/web/src/experimental/.*.backup-*/
+# Experimental idea projects are reviewable source; only their two canonical files are tracked.
+apps/web/src/experimental/ideas/*
+!apps/web/src/experimental/ideas/.gitkeep
+!apps/web/src/experimental/ideas/*/
+apps/web/src/experimental/ideas/*/*
+!apps/web/src/experimental/ideas/*/project.json
+!apps/web/src/experimental/ideas/*/source.tsx
+apps/web/src/experimental/ideas/.*.stage-*/
+apps/web/src/experimental/ideas/.*.backup-*/

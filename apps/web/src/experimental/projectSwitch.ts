@@ -1,6 +1,5 @@
 import type { IdeaSummary } from "@react-playground/api";
 
-/** `/experimental/<idea-id>` → the stable idea id. */
 export function ideaIdFromPath(pathname: string): string | null {
   const match = pathname.match(/^\/experimental\/([A-Za-z0-9-]{8,64})\/?$/);
   return match?.[1] ?? null;
@@ -13,7 +12,6 @@ export function initialIdeaId(
   return ideaIdFromPath(pathname) ?? ideas[0]?.id ?? null;
 }
 
-/** Filter saved ideas by name, component, or remembered Live folder. */
 export function filterIdeas(
   ideas: IdeaSummary[],
   query: string,
@@ -21,7 +19,7 @@ export function filterIdeas(
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const matchingIdeas = normalizedQuery
     ? ideas.filter(idea =>
-        [idea.name, idea.componentName, idea.targetFolder ?? ""].some(value =>
+        [idea.name, idea.componentName].some(value =>
           value.toLocaleLowerCase().includes(normalizedQuery),
         ),
       )
@@ -33,7 +31,6 @@ export function filterIdeas(
   );
 }
 
-/** Short relative time for the project list. */
 export function formatUpdatedAt(iso: string, now = Date.now()): string {
   const then = Date.parse(iso);
   if (!Number.isFinite(then)) return "";

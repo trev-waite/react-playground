@@ -2,12 +2,13 @@ export type {
   ApiErrorCode,
   CatalogStatus,
   CreateIdeaInput,
-  EmeraldConstructState,
-  EmeraldConstructVariant,
+  IdeaAction,
+  IdeaActionMock,
   IdeaDocument,
   IdeaDraft,
   IdeaDraftState,
   IdeaProject,
+  IdeaSlider,
   IdeaSummary,
   PublishIdeaInput,
   PublishIdeaResult,
@@ -37,12 +38,20 @@ export {
 export {
   isSafeIdeaId,
   parseCreateIdeaInput,
-  parseEmeraldConstructState,
   parseIdeaDocument,
   parseIdeaDraft,
   parseIdeaDraftState,
+  coerceIdeaDraftState,
   parseIdeaProject,
   parseIdeaSummary,
   parsePublishIdeaInput,
   parseUpdateIdeaInput,
 } from "./contracts";
+
+export {
+  IDEA_SCHEMA_VERSION,
+  defaultIdeaDraft,
+  defaultIdeaDraftState,
+  bakeSliders,
+  sliderRecord,
+} from "./ideaDraft";

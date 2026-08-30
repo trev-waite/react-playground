@@ -1,9 +1,9 @@
-import { ExperimentalPage } from "./ExperimentalPage";
+import { ExperimentalPage } from "../experimental/ExperimentalPage";
 import { LivePage } from "./LivePage";
 import { FrostOverlay, liveLayerMaskStyle } from "./view/DiagonalBandMask";
 import { ViewProvider, useView } from "./view/ViewController";
 import { ViewToggle } from "./view/ViewToggle";
-import "./shell.css";
+import "./app.css";
 import styles from "./AppShell.module.css";
 
 function ViewStack() {

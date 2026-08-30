@@ -12,11 +12,13 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
     "start": "turbo run start",
     "sync:playground": "turbo run sync:playground --filter=@react-playground/web"
   },
   "devDependencies": {
     "bun": "1.4.0",
+    "typescript": "^5.9.2",
     "turbo": "^2.10.11"
   }
 }

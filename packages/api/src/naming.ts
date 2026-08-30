@@ -1,6 +1,6 @@
 /** Catalog group reserved for ConfigurableShell and other editing structure. */
 export const SHELLS_FOLDER = "shells";
-/** Reserved Live destination name. WIP ideas live under apps/web/src/experimental. */
+/** Reserved Live destination name. WIP ideas live under apps/web/src/experimental/ideas. */
 export const EXPERIMENTAL_FOLDER = "experimental";
 
 export const RESERVED_LIVE_FOLDERS = new Set([

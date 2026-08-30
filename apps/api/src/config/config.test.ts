@@ -23,7 +23,7 @@ describe("resolveApiConfig", () => {
     expect(config.corsOrigin).toBe("http://localhost:3000");
     expect(config.webRoot).toBe(path.resolve("/tmp/web"));
     expect(config.experimentalRoot).toBe(
-      path.resolve("/tmp/web/src/experimental"),
+      path.resolve("/tmp/web/src/experimental/ideas"),
     );
     expect(config.liveRoot).toBe(path.resolve("/tmp/web/src/live"));
   });

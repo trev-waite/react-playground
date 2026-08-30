@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router";
-import { AppShell } from "./shell/AppShell";
+import { AppShell } from "./app/AppShell";
 
 /**
  * View modes are full-page layers inside AppShell. Routes only drive URL ↔ mode

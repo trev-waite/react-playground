@@ -1,14 +1,14 @@
 import { lazy, Suspense, useMemo } from "react";
-import { playgroundEntries } from "../lib/discover";
+import { liveEntries } from "../lib/discover";
 import { Canvas } from "./Canvas";
-import styles from "./ExperimentStage.module.css";
+import styles from "./LiveStage.module.css";
 
 const lazyPreviews = new Map(
-  playgroundEntries.map(entry => [
+  liveEntries.map(entry => [
     entry.slug,
     lazy(() =>
-      entry.load().then(mod => ({
-        default: mod.default,
+      entry.load().then(module => ({
+        default: module.default,
       })),
     ),
   ]),
@@ -18,14 +18,13 @@ export function EmptyStage() {
   return <Canvas empty />;
 }
 
-type ExperimentStageProps = {
-  /** When set, render this slug instead of reading the URL. */
+type LiveStageProps = {
   slug?: string | null;
 };
 
-export function ExperimentStage({ slug: slugProp }: ExperimentStageProps) {
+export function LiveStage({ slug: slugProp }: LiveStageProps) {
   const slug = slugProp ?? null;
-  const entry = slug ? playgroundEntries.find(e => e.slug === slug) : undefined;
+  const entry = slug ? liveEntries.find(candidate => candidate.slug === slug) : undefined;
   const Preview = useMemo(
     () => (slug ? lazyPreviews.get(slug) : undefined),
     [slug],
@@ -38,7 +37,7 @@ export function ExperimentStage({ slug: slugProp }: ExperimentStageProps) {
   if (!entry || !Preview) {
     return (
       <Canvas>
-        <p className={styles.missing}>No experiment at “{slug}”.</p>
+        <p className={styles.missing}>No Live component at “{slug}”.</p>
       </Canvas>
     );
   }

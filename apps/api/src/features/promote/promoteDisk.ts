@@ -45,13 +45,14 @@ async function destinationMatches(
 export async function publishIdeaToDisk(
   liveRoot: string,
   document: IdeaProject,
+  targetFolder: string,
 ): Promise<{ slug: string; dir: string; reused: boolean }> {
-  if (!document.targetFolder || RESERVED_LIVE_FOLDERS.has(document.targetFolder)) {
+  if (!targetFolder || RESERVED_LIVE_FOLDERS.has(targetFolder)) {
     throw new IdeaError("invalid_request", "Choose or enter a Live folder", 400);
   }
 
-  const slug = buildSlug(document.targetFolder, document.componentName);
-  const parent = path.join(liveRoot, document.targetFolder);
+  const slug = buildSlug(targetFolder, document.componentName);
+  const parent = path.join(liveRoot, targetFolder);
   const dir = path.join(parent, document.componentName);
   const artifact = buildLiveArtifact(document);
 

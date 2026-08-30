@@ -6,7 +6,7 @@ import { type IdeaProject } from "@react-playground/api";
 
 /**
  * Turn studio export source into a named component module.
- * Accepts either `export function Example` or an already-named export.
+ * Requires exactly one `export function Example`.
  */
 export function buildComponentModule(
   componentName: string,
@@ -26,16 +26,11 @@ export function buildComponentModule(
 export function buildPreviewModule(
   componentName: string,
   title: string,
-  status: "live" | "experimental" = "live",
 ): string {
-  const statusLine =
-    status === "experimental"
-      ? `\n  status: "experimental" as const,`
-      : "";
   return `import { ${componentName} } from "./${componentName}";
 
 export const meta = {
-  title: ${JSON.stringify(title)},${statusLine}
+  title: ${JSON.stringify(title)},
 };
 
 export default function ${componentName}Preview() {

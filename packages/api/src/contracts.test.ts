@@ -1,25 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import {
+  coerceIdeaDraftState,
   parseCreateIdeaInput,
   parseIdeaDocument,
   parseIdeaDraft,
+  parsePublishIdeaInput,
 } from "./contracts";
-
-const source = "export function Example() { return null; }";
+import { defaultIdeaDraft, defaultIdeaDraftState } from "./ideaDraft";
 
 describe("idea contracts", () => {
-  test("accepts a versioned, constrained source draft", () => {
+  test("accepts a versioned dock draft with one Example export", () => {
+    expect(parseIdeaDraft(defaultIdeaDraft())).not.toBeNull();
     expect(
       parseIdeaDraft({
-        kind: "source",
-        version: 1,
-        portableSourceTemplate: source,
-      }),
-    ).not.toBeNull();
-    expect(
-      parseIdeaDraft({
-        kind: "source",
-        version: 1,
+        ...defaultIdeaDraft(),
         portableSourceTemplate: "export default null",
       }),
     ).toBeNull();
@@ -27,38 +21,70 @@ describe("idea contracts", () => {
 
   test("preserves source formatting and requires one placeholder export", () => {
     const formatted = `\nexport function Example() {\n  return null;\n}\n`;
-    expect(parseIdeaDraft({
-      kind: "source",
-      version: 1,
-      portableSourceTemplate: formatted,
-    })?.portableSourceTemplate).toBe(formatted);
-    expect(parseIdeaDraft({
-      kind: "source",
-      version: 1,
-      portableSourceTemplate: `${formatted}\nexport function Example() { return null; }`,
-    })).toBeNull();
+    expect(
+      parseIdeaDraft({
+        ...defaultIdeaDraft(),
+        portableSourceTemplate: formatted,
+      })?.portableSourceTemplate,
+    ).toBe(formatted);
+    expect(
+      parseIdeaDraft({
+        ...defaultIdeaDraft(),
+        portableSourceTemplate: `${formatted}\nexport function Example() { return null; }`,
+      }),
+    ).toBeNull();
   });
 
-  test("requires canonical target folders at the boundary", () => {
+  test("migrates source and construct kinds into dock settings", () => {
+    expect(coerceIdeaDraftState({ kind: "source", version: 1 })).toEqual(
+      defaultIdeaDraftState(),
+    );
+    const migrated = coerceIdeaDraftState({
+      kind: "emerald-construct",
+      version: 1,
+      editorState: {
+        formationSpeed: 39,
+        detail: 93,
+        color: 42,
+        origin: { x: 0.5, y: 0.5 },
+        variant: "bird",
+      },
+    });
+    expect(migrated?.sliders[0]?.id).toBe("formationSpeed");
+    expect(migrated?.sliders[0]?.value).toBe(39);
+    expect(migrated?.actions[0]?.label).toBe("Build");
+    expect(migrated?.actions.map(action => action.mock)).toEqual([
+      "form",
+      "unform",
+      "replay",
+    ]);
+    expect(
+      parseIdeaDraft({
+        ...defaultIdeaDraft(),
+        actions: defaultIdeaDraft().actions.map((action, index) =>
+          index === 0 ? { ...action, mock: "form" } : action,
+        ),
+      }),
+    ).not.toBeNull();
+  });
+
+  test("keeps Live destinations out of drafts and validates them at publish", () => {
     expect(
       parseCreateIdeaInput({
         name: "Morph Blob",
-        targetFolder: "my-shapes",
-        draft: { kind: "source", version: 1, portableSourceTemplate: source },
+        draft: defaultIdeaDraft(),
       }),
     ).not.toBeNull();
     expect(
-      parseCreateIdeaInput({
-        name: "Morph Blob",
-        targetFolder: null,
-        draft: { kind: "source", version: 1, portableSourceTemplate: source },
+      parsePublishIdeaInput({
+        expectedRevision: 1,
+        targetFolder: "my-shapes",
       }),
-    ).toBeNull();
+    ).not.toBeNull();
     expect(
-      parseCreateIdeaInput({
-        name: "Morph Blob",
+      parsePublishIdeaInput({
+        expectedRevision: 1,
         targetFolder: "My Shapes",
-        draft: { kind: "source", version: 1, portableSourceTemplate: source },
       }),
     ).toBeNull();
   });
@@ -66,13 +92,12 @@ describe("idea contracts", () => {
   test("rejects documents whose derived component name is stale", () => {
     expect(
       parseIdeaDocument({
-        schemaVersion: 2,
+        schemaVersion: 3,
         id: "11111111-1111-4111-8111-111111111111",
         revision: 1,
         name: "Morph Blob",
-        targetFolder: "shapes",
         componentName: "WrongName",
-        draft: { kind: "source", version: 1 },
+        draft: defaultIdeaDraft(),
         sourceFile: "source.tsx",
         sourceDigest: "daa35f325bfc72d3c725365ba6481373d18f998b17ed5b185e56d7f5fada37bf",
         createdAt: "2026-01-01T00:00:00.000Z",

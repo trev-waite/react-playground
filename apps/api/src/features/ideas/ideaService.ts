@@ -1,5 +1,5 @@
 import {
-  RESERVED_LIVE_FOLDERS,
+  IDEA_SCHEMA_VERSION,
   toComponentName,
   type CreateIdeaInput,
   type IdeaProject,
@@ -17,22 +17,19 @@ import {
 } from "./ideaRepository";
 
 function summary(project: IdeaProject): IdeaSummary {
-  const { id, revision, name, targetFolder, componentName, updatedAt } = project;
-  return { id, revision, name, targetFolder, componentName, updatedAt };
+  const { id, revision, name, componentName, updatedAt } = project;
+  return { id, revision, name, componentName, updatedAt };
 }
 
 function validateIdentity(
   input: CreateIdeaInput,
-): { name: string; componentName: string; targetFolder: string } {
+): { name: string; componentName: string } {
   const name = input.name.trim();
   const componentName = toComponentName(name);
   if (!name || !componentName) {
     throw new IdeaError("invalid_request", "Idea name must start with a letter", 400);
   }
-  if (!input.targetFolder || RESERVED_LIVE_FOLDERS.has(input.targetFolder)) {
-    throw new IdeaError("invalid_request", "Choose a Live folder", 400);
-  }
-  return { name, componentName, targetFolder: input.targetFolder };
+  return { name, componentName };
 }
 
 export function createIdeaService(ideasRoot: string) {
@@ -62,14 +59,13 @@ export function createIdeaService(ideasRoot: string) {
 
     create(input: CreateIdeaInput): Promise<IdeaProject> {
       return mutate(async () => {
-        const { name, componentName, targetFolder } = validateIdentity(input);
+        const { name, componentName } = validateIdentity(input);
         const now = new Date().toISOString();
         const project: IdeaProject = {
-          schemaVersion: 2,
+          schemaVersion: IDEA_SCHEMA_VERSION,
           id: crypto.randomUUID(),
           revision: 1,
           name,
-          targetFolder,
           componentName,
           draft: input.draft,
           sourceFile: "source.tsx",
@@ -93,12 +89,11 @@ export function createIdeaService(ideasRoot: string) {
             409,
           );
         }
-        const { name, componentName, targetFolder } = validateIdentity(input);
+        const { name, componentName } = validateIdentity(input);
         const updated: IdeaProject = {
           ...current,
           revision: current.revision + 1,
           name,
-          targetFolder,
           componentName,
           draft: input.draft,
           sourceDigest: sourceDigest(input.draft.portableSourceTemplate),

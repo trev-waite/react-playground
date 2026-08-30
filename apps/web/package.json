@@ -8,7 +8,8 @@
     "dev": "bun scripts/dev.ts",
     "build": "bun scripts/sync-playground.ts && bun build ./src/index.html --outdir=dist --sourcemap --target=browser --minify --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*'",
     "start": "NODE_ENV=production bun src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@react-playground/api": "workspace:*",

@@ -25,7 +25,6 @@ describe("initialIdeaId", () => {
       revision: 2,
       name: "Most recent",
       componentName: "MostRecent",
-      targetFolder: "shapes",
       updatedAt: "2026-08-29T18:00:00.000Z",
     },
     {
@@ -33,7 +32,6 @@ describe("initialIdeaId", () => {
       revision: 1,
       name: "Older",
       componentName: "Older",
-      targetFolder: "shapes",
       updatedAt: "2026-08-28T18:00:00.000Z",
     },
   ];
@@ -70,7 +68,6 @@ describe("filterIdeas", () => {
       revision: 1,
       name: "Quiet Button",
       componentName: "QuietButton",
-      targetFolder: "buttons",
       updatedAt: "2026-08-26T20:00:00.000Z",
     },
     {
@@ -78,7 +75,6 @@ describe("filterIdeas", () => {
       revision: 1,
       name: "Morph Blob",
       componentName: "MorphBlob",
-      targetFolder: "shapes",
       updatedAt: "2026-08-26T19:00:00.000Z",
     },
     {
@@ -86,7 +82,6 @@ describe("filterIdeas", () => {
       revision: 1,
       name: "Loose Study",
       componentName: "LooseStudy",
-      targetFolder: "studies",
       updatedAt: "2026-08-26T18:00:00.000Z",
     },
   ];
@@ -99,9 +94,9 @@ describe("filterIdeas", () => {
     ]);
   });
 
-  test("filters by idea name, component name, or folder", () => {
+  test("filters by idea name or component name", () => {
     expect(filterIdeas(ideas, "morph")).toEqual([ideas[1]!]);
-    expect(filterIdeas(ideas, "buttons")).toEqual([ideas[0]!]);
+    expect(filterIdeas(ideas, "button")).toEqual([ideas[0]!]);
     expect(filterIdeas(ideas, "looseStudy")).toEqual([ideas[2]!]);
   });
 });

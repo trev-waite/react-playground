@@ -1,5 +1,5 @@
-import type { PlaygroundEntry, PlaygroundStatus, TreeFolder, TreeLeaf, TreeNode } from "./types";
-import { previewModules, previewStatuses } from "./playground.gen";
+import type { PlaygroundEntry, TreeFolder, TreeLeaf, TreeNode } from "./types";
+import { previewModules } from "./playground.gen";
 
 function titleFromSlug(slug: string): string {
   const leaf = slug.split("/").pop() ?? slug;
@@ -11,21 +11,12 @@ function buildEntries(): PlaygroundEntry[] {
     .map(([slug, load]) => ({
       slug,
       title: titleFromSlug(slug),
-      status: (previewStatuses[slug] ?? "live") as PlaygroundStatus,
       load,
     }))
     .sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
-export const playgroundEntries: PlaygroundEntry[] = buildEntries();
-
-export const entriesBySlug: Map<string, PlaygroundEntry> = new Map(
-  playgroundEntries.map(e => [e.slug, e]),
-);
-
-export const liveEntries: PlaygroundEntry[] = playgroundEntries.filter(
-  e => e.status === "live",
-);
+export const liveEntries: PlaygroundEntry[] = buildEntries();
 
 type MutableFolder = {
   name: string;
@@ -42,10 +33,7 @@ function ensureFolder(parent: MutableFolder, name: string): MutableFolder {
   return folder;
 }
 
-/**
- * Build a nested folder tree from flat slug paths.
- */
-export function buildTree(entries: PlaygroundEntry[] = playgroundEntries): TreeNode[] {
+export function buildTree(entries: PlaygroundEntry[] = liveEntries): TreeNode[] {
   const root: MutableFolder = { name: "", folders: new Map(), leaves: [] };
 
   for (const entry of entries) {

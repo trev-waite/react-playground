@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHttpPlaygroundApi } from "./httpPlaygroundApi";
 import { PlaygroundApiError } from "./playgroundApi";
+import { defaultIdeaDraft } from "./ideaDraft";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -10,17 +11,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 const id = "11111111-1111-4111-8111-111111111111";
-const draft = {
-  kind: "source" as const,
-  version: 1 as const,
-  portableSourceTemplate: "export function Example() { return null; }",
-};
+const draft = defaultIdeaDraft();
 const idea = {
-  schemaVersion: 2 as const,
+  schemaVersion: 3 as const,
   id,
   revision: 1,
   name: "Morph Blob",
-  targetFolder: "shapes",
   componentName: "MorphBlob",
   draft,
   sourceFile: "source.tsx" as const,
@@ -54,10 +50,9 @@ describe("createHttpPlaygroundApi", () => {
     });
 
     expect((await api.loadIdea(id)).componentName).toBe("MorphBlob");
-    await api.createIdea({ name: idea.name, targetFolder: "shapes", draft });
+    await api.createIdea({ name: idea.name, draft });
     await api.updateIdea(id, {
       name: idea.name,
-      targetFolder: "shapes",
       draft,
       expectedRevision: 1,
     });
@@ -88,7 +83,6 @@ describe("createHttpPlaygroundApi", () => {
     try {
       await api.updateIdea(id, {
         name: idea.name,
-        targetFolder: "shapes",
         draft,
         expectedRevision: 1,
       });
@@ -113,7 +107,10 @@ describe("createHttpPlaygroundApi", () => {
         });
       },
     });
-    expect(await api.publishIdea(id, { expectedRevision: 1 })).toEqual({
+    expect(await api.publishIdea(id, {
+      expectedRevision: 1,
+      targetFolder: "shapes",
+    })).toEqual({
       slug: "shapes/MorphBlob",
       catalogStatus: "refresh-failed",
     });

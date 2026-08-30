@@ -94,8 +94,8 @@ async function copyToClipboard(text: string): Promise<boolean> {
  * Portable configurator card for Live experiments.
  * Pass preview children, actions, controls, and `getExportCode`.
  * Omit preview.tsx / ExamplePreview.* / exportExample.* when exporting.
- * Experimental view is a separate full-bleed workbench that only echoes this
- * look — never mount this component from Experimental chrome.
+ * Experimental view is a separate studio that only echoes this look —
+ * never mount this component from Experimental chrome.
  */
 export function ConfigurableShell({
   children,
