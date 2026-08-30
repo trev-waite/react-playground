@@ -122,6 +122,39 @@
   opacity: 0.45;
 }
 
+.editor[data-tone="dark"] {
+  color: #fff;
+}
+
+.editor[data-tone="dark"] .label {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.editor[data-tone="dark"] .select,
+.editor[data-tone="dark"] .input {
+  color-scheme: dark;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+
+.editor[data-tone="dark"] .input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.editor[data-tone="dark"] .hint {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.editor[data-tone="dark"] .cancel {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.editor[data-tone="dark"] .confirm {
+  background: #fff;
+  color: #111113;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .customSlot {
     transition: none;

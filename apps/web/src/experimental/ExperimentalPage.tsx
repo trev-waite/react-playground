@@ -1,4 +1,15 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { useLocation, useNavigate } from "react-router";
 import {
   EXPERIMENTAL_FOLDER,
@@ -72,6 +83,9 @@ export function ExperimentalPage() {
   const saveIdeaRef = useRef<() => Promise<IdeaProject | null>>(async () => null);
   const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
   const activeIdRef = useRef<string | null>(null);
+  const makeLivePanelRef = useRef<HTMLDivElement>(null);
+  const makeLivePanelId = useId();
+  const [makeLivePanelHeight, setMakeLivePanelHeight] = useState(0);
 
   const componentName = toComponentName(ideaName.trim() || DEFAULT_IDEA_NAME);
   const errorMessage = saveError ?? publishError;
@@ -335,6 +349,16 @@ export function ExperimentalPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [pickingLiveFolder]);
 
+  useLayoutEffect(() => {
+    const panel = makeLivePanelRef.current;
+    if (!panel) return;
+    const measure = () => setMakeLivePanelHeight(panel.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     if (mode !== "experimental") return;
 
@@ -443,7 +467,10 @@ export function ExperimentalPage() {
                   </svg>
                 )}
               </button>
-              <div className={styles.makeLiveHost}>
+              <div
+                className={styles.makeLiveHost}
+                data-open={pickingLiveFolder || undefined}
+              >
                 {pickingLiveFolder ? (
                   <div
                     className={styles.makeLiveBackdrop}
@@ -451,27 +478,47 @@ export function ExperimentalPage() {
                     onClick={() => setPickingLiveFolder(false)}
                   />
                 ) : null}
-                {pickingLiveFolder ? (
+                <div
+                  className={styles.makeLiveSurface}
+                  data-open={pickingLiveFolder || undefined}
+                  style={
+                    makeLivePanelHeight > 0
+                      ? ({
+                          "--make-live-panel-height": `${makeLivePanelHeight}px`,
+                        } as CSSProperties)
+                      : undefined
+                  }
+                >
                   <div
+                    id={makeLivePanelId}
                     className={styles.makeLivePanel}
+                    ref={makeLivePanelRef}
                     role="dialog"
                     aria-label="Choose Live folder"
+                    inert={pickingLiveFolder ? undefined : true}
                   >
                     <FolderEditor
                       folders={LIVE_FOLDERS}
                       initialFolder={liveFolder}
+                      autoFocus={pickingLiveFolder}
+                      tone="dark"
                       submitLabel="Publish"
                       destinationHint={`apps/web/src/live/<folder>/${componentName}/`}
                       onCancel={() => setPickingLiveFolder(false)}
                       onSubmit={nextFolder => void publishToFolder(nextFolder)}
                     />
                   </div>
-                ) : null}
+                </div>
                 <button
                   type="button"
                   className={styles.makeLive}
                   disabled={publishing || saving || !hydrated || !hasDraft}
-                  onClick={() => void onMakeLive()}
+                  aria-expanded={pickingLiveFolder}
+                  aria-controls={makeLivePanelId}
+                  onClick={() => {
+                    if (pickingLiveFolder) setPickingLiveFolder(false);
+                    else onMakeLive();
+                  }}
                 >
                   {publishing ? "Publishing…" : "Make Live"}
                 </button>

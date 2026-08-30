@@ -6,6 +6,8 @@ const CUSTOM_FOLDER_VALUE = "__custom__";
 type FolderEditorProps = {
   folders: string[];
   initialFolder?: string;
+  autoFocus?: boolean;
+  tone?: "light" | "dark";
   submitLabel: string;
   destinationHint?: string;
   onCancel: () => void;
@@ -21,6 +23,8 @@ function defaultFolderChoice(folders: string[], initialFolder: string): string {
 export function FolderEditor({
   folders,
   initialFolder = "",
+  autoFocus = true,
+  tone = "light",
   submitLabel,
   destinationHint,
   onCancel,
@@ -38,18 +42,19 @@ export function FolderEditor({
   const custom = choice === CUSTOM_FOLDER_VALUE;
 
   useEffect(() => {
-    selectRef.current?.focus();
-  }, []);
+    if (autoFocus) selectRef.current?.focus();
+  }, [autoFocus]);
 
   useEffect(() => {
-    if (!custom) return;
+    if (!autoFocus || !custom) return;
     inputRef.current?.focus();
-  }, [custom]);
+  }, [autoFocus, custom]);
 
   return (
     <form
       className={styles.editor}
       data-custom={custom || undefined}
+      data-tone={tone}
       onSubmit={event => {
         event.preventDefault();
         const next = folder.trim();
