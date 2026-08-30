@@ -12,7 +12,7 @@ import { useLocation, useNavigate } from "react-router";
 import { liveEntries } from "../../lib/discover";
 import { playgroundApi } from "../../lib/playgroundApi";
 import type { PlaygroundEntry } from "../../lib/types";
-import type { PromoteInput } from "@react-playground/api";
+import type { PublishIdeaInput } from "@react-playground/api";
 import {
   DEFAULT_DURATION_MS,
   REDUCED_MOTION_MS,
@@ -33,11 +33,7 @@ type ViewContextValue = {
   reducedMotion: boolean;
   reducedTransparency: boolean;
   setMode: (mode: ViewMode) => void;
-  /**
-   * Publish the current idea as a new Live component.
-   * When `discardExperimental` is set, that WIP folder is deleted after publish.
-   */
-  promote: (input: PromoteInput) => Promise<void>;
+  promote: (id: string, input: PublishIdeaInput) => Promise<void>;
 };
 
 const ViewContext = createContext<ViewContextValue | null>(null);
@@ -220,15 +216,20 @@ export function ViewProvider({ children }: ViewProviderProps) {
   );
 
   const promote = useCallback(
-    async (input: PromoteInput) => {
+    async (id: string, input: PublishIdeaInput) => {
       if (promoting) return;
 
       setPromoting(true);
       setPromoteError(null);
 
       try {
-        const { slug } = await playgroundApi.promote(input);
+        const { slug, catalogStatus } = await playgroundApi.publishIdea(id, input);
         setLiveSlug(slug);
+        if (catalogStatus === "refresh-failed") {
+          setPromoteError("Published files, but the Live catalog refresh failed. Try Make Live again.");
+          setPromoting(false);
+          return;
+        }
         // Full reload so the regenerated registry can lazy-load the new module.
         window.location.assign(`/${slug}`);
       } catch (err) {

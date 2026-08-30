@@ -318,8 +318,32 @@ export function edgesFor(id: ConstructId): Edge[] {
   ];
 }
 
+function distributedDetail<T>(items: T[], detail: number): T[] {
+  const count = Math.round(items.length * clamp01(detail / 100));
+  if (count <= 0) return [];
+  if (count >= items.length) return items;
+  return Array.from({ length: count }, (_, index) => {
+    const itemIndex = Math.floor((index * items.length) / count);
+    return items[itemIndex];
+  }).filter((item): item is T => item != null);
+}
+
+export function detailedEdges(id: ConstructId, detail: number): Edge[] {
+  const edges = edgesFor(id);
+  const outline = edges.filter(edge => edge.layer === "outline");
+  const internal = edges.filter(edge => edge.layer !== "outline");
+  return [...outline, ...distributedDetail(internal, detail)];
+}
+
 export function fillRings(id: ConstructId): Vec2[][] {
-  if (id === "bird") return [];
+  if (id === "bird") {
+    const bird = hummingbird();
+    return [
+      bird.outline
+        .map(index => bird.vertices[index])
+        .filter((point): point is Vec2 => point != null),
+    ];
+  }
   if (id === "stella") {
     return [
       regularPolygon(3, 1, -Math.PI / 2),
@@ -332,6 +356,17 @@ export function fillRings(id: ConstructId): Vec2[][] {
 export function facetsFor(id: ConstructId): Facet[] {
   if (id === "bird") return hummingbird().facets;
   return [];
+}
+
+export function detailedFacets(id: ConstructId, detail: number): Facet[] {
+  return distributedDetail(facetsFor(id), detail);
+}
+
+export function detailElementCount(id: ConstructId, detail: number): number {
+  const internalEdges = detailedEdges(id, detail).filter(
+    edge => edge.layer !== "outline",
+  ).length;
+  return internalEdges + detailedFacets(id, detail).length;
 }
 
 export function guideVertices(id: ConstructId): Vec2[] {
@@ -381,7 +416,7 @@ function lerpVec(a: Vec2, b: Vec2, t: number): Vec2 {
 }
 
 export function sampleConstruct(id: ConstructId, detail: number): Sample[] {
-  const edges = edgesFor(id);
+  const edges = detailedEdges(id, detail);
   const budget = detailToCount(detail);
   const samples: Sample[] = [];
   const lengths = edges.map(edge => dist(edge.a, edge.b));

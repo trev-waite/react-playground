@@ -3,6 +3,8 @@ import {
   CONSTRUCTS,
   DETAIL_MAX,
   DETAIL_MIN,
+  detailedEdges,
+  detailedFacets,
   detailToCount,
   edgesFor,
   facetsFor,
@@ -60,6 +62,18 @@ describe("EmeraldConstruct geometry", () => {
     const dense = sampleConstruct("bird", 92);
     expect(dense.length).toBeGreaterThan(sparse.length);
     expect(sparse.length).toBeGreaterThanOrEqual(DETAIL_MIN / 2);
+  });
+
+  test("detail controls internal edges and facets while preserving the outline", () => {
+    const sparseEdges = detailedEdges("bird", 10);
+    const denseEdges = detailedEdges("bird", 90);
+    expect(denseEdges.length).toBeGreaterThan(sparseEdges.length);
+    expect(detailedFacets("bird", 90).length).toBeGreaterThan(
+      detailedFacets("bird", 10).length,
+    );
+    expect(sparseEdges.filter(edge => edge.layer === "outline")).toEqual(
+      edgesFor("bird").filter(edge => edge.layer === "outline"),
+    );
   });
 
   test("progress launches early samples first and arrives fully at 1", () => {

@@ -4,7 +4,8 @@ export type ApiConfig = {
   port: number;
   corsOrigin: string;
   webRoot: string;
-  playgroundRoot: string;
+  experimentalRoot: string;
+  liveRoot: string;
 };
 
 export function parsePort(raw: string | undefined, fallback: number): number {
@@ -16,7 +17,7 @@ export function parsePort(raw: string | undefined, fallback: number): number {
 
 export function resolveApiConfig(
   env: Record<string, string | undefined> = process.env,
-  // apps/api/src, so ../../web is the sibling web app
+  // Default: apps/api/src. ../../web is the sibling web app.
   srcDir = path.join(import.meta.dir, ".."),
 ): ApiConfig {
   const webRoot = path.resolve(env.WEB_ROOT ?? path.join(srcDir, "../../web"));
@@ -24,9 +25,10 @@ export function resolveApiConfig(
     port: parsePort(env.PORT, 3001),
     corsOrigin: env.CORS_ORIGIN ?? "http://localhost:3000",
     webRoot,
-    playgroundRoot: path.resolve(
-      env.PLAYGROUND_ROOT ?? path.join(webRoot, "src", "playground"),
+    experimentalRoot: path.resolve(
+      env.EXPERIMENTAL_ROOT ?? path.join(webRoot, "src", "experimental"),
     ),
+    liveRoot: path.resolve(env.LIVE_ROOT ?? path.join(webRoot, "src", "live")),
   };
 }
 
@@ -35,4 +37,5 @@ const config = resolveApiConfig();
 export const PORT = config.port;
 export const CORS_ORIGIN = config.corsOrigin;
 export const WEB_ROOT = config.webRoot;
-export const PLAYGROUND_ROOT = config.playgroundRoot;
+export const EXPERIMENTAL_ROOT = config.experimentalRoot;
+export const LIVE_ROOT = config.liveRoot;

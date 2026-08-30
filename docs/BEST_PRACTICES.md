@@ -8,11 +8,15 @@ Use Effects only to synchronize with something outside React (browser APIs, subs
 
 ## Experiments
 
-CSS Modules on portable components. No imports from `apps/web/src/shell/` or `apps/web/src/lib/`. Author WIP in Experimental; Make Live publishes the component only. Do not put WIP by hand in `experimental/` or `shells/`. Do not wrap experiments in ConfigurableShell.
+Author WIP in Experimental. Let the app create project directories and manage `project.json`; humans and agents may edit `source.tsx`. Make Live asks for a Live folder and publishes only the portable component.
+
+Portable components may use CSS Modules but must not import from `apps/web/src/shell/` or `apps/web/src/lib/`. Do not put WIP in `apps/web/src/live/shells/` or render ConfigurableShell in Experimental.
 
 ## Backend
 
-The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Do not scatter `fetch("/api/...")`. Put API behavior in `apps/api/src/features/`; `src/server/` only wires routes.
+The UI talks only to `PlaygroundApi`; do not scatter `fetch("/api/...")`. Put behavior in `apps/api/src/features/`. Keep `src/server/` limited to validation and routing.
+
+For saved ideas, `project.json` owns metadata and `source.tsx` owns code. Publish from that saved project instead of accepting duplicate name, folder, or source data.
 
 ## Motion
 

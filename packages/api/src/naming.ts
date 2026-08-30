@@ -1,6 +1,6 @@
 /** Catalog group reserved for ConfigurableShell and other editing structure. */
 export const SHELLS_FOLDER = "shells";
-/** On-disk WIP prototypes. Skipped by the Live catalog; deleted on Make Live. */
+/** Reserved Live destination name. WIP ideas live under apps/web/src/experimental. */
 export const EXPERIMENTAL_FOLDER = "experimental";
 
 export const RESERVED_LIVE_FOLDERS = new Set([
@@ -39,16 +39,6 @@ export function toComponentName(input: string): string | null {
 
 export function buildSlug(folder: string, componentName: string): string {
   return `${folder}/${componentName}`;
-}
-
-export function experimentalSlug(componentName: string): string {
-  return `${EXPERIMENTAL_FOLDER}/${componentName}`;
-}
-
-export function isWipExperimentalSlug(slug: string): boolean {
-  return (
-    slug === EXPERIMENTAL_FOLDER || slug.startsWith(`${EXPERIMENTAL_FOLDER}/`)
-  );
 }
 
 export function isSafeComponentName(input: string): boolean {

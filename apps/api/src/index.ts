@@ -1,9 +1,10 @@
-import { CORS_ORIGIN, PLAYGROUND_ROOT, PORT } from "./config/config";
+import { CORS_ORIGIN, EXPERIMENTAL_ROOT, LIVE_ROOT, PORT } from "./config/config";
 import { refreshWebRegistry } from "./config/registry";
 import { startPlaygroundApi } from "./server/server";
 
 const server = startPlaygroundApi({
-  playgroundRoot: PLAYGROUND_ROOT,
+  experimentalRoot: EXPERIMENTAL_ROOT,
+  liveRoot: LIVE_ROOT,
   corsOrigin: CORS_ORIGIN,
   port: PORT,
   refreshRegistry: refreshWebRegistry,

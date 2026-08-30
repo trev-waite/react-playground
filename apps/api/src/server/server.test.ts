@@ -1,132 +1,155 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createHttpPlaygroundApi } from "@react-playground/api";
-import { startPlaygroundApi } from "./server";
+import { createHttpPlaygroundApi, PlaygroundApiError } from "@react-playground/api";
+import { createPlaygroundApiHandler } from "./server";
 
-const dirs: string[] = [];
-const servers: ReturnType<typeof startPlaygroundApi>[] = [];
+const directories: string[] = [];
 
 async function tempPlayground(): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "api-http-"));
-  dirs.push(dir);
-  return dir;
+  const directory = await mkdtemp(path.join(tmpdir(), "api-http-"));
+  directories.push(directory);
+  return directory;
 }
 
-function startApi(playgroundRoot: string, refreshRegistry?: () => Promise<void>) {
-  const server = startPlaygroundApi({
-    playgroundRoot,
+function apiHandler(root: string, refreshRegistry?: () => Promise<void>) {
+  return createPlaygroundApiHandler({
+    experimentalRoot: root,
+    liveRoot: root,
     corsOrigin: "http://localhost:3000",
-    port: 0,
     refreshRegistry,
   });
-  servers.push(server);
-  return server;
+}
+
+function apiClient(playgroundRoot: string, refreshRegistry?: () => Promise<void>) {
+  const handler = apiHandler(playgroundRoot, refreshRegistry);
+  return createHttpPlaygroundApi({
+    baseUrl: "http://api.test",
+    fetch: (input, init) => handler(new Request(input, init)),
+  });
 }
 
 afterEach(async () => {
-  for (const server of servers.splice(0)) server.stop(true);
-  await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    directories.splice(0).map(directory =>
+      rm(directory, { recursive: true, force: true }),
+    ),
+  );
 });
 
-const source = `export function Example() {
-  return <div>blob</div>;
-}
-`;
+const draft = {
+  kind: "source" as const,
+  version: 1 as const,
+  portableSourceTemplate: "export function Example() { return <div>blob</div>; }",
+};
 
-describe("startPlaygroundApi", () => {
-  test("lists, saves, loads, and deletes ideas over HTTP", async () => {
+describe("playground API handler", () => {
+  test("creates, updates, loads, lists, and deletes stable-id ideas", async () => {
     const root = await tempPlayground();
-    const server = startApi(root);
-    const api = createHttpPlaygroundApi({ baseUrl: server.url.origin });
+    const api = apiClient(root);
 
-    expect(await api.listIdeas()).toEqual([]);
-
-    const saved = await api.saveIdea({
+    const created = await api.createIdea({
       name: "Morph Blob",
-      folder: "shapes",
-      source,
-      studio: { form: 40, soft: 50, drift: 20, offset: { x: 0, y: 0 } },
+      targetFolder: "shapes",
+      draft,
     });
-    expect(saved.idea.componentName).toBe("MorphBlob");
-    expect(saved.ideas).toHaveLength(1);
+    expect(created.id).not.toBe(created.componentName);
+    expect((await api.listIdeas())[0]?.id).toBe(created.id);
 
-    const loaded = await api.loadIdea("MorphBlob");
-    expect(loaded.name).toBe("Morph Blob");
-    expect(loaded.source).toContain("export function MorphBlob");
+    const updated = await api.updateIdea(created.id, {
+      name: "Pulse Mark",
+      targetFolder: "feedback",
+      draft,
+      expectedRevision: created.revision,
+    });
+    expect(updated.componentName).toBe("PulseMark");
+    expect(updated.revision).toBe(2);
+    expect((await api.loadIdea(created.id)).targetFolder).toBe("feedback");
 
-    const remaining = await api.deleteIdea("MorphBlob");
-    expect(remaining).toEqual([]);
+    await api.deleteIdea(created.id);
     expect(await api.listIdeas()).toEqual([]);
   });
 
-  test("rejects an invalid prototype name", async () => {
+  test("rejects stale revisions without changing the project", async () => {
     const root = await tempPlayground();
-    const server = startApi(root);
-    const res = await fetch(`${server.url.origin}/api/ideas/foo-bar`);
-    const data = (await res.json()) as { ok: boolean; error?: string };
-    expect(res.status).toBe(400);
-    expect(data.ok).toBe(false);
-    expect(data.error).toBe("Invalid prototype name");
-  });
-
-  test("returns 404 for a missing idea", async () => {
-    const root = await tempPlayground();
-    const server = startApi(root);
-    const res = await fetch(`${server.url.origin}/api/ideas/MissingIdea`);
-    expect(res.status).toBe(404);
-  });
-
-  test("promotes and invokes registry refresh", async () => {
-    const root = await tempPlayground();
-    let refreshed = 0;
-    const server = startApi(root, async () => {
-      refreshed += 1;
-    });
-    const api = createHttpPlaygroundApi({ baseUrl: server.url.origin });
-
-    await api.saveIdea({ name: "Morph Blob", folder: "shapes", source });
-    const promoted = await api.promote({
-      folder: "shapes",
+    const api = apiClient(root);
+    const created = await api.createIdea({
       name: "Morph Blob",
-      source,
-      discardExperimental: "MorphBlob",
+      targetFolder: "shapes",
+      draft,
     });
-    expect(promoted.slug).toBe("shapes/MorphBlob");
-    expect(refreshed).toBe(1);
-    expect(await api.listIdeas()).toEqual([]);
-  });
-
-  test("keeps published files when registry refresh fails", async () => {
-    const root = await tempPlayground();
-    const server = startApi(root, async () => {
-      throw new Error("sync failed");
+    await api.updateIdea(created.id, {
+      name: "First edit",
+      targetFolder: "shapes",
+      draft,
+      expectedRevision: 1,
     });
-    const api = createHttpPlaygroundApi({ baseUrl: server.url.origin });
 
     try {
-      await api.promote({ folder: "shapes", name: "Morph Blob", source });
-      throw new Error("expected promote to fail");
-    } catch (err) {
-      expect(String(err)).toContain("failed to refresh the Live catalog");
+      await api.updateIdea(created.id, {
+        name: "Stale edit",
+        targetFolder: "shapes",
+        draft,
+        expectedRevision: 1,
+      });
+      throw new Error("expected conflict");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PlaygroundApiError);
+      expect((error as PlaygroundApiError).code).toBe("revision_conflict");
     }
-
-    expect(
-      await Bun.file(path.join(root, "shapes", "MorphBlob", "MorphBlob.tsx")).exists(),
-    ).toBe(true);
+    expect((await api.loadIdea(created.id)).name).toBe("First edit");
   });
 
-  test("answers OPTIONS with CORS for a loopback alias", async () => {
+  test("publishes idempotently and reports a recoverable registry failure", async () => {
     const root = await tempPlayground();
-    const server = startApi(root);
-    const res = await fetch(`${server.url.origin}/api/ideas`, {
-      method: "OPTIONS",
-      headers: { Origin: "http://127.0.0.1:3000" },
+    let refreshCount = 0;
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    const api = apiClient(root, async () => {
+      refreshCount += 1;
+      if (refreshCount === 1) throw new Error("sync failed");
     });
-    expect(res.status).toBe(204);
-    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
-      "http://127.0.0.1:3000",
+    try {
+      const created = await api.createIdea({
+        name: "Morph Blob",
+        targetFolder: "shapes",
+        draft,
+      });
+
+      expect(await api.publishIdea(created.id, { expectedRevision: 1 })).toEqual({
+        slug: "shapes/MorphBlob",
+        catalogStatus: "refresh-failed",
+      });
+      expect(await api.publishIdea(created.id, { expectedRevision: 1 })).toEqual({
+        slug: "shapes/MorphBlob",
+        catalogStatus: "ready",
+      });
+      expect(
+        await readFile(
+          path.join(root, "shapes", "MorphBlob", "MorphBlob.tsx"),
+          "utf8",
+        ),
+      ).toContain("function MorphBlob");
+      expect(await api.listIdeas()).toHaveLength(1);
+    } finally {
+      console.error = originalConsoleError;
+    }
+  });
+
+  test("rejects invalid ids and supports loopback CORS aliases", async () => {
+    const root = await tempPlayground();
+    const handler = apiHandler(root);
+    const invalid = await handler(new Request("http://api.test/api/ideas/short"));
+    expect(invalid.status).toBe(400);
+
+    const options = await handler(
+      new Request("http://api.test/api/ideas", {
+        method: "OPTIONS",
+        headers: { Origin: "http://127.0.0.1:3000" },
+      }),
     );
+    expect(options.status).toBe(204);
+    expect(options.headers.get("Access-Control-Allow-Methods")).toContain("PUT");
   });
 });

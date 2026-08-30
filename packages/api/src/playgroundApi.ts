@@ -1,30 +1,33 @@
 import type {
-  PromoteInput,
-  PromoteResult,
-  SaveIdeaInput,
-  SaveIdeaResult,
+  ApiErrorCode,
+  CreateIdeaInput,
+  IdeaProject,
   IdeaSummary,
-  SavedIdea,
+  PublishIdeaInput,
+  PublishIdeaResult,
+  UpdateIdeaInput,
 } from "./types";
 
 export class PlaygroundApiError extends Error {
   readonly status: number | undefined;
+  readonly code: ApiErrorCode | undefined;
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, code?: ApiErrorCode) {
     super(message);
     this.name = "PlaygroundApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
 /**
- * UI-facing backend contract. The web app depends on this interface only.
- * Swap implementations (local HTTP, remote, in-memory) without changing pages.
+ * UI-facing contract for saved Experimental projects and Live publishing.
  */
 export interface PlaygroundApi {
   listIdeas(): Promise<IdeaSummary[]>;
-  loadIdea(componentName: string): Promise<SavedIdea>;
-  saveIdea(input: SaveIdeaInput): Promise<SaveIdeaResult>;
-  deleteIdea(componentName: string): Promise<IdeaSummary[]>;
-  promote(input: PromoteInput): Promise<PromoteResult>;
+  loadIdea(id: string): Promise<IdeaProject>;
+  createIdea(input: CreateIdeaInput): Promise<IdeaProject>;
+  updateIdea(id: string, input: UpdateIdeaInput): Promise<IdeaProject>;
+  deleteIdea(id: string): Promise<void>;
+  publishIdea(id: string, input: PublishIdeaInput): Promise<PublishIdeaResult>;
 }

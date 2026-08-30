@@ -1,19 +1,8 @@
 /**
- * Promote an Experimental idea into a new Live playground component.
- * Never mutates ConfigurableShell or other experimental tooling.
+ * Promote an Experimental idea into a Live component.
+ * Never mutates ConfigurableShell or Experimental tooling.
  */
-import {
-  RESERVED_LIVE_FOLDERS,
-  SHELLS_FOLDER,
-  buildSlug,
-  normalizeFolder,
-  toComponentName,
-  type PromoteInput,
-} from "@react-playground/api";
-
-export type PromoteResponse =
-  | { ok: true; slug: string }
-  | { ok: false; error: string };
+import { type IdeaProject } from "@react-playground/api";
 
 /**
  * Turn studio export source into a named component module.
@@ -24,21 +13,11 @@ export function buildComponentModule(
   source: string,
 ): string {
   let body = source.trim();
-  if (/export\s+function\s+Example\b/.test(body)) {
-    body = body.replace(
-      /export\s+function\s+Example\b/,
-      `export function ${componentName}`,
-    );
-  } else if (!new RegExp(`export\\s+function\\s+${componentName}\\b`).test(body)) {
-    if (/^export\s+function\s+[A-Za-z]/.test(body)) {
-      body = body.replace(
-        /export\s+function\s+[A-Za-z][A-Za-z0-9]*/,
-        `export function ${componentName}`,
-      );
-    } else {
-      body = `export function ${componentName}() {\n  return (\n${indent(body, 4)}\n  );\n}\n`;
-    }
+  const placeholder = /export\s+function\s+Example\b/g;
+  if ((body.match(placeholder) ?? []).length !== 1) {
+    throw new Error("Portable source must export exactly one Example function");
   }
+  body = body.replace(placeholder, `export function ${componentName}`);
 
   if (!body.endsWith("\n")) body += "\n";
   return body;
@@ -65,49 +44,15 @@ export default function ${componentName}Preview() {
 `;
 }
 
-function indent(text: string, spaces: number): string {
-  const pad = " ".repeat(spaces);
-  return text
-    .split("\n")
-    .map(line => (line.length ? pad + line : line))
-    .join("\n");
-}
-
-export function validatePromoteRequest(
-  input: PromoteInput,
-):
-  | { ok: true; folder: string; componentName: string; title: string; slug: string }
-  | { ok: false; error: string } {
-  const folder = normalizeFolder(input.folder);
-  if (!folder) {
-    return { ok: false, error: "Choose or enter a folder" };
-  }
-  if (RESERVED_LIVE_FOLDERS.has(folder)) {
-    return {
-      ok: false,
-      error:
-        folder === SHELLS_FOLDER
-          ? "Use another folder — shells is reserved for editing structure"
-          : "Use another folder — experimental is reserved for in-progress ideas",
-    };
-  }
-
-  const title = input.name.trim() || "Untitled idea";
-  const componentName = toComponentName(title);
-  if (!componentName) {
-    return { ok: false, error: "Idea name must start with a letter" };
-  }
-
-  const source = input.source.trim();
-  if (!source) {
-    return { ok: false, error: "Nothing to publish yet" };
-  }
-
+export function buildLiveArtifact(document: IdeaProject): {
+  component: string;
+  preview: string;
+} {
   return {
-    ok: true,
-    folder,
-    componentName,
-    title,
-    slug: buildSlug(folder, componentName),
+    component: buildComponentModule(
+      document.componentName,
+      document.draft.portableSourceTemplate,
+    ),
+    preview: buildPreviewModule(document.componentName, document.name),
   };
 }

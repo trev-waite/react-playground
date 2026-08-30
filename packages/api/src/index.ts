@@ -1,11 +1,17 @@
 export type {
-  IdeaStudioState,
+  ApiErrorCode,
+  CatalogStatus,
+  CreateIdeaInput,
+  EmeraldConstructState,
+  EmeraldConstructVariant,
+  IdeaDocument,
+  IdeaDraft,
+  IdeaDraftState,
+  IdeaProject,
   IdeaSummary,
-  SavedIdea,
-  SaveIdeaInput,
-  SaveIdeaResult,
-  PromoteInput,
-  PromoteResult,
+  PublishIdeaInput,
+  PublishIdeaResult,
+  UpdateIdeaInput,
 } from "./types";
 
 export {
@@ -15,8 +21,6 @@ export {
   normalizeFolder,
   toComponentName,
   buildSlug,
-  experimentalSlug,
-  isWipExperimentalSlug,
   isSafeComponentName,
 } from "./naming";
 
@@ -29,3 +33,16 @@ export {
   createHttpPlaygroundApi,
   type HttpPlaygroundApiOptions,
 } from "./httpPlaygroundApi";
+
+export {
+  isSafeIdeaId,
+  parseCreateIdeaInput,
+  parseEmeraldConstructState,
+  parseIdeaDocument,
+  parseIdeaDraft,
+  parseIdeaDraftState,
+  parseIdeaProject,
+  parseIdeaSummary,
+  parsePublishIdeaInput,
+  parseUpdateIdeaInput,
+} from "./contracts";

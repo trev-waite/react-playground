@@ -18,12 +18,12 @@
 
 These are separate surfaces that share look and feel, not one component used twice.
 
-- **ConfigurableShell** (`apps/web/src/playground/shells/ConfigurableShell/`) is a portable Live card. Keep it self-contained. Do not add save/switch/promote, idea exporters, or Experimental layout to it. Do not reuse it as the experiment host.
+- **ConfigurableShell** (`apps/web/src/live/shells/ConfigurableShell/`) is a portable Live card. Keep it self-contained. Do not add save/switch/promote, idea exporters, or Experimental layout to it. Do not reuse it as the experiment host.
 - **Experimental view** (`apps/web/src/shell/ExperimentalPage.tsx`, `apps/web/src/shell/IdeaWorkbench.tsx`) is where new ideas are authored: a full-bleed stage and dock, plus save / switch / Make Live. Echo the shell's visual language in Experimental's own CSS and layout. Do not render `<ConfigurableShell>` in Experimental, and do not import `ConfigurableShell.module.css`.
 
 Experimental may import `ProximityControl`, `linearScale`, and icons so the controls feel the same. It must not import the `ConfigurableShell` component.
 
-**Workflow:** create and tweak in Experimental. Save and Open switch between WIP projects. Make Live writes only the portable component into `apps/web/src/playground/<folder>/<Name>/`. Live `preview.tsx` renders `<Name />` and nothing else — no sliders, no shell. Do not add Live experiments by wrapping them in ConfigurableShell.
+**Workflow:** create and tweak in Experimental. Save and Open switch between WIP projects. Make Live asks for a Live folder, then writes only the portable component into `apps/web/src/live/<folder>/<Name>/`. Live `preview.tsx` renders `<Name />` and nothing else. No sliders, no shell. Do not add Live experiments by wrapping them in ConfigurableShell.
 
 ## Naming
 

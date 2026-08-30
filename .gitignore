@@ -49,6 +49,12 @@ Thumbs.db
 *.local
 .vercel
 
-# Local experimental prototypes (published into the catalog via Make Live)
-apps/web/src/playground/experimental/*
-!apps/web/src/playground/experimental/.gitkeep
+# Experimental projects are reviewable source; only their two canonical files are tracked.
+apps/web/src/experimental/*
+!apps/web/src/experimental/.gitkeep
+!apps/web/src/experimental/*/
+apps/web/src/experimental/*/*
+!apps/web/src/experimental/*/project.json
+!apps/web/src/experimental/*/source.tsx
+apps/web/src/experimental/.*.stage-*/
+apps/web/src/experimental/.*.backup-*/

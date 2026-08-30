@@ -1,54 +1,40 @@
 import type { IdeaSummary } from "@react-playground/api";
 
-/** `/experimental/MorphBlob` → `MorphBlob`. */
-export function ideaNameFromPath(pathname: string): string | null {
-  const match = pathname.match(/^\/experimental\/([A-Za-z][A-Za-z0-9]*)\/?$/);
+/** `/experimental/<idea-id>` → the stable idea id. */
+export function ideaIdFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/experimental\/([A-Za-z0-9-]{8,64})\/?$/);
   return match?.[1] ?? null;
 }
 
-export function initialIdeaComponentName(
+export function initialIdeaId(
   pathname: string,
   ideas: IdeaSummary[],
 ): string | null {
-  return ideaNameFromPath(pathname) ?? ideas[0]?.componentName ?? null;
+  return ideaIdFromPath(pathname) ?? ideas[0]?.id ?? null;
 }
 
-export type IdeaGroup = {
-  folder: string;
-  ideas: IdeaSummary[];
-};
-
-/** Filter saved ideas and group them by their intended Live folder. */
-export function organizeIdeas(
+/** Filter saved ideas by name, component, or remembered Live folder. */
+export function filterIdeas(
   ideas: IdeaSummary[],
   query: string,
-): IdeaGroup[] {
+): IdeaSummary[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const matchingIdeas = normalizedQuery
     ? ideas.filter(idea =>
-        [idea.name, idea.componentName, idea.folder].some(value =>
+        [idea.name, idea.componentName, idea.targetFolder ?? ""].some(value =>
           value.toLocaleLowerCase().includes(normalizedQuery),
         ),
       )
     : ideas;
 
-  const grouped = new Map<string, IdeaSummary[]>();
-  for (const idea of matchingIdeas) {
-    const folder = idea.folder.trim();
-    grouped.set(folder, [...(grouped.get(folder) ?? []), idea]);
-  }
-
-  return [...grouped.entries()]
-    .sort(([folderA], [folderB]) => {
-      if (!folderA) return 1;
-      if (!folderB) return -1;
-      return folderA.localeCompare(folderB);
-    })
-    .map(([folder, groupedIdeas]) => ({ folder, ideas: groupedIdeas }));
+  return [...matchingIdeas].sort(
+    (a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt) || a.name.localeCompare(b.name),
+  );
 }
 
 /** Short relative time for the project list. */
-export function formatSavedAt(iso: string, now = Date.now()): string {
+export function formatUpdatedAt(iso: string, now = Date.now()): string {
   const then = Date.parse(iso);
   if (!Number.isFinite(then)) return "";
   const seconds = Math.round((now - then) / 1000);

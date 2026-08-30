@@ -1,7 +1,7 @@
 import {
   type ConstructId,
-  edgesFor,
-  facetsFor,
+  detailedEdges,
+  detailedFacets,
   fillRings,
   hueFromColor,
   sampleConstruct,
@@ -10,19 +10,19 @@ import {
 /**
  * Portable source for Save / Make Live.
  * Geometry is baked at the current Experimental values. The published file is
- * the component only — no shell, sliders, or workbench chrome.
+ * the component only: no shell, sliders, or workbench chrome.
  */
 export function exportEmeraldConstructCode(
   formationSpeed: number,
   detail: number,
   color: number,
   variant: ConstructId,
-  _progress: number,
+  origin: { x: number; y: number },
 ): string {
   const samples = sampleConstruct(variant, detail);
-  const edges = edgesFor(variant);
+  const edges = detailedEdges(variant, detail);
   const rings = fillRings(variant);
-  const facets = facetsFor(variant);
+  const facets = detailedFacets(variant, detail);
   const hue = Math.round(hueFromColor(color));
 
   return `import { useEffect, useRef } from "react";
@@ -33,9 +33,10 @@ const RINGS = ${JSON.stringify(rings)};
 const FACETS = ${JSON.stringify(facets)};
 const SPEED = ${formationSpeed};
 const HUE = ${hue};
+const ORIGIN = ${JSON.stringify(origin)};
 
 export function Example({ progress = 1 }: { progress?: number } = {}) {
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -53,23 +54,23 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
     const cx = width / 2;
     const cy = height / 2;
     const scale = Math.min(width, height) * 0.36;
-    const origin = { x: width * 0.5, y: height * 0.68 };
+    const origin = { x: width * ORIGIN.x, y: height * ORIGIN.y };
     const count = Math.max(SAMPLES.length, 1);
     const travel = 0.4 - Math.min(1, Math.max(0, SPEED / 100)) * 0.26;
     const amount = Math.min(1, Math.max(0, progress));
-    const project = (point) => ({ x: cx + point.x * scale, y: cy + point.y * scale });
-    const localOf = (index) => {
+    const project = (point: { x: number; y: number }) => ({ x: cx + point.x * scale, y: cy + point.y * scale });
+    const localOf = (index: number) => {
       if (amount <= 0) return 0;
       if (amount >= 1) return 1;
       const launch = (index / Math.max(count - 1, 1)) * (1 - travel);
       return Math.min(1, Math.max(0, (amount - launch) / travel));
     };
-    const ease = (t) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
-    const mix = (a, b, t) => {
+    const ease = (t: number) => 1 - (1 - Math.min(1, Math.max(0, t))) ** 3;
+    const mix = (a: { x: number; y: number }, b: { x: number; y: number }, t: number) => {
       const e = ease(t);
       return { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e };
     };
-    const hsl = (sat, light, alpha = 1) =>
+    const hsl = (sat: number, light: number, alpha = 1) =>
       alpha >= 1
         ? \`hsl(\${HUE} \${sat}% \${light}%)\`
         : \`hsl(\${HUE} \${sat}% \${light}% / \${alpha})\`;
@@ -78,25 +79,9 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
 
-    const fillAlpha = ease(Math.max(0, (amount - 0.82) / 0.18)) * 0.1;
-    if (FACETS.length) {
-      FACETS.forEach((facet) => {
-        const reveal = ease(Math.max(0, (amount - 0.68) / 0.24));
-        if (reveal < 0.02) return;
-        const light = 16 + facet.shade * 22;
-        ctx.fillStyle = hsl(30 + facet.shade * 16, light, 0.42 + reveal * 0.5);
-        ctx.beginPath();
-        const pa = project(facet.a);
-        const pb = project(facet.b);
-        const pc = project(facet.c);
-        ctx.moveTo(pa.x, pa.y);
-        ctx.lineTo(pb.x, pb.y);
-        ctx.lineTo(pc.x, pc.y);
-        ctx.closePath();
-        ctx.fill();
-      });
-    } else if (fillAlpha > 0.002) {
-      ctx.fillStyle = hsl(28, 26, fillAlpha);
+    const bodyReveal = ease(Math.max(0, (amount - 0.36) / 0.28));
+    if (bodyReveal > 0.02) {
+      ctx.fillStyle = hsl(40, 24, 0.92 * bodyReveal);
       for (const ring of RINGS) {
         ctx.beginPath();
         ring.forEach((point, index) => {
@@ -107,6 +92,24 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
         ctx.closePath();
         ctx.fill();
       }
+    }
+
+    if (FACETS.length) {
+      FACETS.forEach((facet) => {
+        const reveal = ease(Math.max(0, (amount - 0.48) / 0.2));
+        if (reveal < 0.02) return;
+        const light = 14 + facet.shade * 28;
+        ctx.fillStyle = hsl(34 + facet.shade * 20, light, (0.18 + facet.shade * 0.34) * reveal);
+        ctx.beginPath();
+        const pa = project(facet.a);
+        const pb = project(facet.b);
+        const pc = project(facet.c);
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.lineTo(pc.x, pc.y);
+        ctx.closePath();
+        ctx.fill();
+      });
     }
 
     const coverage = EDGES.map(() => 0);
@@ -132,22 +135,6 @@ export function Example({ progress = 1 }: { progress?: number } = {}) {
       ctx.stroke();
     });
 
-    SAMPLES.forEach((sample, index) => {
-      const local = localOf(index);
-      if (local <= 0.02) return;
-      const pos = mix(origin, project(sample), local);
-      ctx.fillStyle = hsl(44, 30, 0.55 + local * 0.4);
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, 1.6, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    if (amount > 0.04 && amount < 0.88) {
-      ctx.fillStyle = hsl(48, 36, 0.92);
-      ctx.beginPath();
-      ctx.arc(origin.x, origin.y, 4.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }, [progress]);
 
   return (

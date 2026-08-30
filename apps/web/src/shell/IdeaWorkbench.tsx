@@ -1,25 +1,22 @@
 /**
- * Experimental workbench chrome — a full-bleed stage + dock, not ConfigurableShell.
- *
- * Author ideas here. Save / Make Live publish the portable component only.
- * Do not render <ConfigurableShell>. Do not import ConfigurableShell.module.css.
+ * Experimental stage and dock. Not ConfigurableShell.
+ * Author here; Save and Make Live write the portable component only.
  */
 import { useEffect, useMemo, useRef, useState, type SVGProps } from "react";
-import type { IdeaStudioSession } from "../lib/ideaSession";
-import { registerIdeaExporter } from "../lib/ideaExport";
+import type { IdeaDraft, IdeaStudioSession } from "../lib/ideaSession";
 import {
   CheckIcon,
   CopyIcon,
-} from "../playground/shells/ConfigurableShell/icons";
+} from "../live/shells/ConfigurableShell/icons";
 import {
   ProximityControl,
   type ShellControl,
-} from "../playground/shells/ConfigurableShell/ProximityControl";
-import { linearScale } from "../playground/shells/ConfigurableShell/scales";
+} from "../live/shells/ConfigurableShell/ProximityControl";
+import { linearScale } from "../live/shells/ConfigurableShell/scales";
 import { EmeraldConstruct } from "./workbench/EmeraldConstruct/EmeraldConstruct";
 import {
   type ConstructId,
-  detailToCount,
+  detailElementCount,
   hueFromColor,
   isConstructId,
   nextConstruct,
@@ -39,19 +36,6 @@ const COPIED_MS = 1600;
 
 function reducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-function originFromOffset(offset: { x: number; y: number }) {
-  if (offset.x === 0 && offset.y === 0) return { ...DEFAULTS.origin };
-  if (
-    offset.x >= 0 &&
-    offset.x <= 1 &&
-    offset.y >= 0 &&
-    offset.y <= 1
-  ) {
-    return offset;
-  }
-  return { ...DEFAULTS.origin };
 }
 
 function BuildIcon(props: SVGProps<SVGSVGElement>) {
@@ -118,14 +102,14 @@ function stateFromSession(session: IdeaStudioSession) {
     };
   }
   if (session.kind === "restore") {
-    const variant = session.studio.variant;
+    const variant = session.editorState.variant;
     return {
       blank: false,
-      formationSpeed: session.studio.form,
-      detail: session.studio.soft,
-      color: session.studio.drift,
+      formationSpeed: session.editorState.formationSpeed,
+      detail: session.editorState.detail,
+      color: session.editorState.color,
       variant: variant && isConstructId(variant) ? variant : DEFAULTS.variant,
-      origin: originFromOffset(session.studio.offset),
+      origin: { ...session.editorState.origin },
     };
   }
   return {
@@ -141,7 +125,7 @@ function stateFromSession(session: IdeaStudioSession) {
 type IdeaWorkbenchProps = {
   session?: IdeaStudioSession;
   onMutate?: () => void;
-  onDraftChange?: (hasDraft: boolean) => void;
+  onDraftChange?: (draft: IdeaDraft | null) => void;
 };
 
 export default function IdeaWorkbench({
@@ -164,18 +148,10 @@ export default function IdeaWorkbench({
     initial.blank ? 0 : reducedMotion() ? 1 : 0,
   );
   const [motionNonce, setMotionNonce] = useState(0);
-  const pinnedRef = useRef(!initial.blank && reducedMotion());
   const progressRef = useRef(progress);
   progressRef.current = progress;
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const baseline = useRef({
-    formationSpeed: initial.formationSpeed,
-    detail: initial.detail,
-    color: initial.color,
-    variant: initial.variant,
-    origin: { ...initial.origin },
-  });
-
+  const mutatedRef = useRef(session.kind !== "restore");
   useEffect(() => {
     return () => {
       if (copiedTimer.current) clearTimeout(copiedTimer.current);
@@ -183,6 +159,7 @@ export default function IdeaWorkbench({
   }, []);
 
   function markDraft() {
+    mutatedRef.current = true;
     setBlank(false);
     onMutate?.();
   }
@@ -243,7 +220,7 @@ export default function IdeaWorkbench({
         label: "Detail",
         value: detail,
         onChange: mutateDetail,
-        format: (value: number) => String(detailToCount(value)),
+        format: (value: number) => String(detailElementCount(variant, value)),
         ...linearScale(0, 100, 1),
       },
       {
@@ -263,30 +240,28 @@ export default function IdeaWorkbench({
     detail,
     color,
     variant,
-    progress,
+    origin,
   );
 
   useEffect(() => {
-    onDraftChange?.(!blank);
-  }, [blank, onDraftChange]);
-
-  useEffect(() => {
     if (blank) {
-      registerIdeaExporter(null);
-      return () => registerIdeaExporter(null);
+      onDraftChange?.(null);
+      return;
     }
-    registerIdeaExporter(() => ({
-      source,
-      studio: {
-        form: formationSpeed,
-        soft: detail,
-        drift: color,
-        offset: { ...origin },
+    if (!mutatedRef.current) return;
+    onDraftChange?.({
+      kind: "emerald-construct",
+      version: 1,
+      portableSourceTemplate: source,
+      editorState: {
+        formationSpeed,
+        detail,
+        color,
+        origin: { ...origin },
         variant,
       },
-    }));
-    return () => registerIdeaExporter(null);
-  }, [blank, source, formationSpeed, detail, color, origin, variant]);
+    });
+  }, [blank, source, formationSpeed, detail, color, origin, variant, onDraftChange]);
 
   async function onCopy() {
     if (blank) return;
@@ -297,8 +272,7 @@ export default function IdeaWorkbench({
     copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
   }
 
-  function playTo(next: number, pin: boolean) {
-    pinnedRef.current = pin;
+  function playTo(next: number) {
     setTarget(next);
     setMotionNonce(value => value + 1);
     markDraft();
@@ -321,14 +295,6 @@ export default function IdeaWorkbench({
               progress={progress}
               origin={origin}
               onOriginChange={setOrigin}
-              onPressChange={(pressed, nextOrigin) => {
-                setOrigin(nextOrigin);
-                if (pressed) {
-                  playTo(1, false);
-                  return;
-                }
-                if (!pinnedRef.current) playTo(0, false);
-              }}
             />
           )}
         </div>
@@ -344,7 +310,7 @@ export default function IdeaWorkbench({
               className={styles.action}
               aria-pressed={target >= 1 && progress >= 0.99}
               data-pressed={target >= 1 && progress >= 0.99 ? true : undefined}
-              onClick={() => playTo(1, true)}
+              onClick={() => playTo(1)}
             >
               <BuildIcon />
               Build
@@ -355,7 +321,7 @@ export default function IdeaWorkbench({
               aria-pressed={target <= 0 && progress <= 0.01}
               data-pressed={target <= 0 && progress <= 0.01 ? true : undefined}
               disabled={blank}
-              onClick={() => playTo(0, false)}
+              onClick={() => playTo(0)}
             >
               <DissolveIcon />
               Dissolve
@@ -368,7 +334,7 @@ export default function IdeaWorkbench({
                 if (progressRef.current > 0.04) {
                   progressRef.current = 0;
                   setProgress(0);
-                  playTo(1, true);
+                  playTo(1);
                   return;
                 }
                 markDraft();

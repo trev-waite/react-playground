@@ -1,15 +1,14 @@
 /**
- * Scans playground preview.tsx files and writes src/lib/playground.gen.ts
+ * Scans Live preview.tsx files and writes src/lib/playground.gen.ts
  * so the client bundle gets explicit lazy imports (Bun-friendly auto-discovery).
  */
 import { Glob } from "bun";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { PlaygroundStatus } from "../src/lib/types";
-import { isWipExperimentalSlug } from "@react-playground/api";
 
 const ROOT = path.join(import.meta.dir, "..");
-const PLAYGROUND = path.join(ROOT, "src", "playground");
+const LIVE = path.join(ROOT, "src", "live");
 const OUT = path.join(ROOT, "src", "lib", "playground.gen.ts");
 
 /** Read preview source and detect `status: "experimental"` in meta. Default live. */
@@ -26,10 +25,9 @@ export async function syncPlaygroundRegistry(): Promise<
   const glob = new Glob("**/preview.tsx");
   const entries: { slug: string; status: PlaygroundStatus }[] = [];
 
-  for await (const file of glob.scan({ cwd: PLAYGROUND, onlyFiles: true })) {
+  for await (const file of glob.scan({ cwd: LIVE, onlyFiles: true })) {
     const slug = file.replace(/\/preview\.tsx$/, "").replace(/\\/g, "/");
-    if (isWipExperimentalSlug(slug)) continue;
-    const absolute = path.join(PLAYGROUND, file);
+    const absolute = path.join(LIVE, file);
     const source = await Bun.file(absolute).text();
     entries.push({
       slug,
@@ -40,7 +38,7 @@ export async function syncPlaygroundRegistry(): Promise<
   entries.sort((a, b) => a.slug.localeCompare(b.slug));
 
   const moduleLines = entries.map(({ slug }) => {
-    const importPath = `../playground/${slug}/preview.tsx`;
+    const importPath = `../live/${slug}/preview.tsx`;
     return `  ${JSON.stringify(slug)}: () => import(${JSON.stringify(importPath)}),`;
   });
 
@@ -68,7 +66,7 @@ ${statusLines.join("\n")}
 
 if (import.meta.main) {
   const entries = await syncPlaygroundRegistry();
-  console.log(`Synced ${entries.length} playground experiment(s):`);
+  console.log(`Synced ${entries.length} Live entries:`);
   for (const { slug, status } of entries) {
     console.log(`  - ${slug} (${status})`);
   }

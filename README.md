@@ -2,7 +2,7 @@
 
 Local playground for isolated React components. **Live** is the published catalog. **Experimental** is a full-bleed studio for WIP — save, switch ideas, then Make Live.
 
-This is not a WYSIWYG editor. Preview chrome lives in `apps/web/src/shell/`. Portable components live in `apps/web/src/playground/`.
+This is not a WYSIWYG editor. Preview chrome lives in `apps/web/src/shell/`. Portable Live components live in `apps/web/src/live/`. WIP ideas live in `apps/web/src/experimental/`.
 
 ## Quick start
 
@@ -20,40 +20,46 @@ The repo pins **Bun 1.4** via `bun install` (project-local, does not change your
 
 ## Live vs Experimental
 
-**Live** — published catalog in the sidebar. Each entry is a portable component folder:
+**Live** is the published catalog. Each entry is a portable component folder:
 
-`apps/web/src/playground/<group>/<Name>/`
+`apps/web/src/live/<group>/<Name>/`
 
-Live `preview.tsx` only mounts the component. No sliders, no ConfigurableShell.
+Its `preview.tsx` only mounts the component. It has no sliders or ConfigurableShell.
 
-**Experimental** — full-bleed studio for WIP, not ConfigurableShell. Sketch in the studio, **Save** (`⌘S`) to `apps/web/src/playground/experimental/` (gitignored), **Open** to switch saved projects, then **Make Live** into a group. Make Live writes the component (and a mount-only preview) into Live. The experimental copy stays so you can keep iterating.
+**Experimental** is the WIP studio. **Save** (`⌘S`) creates a named project directory containing:
 
-Do not create files by hand in `experimental/` or `shells/`. Do not wrap new ideas in ConfigurableShell.
+- `project.json` for app-managed metadata
+- `source.tsx` for canonical, editable component code
+
+Use **Open** to switch projects. **Make Live** asks which Live folder to publish into, then writes the portable component. The WIP project remains after publishing. Humans and agents may edit `source.tsx` directly; let the app manage `project.json`. See [Experimental Projects](docs/IDEA_PERSISTENCE.md).
 
 ## Add an experiment
 
-Work in **Experimental** (`/experimental`). Wire sliders and actions on the Experimental dock. When it is ready, **Make Live**.
+Work at `/experimental`. Put authoring controls in the Experimental dock. When the component is ready, use **Make Live**.
 
-Do not add a Live folder with ConfigurableShell. Published Live examples: `apps/web/src/playground/buttons/PrimaryButton/preview.tsx`.
+Do not put WIP in `apps/web/src/live/shells/`, render ConfigurableShell in Experimental, or include authoring controls in a Live component. See `apps/web/src/live/buttons/PrimaryButton/preview.tsx` for a Live preview.
 
 ## Export
 
-Copy the experiment folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/`.
+Copy the Live component folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/shell/` or `apps/web/src/lib/`.
 
 ## Layout
 
 ```
 apps/web          UI (port 3000)
+  src/live/       published catalog
+  src/experimental/  saved WIP ideas
+  src/shell/      app chrome
 apps/api          local HTTP API (port 3001)
   src/config/     ports, paths, Live registry refresh
   src/server/     Bun.serve routes + CORS
   src/features/   business logic
-    ideas/        save / load Experimental WIP
-    promote/      Make Live
+    ideas/        project validation, atomic storage, revisions, migration
+    promote/      atomic and retryable Make Live artifacts
 packages/api      PlaygroundApi contract + HTTP client
 ```
 
-The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Swap that one binding to replace the local API.
+The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Runtime parsers validate both sides. See [Experimental Projects](docs/IDEA_PERSISTENCE.md) for the storage and publishing rules.
 
 More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
 

@@ -12,8 +12,10 @@ export function numberColumns(from: number, to: number): NumberColumn[] {
   const toColumns = toText.padStart(columnCount, " ");
 
   return Array.from({ length: columnCount }, (_, index) => {
-    const fromDigit = fromColumns[index] === " " ? null : fromColumns[index];
-    const toDigit = toColumns[index] === " " ? null : toColumns[index];
+    const fromValue = fromColumns.charAt(index);
+    const toValue = toColumns.charAt(index);
+    const fromDigit = fromValue === " " ? null : fromValue;
+    const toDigit = toValue === " " ? null : toValue;
 
     return {
       from: fromDigit,

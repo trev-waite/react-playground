@@ -6,6 +6,20 @@
   min-width: 0;
 }
 
+.backdrop {
+  appearance: none;
+  position: fixed;
+  z-index: 4;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
 .currentIdea {
   position: absolute;
   inset: 0;
@@ -38,8 +52,11 @@
 }
 
 .currentIdeaInput:focus-visible {
-  border-radius: 4px;
-  box-shadow: 0 2px 0 #111113;
+  outline: none;
+}
+
+.root[data-open] .currentIdea {
+  pointer-events: none;
 }
 
 .surface {
@@ -99,10 +116,6 @@
     height var(--morph-open-duration) var(--morph-open-ease),
     border-radius var(--morph-open-duration) var(--morph-open-ease),
     box-shadow 200ms ease;
-}
-
-.surface[data-open][data-editing] {
-  height: min(max(var(--menu-height), 20rem), calc(100dvh - 5.5rem));
 }
 
 .trigger {
@@ -246,14 +259,6 @@
   border-radius: 12px;
   background: #111113;
   color: #fff;
-  transition:
-    min-height 300ms var(--morph-open-ease),
-    border-radius 300ms var(--morph-open-ease);
-}
-
-.newIdea[data-expanded] {
-  min-height: 8.8rem;
-  border-radius: 16px;
 }
 
 .newIdeaButton {
@@ -304,14 +309,6 @@
   letter-spacing: -0.01em;
 }
 
-.newIdeaMeta {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 0.6875rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .newIdeaAction {
   padding: 0.25rem 0.45rem;
   border-radius: 999px;
@@ -338,8 +335,7 @@
 }
 
 .searchInput:focus-visible {
-  outline: 2px solid #111113;
-  outline-offset: 1px;
+  outline: none;
 }
 
 .list {
@@ -351,197 +347,16 @@
   overflow: auto;
 }
 
-.group,
-.groupList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.group + .group {
-  margin-top: 0.25rem;
-  padding-top: 0.25rem;
-  border-top: 1px solid rgba(17, 17, 19, 0.06);
-}
-
-.groupLabel {
-  margin: 0;
-  padding: 0.35rem 0.55rem 0.2rem;
-  color: var(--exp-muted);
-  font-size: 0.625rem;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .ideaRow {
   display: block;
+  position: relative;
 }
 
 .ideaRowMain {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.2rem;
-}
-
-.rowFolder {
-  appearance: none;
-  display: grid;
-  place-items: center;
-  width: 1.8rem;
-  height: 1.8rem;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--exp-muted);
-  cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, transform 140ms var(--exp-ease);
-}
-
-.rowFolder svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.45;
-  stroke-linejoin: round;
-}
-
-.rowFolder:hover,
-.rowFolder[aria-expanded="true"] {
-  background: rgba(17, 17, 19, 0.08);
-  color: var(--exp-ink);
-}
-
-.rowFolder:active {
-  transform: scale(0.94);
-}
-
-.rowFolder:focus-visible {
-  outline: 2px solid #111113;
-  outline-offset: -2px;
-}
-
-.folderEditor {
-  display: grid;
-  gap: 0.45rem;
-  padding: 0.7rem;
-  animation: revealEditor 220ms var(--morph-close-ease) both;
-}
-
-.ideaRow > .folderEditor {
-  margin: 0.15rem 0 0.35rem;
-  border-radius: 12px;
-  background: rgba(17, 17, 19, 0.045);
-}
-
-.folderLabel {
-  display: grid;
-  gap: 0.3rem;
-  color: rgba(255, 255, 255, 0.66);
-  font-size: 0.65rem;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.ideaRow .folderLabel {
-  color: var(--exp-muted);
-}
-
-.folderSelect,
-.folderInput {
-  appearance: none;
-  width: 100%;
-  height: 2rem;
-  box-sizing: border-box;
-  padding: 0 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.1);
-  color: inherit;
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 520;
-  text-transform: none;
-}
-
-.folderSelect {
-  color-scheme: dark;
-}
-
-.ideaRow .folderSelect,
-.ideaRow .folderInput {
-  border-color: rgba(17, 17, 19, 0.08);
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--exp-ink);
-}
-
-.ideaRow .folderSelect {
-  color-scheme: light;
-}
-
-.folderSelect:focus-visible,
-.folderInput:focus-visible {
-  outline: 2px solid rgba(0, 122, 255, 0.7);
-  outline-offset: 1px;
-}
-
-.folderActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.35rem;
-}
-
-.cancelAction,
-.confirmAction {
-  appearance: none;
-  height: 1.8rem;
-  padding: 0 0.65rem;
-  border: 0;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 0.6875rem;
-  font-weight: 650;
-  cursor: pointer;
-  transition: transform 140ms var(--exp-ease), background 140ms ease;
-}
-
-.cancelAction {
-  background: transparent;
-  color: rgba(255, 255, 255, 0.68);
-}
-
-.confirmAction {
-  background: #fff;
-  color: #111113;
-}
-
-.ideaRow .cancelAction {
-  color: var(--exp-muted);
-}
-
-.ideaRow .confirmAction {
-  background: #111113;
-  color: #fff;
-}
-
-.cancelAction:active,
-.confirmAction:active {
-  transform: scale(0.96);
-}
-
-.confirmAction:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-@keyframes revealEditor {
-  from {
-    opacity: 0;
-    transform: translateY(-0.35rem) scale(0.98);
-    filter: blur(2px);
-  }
 }
 
 .empty {
@@ -674,10 +489,7 @@
   .trigger,
   .icon,
   .menu,
-  .newIdea,
   .newIdeaButton,
-  .folderEditor,
-  .rowFolder,
   .row,
   .rowDelete {
     transition: none;

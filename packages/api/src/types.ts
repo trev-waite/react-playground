@@ -1,43 +1,74 @@
-export type IdeaStudioState = {
-  form: number;
-  soft: number;
-  drift: number;
-  offset: { x: number; y: number };
-  variant?: string;
+export type EmeraldConstructVariant = "bird" | "stella" | "octagram";
+
+export type EmeraldConstructState = {
+  formationSpeed: number;
+  detail: number;
+  color: number;
+  origin: { x: number; y: number };
+  variant: EmeraldConstructVariant;
+};
+
+export type IdeaDraftState =
+  | {
+      kind: "emerald-construct";
+      version: 1;
+      editorState: EmeraldConstructState;
+    }
+  | {
+      kind: "source";
+      version: 1;
+    };
+
+export type IdeaDraft = IdeaDraftState & {
+  portableSourceTemplate: string;
 };
 
 export type IdeaSummary = {
+  id: string;
+  revision: number;
   name: string;
-  folder: string;
+  targetFolder: string;
   componentName: string;
-  savedAt: string;
+  updatedAt: string;
 };
 
-export type SavedIdea = IdeaSummary & {
-  source: string;
-  studio: IdeaStudioState | null;
+export type IdeaDocument = IdeaSummary & {
+  schemaVersion: 2;
+  draft: IdeaDraftState;
+  sourceFile: "source.tsx";
+  sourceDigest: string;
+  createdAt: string;
 };
 
-export type SaveIdeaInput = {
+export type IdeaProject = Omit<IdeaDocument, "draft"> & {
+  draft: IdeaDraft;
+};
+
+export type CreateIdeaInput = {
   name: string;
-  folder: string;
-  source: string;
-  studio?: IdeaStudioState | null;
-  previousComponentName?: string;
+  targetFolder: string;
+  draft: IdeaDraft;
 };
 
-export type SaveIdeaResult = {
-  idea: IdeaSummary;
-  ideas: IdeaSummary[];
+export type UpdateIdeaInput = CreateIdeaInput & {
+  expectedRevision: number;
 };
 
-export type PromoteInput = {
-  folder: string;
-  name: string;
-  source: string;
-  discardExperimental?: string;
+export type PublishIdeaInput = {
+  expectedRevision: number;
 };
 
-export type PromoteResult = {
+export type CatalogStatus = "ready" | "refresh-failed";
+
+export type PublishIdeaResult = {
   slug: string;
+  catalogStatus: CatalogStatus;
 };
+
+export type ApiErrorCode =
+  | "invalid_request"
+  | "invalid_document"
+  | "not_found"
+  | "revision_conflict"
+  | "destination_exists"
+  | "io_failure";

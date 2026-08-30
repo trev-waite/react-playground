@@ -1,43 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildLiveArtifact,
   buildComponentModule,
   buildPreviewModule,
-  validatePromoteRequest,
 } from "./promote";
 import { buildSlug } from "@react-playground/api";
-
-describe("validatePromoteRequest", () => {
-  test("accepts a normal idea", () => {
-    const result = validatePromoteRequest({
-      folder: "shapes",
-      name: "Morph Blob",
-      source: "export function Example() { return null; }",
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.slug).toBe("shapes/MorphBlob");
-      expect(result.componentName).toBe("MorphBlob");
-    }
-  });
-
-  test("rejects shells folder to protect ConfigurableShell", () => {
-    const result = validatePromoteRequest({
-      folder: "shells",
-      name: "Anything",
-      source: "export function Example() { return null; }",
-    });
-    expect(result.ok).toBe(false);
-  });
-
-  test("rejects experimental folder so WIP is not published onto itself", () => {
-    const result = validatePromoteRequest({
-      folder: "experimental",
-      name: "Anything",
-      source: "export function Example() { return null; }",
-    });
-    expect(result.ok).toBe(false);
-  });
-});
 
 describe("buildComponentModule / buildPreviewModule", () => {
   test("renames Example export and builds a live preview", () => {
@@ -63,5 +30,27 @@ describe("buildComponentModule / buildPreviewModule", () => {
 
   test("buildSlug joins folder and name", () => {
     expect(buildSlug("feedback", "PulseMark")).toBe("feedback/PulseMark");
+  });
+
+  test("builds both Live files from a saved project snapshot", () => {
+    const artifact = buildLiveArtifact({
+      schemaVersion: 2,
+      id: "11111111-1111-4111-8111-111111111111",
+      revision: 1,
+      name: "Morph Blob",
+      targetFolder: "shapes",
+      componentName: "MorphBlob",
+      draft: {
+        kind: "source",
+        version: 1,
+        portableSourceTemplate: "export function Example() { return null; }",
+      },
+      sourceFile: "source.tsx",
+      sourceDigest: "daa35f325bfc72d3c725365ba6481373d18f998b17ed5b185e56d7f5fada37bf",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    expect(artifact.component).toContain("function MorphBlob");
+    expect(artifact.preview).toContain("<MorphBlob />");
   });
 });

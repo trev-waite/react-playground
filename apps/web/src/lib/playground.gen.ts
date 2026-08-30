@@ -3,8 +3,8 @@
 import type { PlaygroundStatus, PreviewModule } from "./types";
 
 export const previewModules: Record<string, () => Promise<PreviewModule>> = {
-  "buttons/PrimaryButton": () => import("../playground/buttons/PrimaryButton/preview.tsx"),
-  "shells/ConfigurableShell": () => import("../playground/shells/ConfigurableShell/preview.tsx"),
+  "buttons/PrimaryButton": () => import("../live/buttons/PrimaryButton/preview.tsx"),
+  "shells/ConfigurableShell": () => import("../live/shells/ConfigurableShell/preview.tsx"),
 };
 
 export const previewStatuses: Record<string, PlaygroundStatus> = {

@@ -1,11 +1,8 @@
-import type { IdeaStudioState } from "@react-playground/api";
+import type { EmeraldConstructState, IdeaDraft } from "@react-playground/api";
 
 export type IdeaStudioSession =
   | { kind: "demo" }
   | { kind: "blank" }
-  | { kind: "restore"; studio: IdeaStudioState };
+  | { kind: "restore"; editorState: EmeraldConstructState };
 
-export type IdeaDraft = {
-  source: string;
-  studio?: IdeaStudioState | null;
-};
+export type { IdeaDraft };

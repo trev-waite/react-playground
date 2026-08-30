@@ -1,27 +1,43 @@
+import { parseIdeaProject, parseIdeaSummary } from "./contracts";
 import { PlaygroundApiError, type PlaygroundApi } from "./playgroundApi";
 import type {
+  ApiErrorCode,
+  CreateIdeaInput,
+  IdeaProject,
   IdeaSummary,
-  PromoteInput,
-  PromoteResult,
-  SaveIdeaInput,
-  SaveIdeaResult,
-  SavedIdea,
+  PublishIdeaInput,
+  PublishIdeaResult,
+  UpdateIdeaInput,
 } from "./types";
-
-type OkEnvelope<T> = T & { ok: true };
-type ErrEnvelope = { ok: false; error?: string };
 
 export type HttpPlaygroundApiOptions = {
   /** Origin of the API, no trailing slash. Empty string uses same-origin `/api`. */
   baseUrl?: string;
-  fetch?: (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ) => Promise<Response>;
+  fetch?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 };
+
+type JsonRecord = Record<string, unknown>;
+const API_ERROR_CODES = new Set<ApiErrorCode>([
+  "invalid_request",
+  "invalid_document",
+  "not_found",
+  "revision_conflict",
+  "destination_exists",
+  "io_failure",
+]);
 
 function apiUrl(baseUrl: string, path: string): string {
   return `${baseUrl}${path}`;
+}
+
+function asRecord(input: unknown): JsonRecord | null {
+  return typeof input === "object" && input != null ? (input as JsonRecord) : null;
+}
+
+function errorCode(input: unknown): ApiErrorCode | undefined {
+  return typeof input === "string" && API_ERROR_CODES.has(input as ApiErrorCode)
+    ? (input as ApiErrorCode)
+    : undefined;
 }
 
 export function createHttpPlaygroundApi(
@@ -30,47 +46,53 @@ export function createHttpPlaygroundApi(
   const baseUrl = (options.baseUrl ?? "").replace(/\/$/, "");
   const fetchFn = options.fetch ?? globalThis.fetch;
 
-  async function readOk<T>(
-    res: Response,
-    fallback: string,
-  ): Promise<T> {
-    let data: OkEnvelope<T> | ErrEnvelope;
+  async function readOk(res: Response, fallback: string): Promise<JsonRecord> {
+    let data: JsonRecord | null = null;
     try {
-      data = (await res.json()) as OkEnvelope<T> | ErrEnvelope;
+      data = asRecord(await res.json());
     } catch {
-      throw new PlaygroundApiError(fallback, res.status);
+      // Handled below as an invalid response.
     }
-    if (!res.ok || !data.ok) {
+    if (!data || !res.ok || data.ok !== true) {
       throw new PlaygroundApiError(
-        (data as ErrEnvelope).error ?? fallback,
+        typeof data?.error === "string" ? data.error : fallback,
         res.status,
+        errorCode(data?.code),
       );
     }
     return data;
   }
 
+  function invalidResponse(fallback: string): never {
+    throw new PlaygroundApiError(`${fallback}: invalid API response`);
+  }
+
   return {
     async listIdeas(): Promise<IdeaSummary[]> {
-      const data = await readOk<{ ideas?: IdeaSummary[] }>(
+      const data = await readOk(
         await fetchFn(apiUrl(baseUrl, "/api/ideas")),
         "Could not load saved prototypes",
       );
-      return data.ideas ?? [];
+      if (!Array.isArray(data.ideas)) invalidResponse("Could not load saved prototypes");
+      const ideas: IdeaSummary[] = [];
+      for (const value of data.ideas) {
+        const idea = parseIdeaSummary(value);
+        if (!idea) invalidResponse("Could not load saved prototypes");
+        ideas.push(idea);
+      }
+      return ideas;
     },
 
-    async loadIdea(componentName: string): Promise<SavedIdea> {
-      const data = await readOk<{ idea?: SavedIdea }>(
-        await fetchFn(
-          apiUrl(baseUrl, `/api/ideas/${encodeURIComponent(componentName)}`),
-        ),
+    async loadIdea(id: string): Promise<IdeaProject> {
+      const data = await readOk(
+        await fetchFn(apiUrl(baseUrl, `/api/ideas/${encodeURIComponent(id)}`)),
         "Could not open prototype",
       );
-      if (!data.idea) throw new PlaygroundApiError("Could not open prototype");
-      return data.idea;
+      return parseIdeaProject(data.idea) ?? invalidResponse("Could not open prototype");
     },
 
-    async saveIdea(input: SaveIdeaInput): Promise<SaveIdeaResult> {
-      const data = await readOk<{ idea?: IdeaSummary; ideas?: IdeaSummary[] }>(
+    async createIdea(input: CreateIdeaInput): Promise<IdeaProject> {
+      const data = await readOk(
         await fetchFn(apiUrl(baseUrl, "/api/ideas"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -78,32 +100,46 @@ export function createHttpPlaygroundApi(
         }),
         "Save failed",
       );
-      if (!data.idea) throw new PlaygroundApiError("Save failed");
-      return { idea: data.idea, ideas: data.ideas ?? [] };
+      return parseIdeaProject(data.idea) ?? invalidResponse("Save failed");
     },
 
-    async deleteIdea(componentName: string): Promise<IdeaSummary[]> {
-      const data = await readOk<{ ideas?: IdeaSummary[] }>(
-        await fetchFn(
-          apiUrl(baseUrl, `/api/ideas/${encodeURIComponent(componentName)}`),
-          { method: "DELETE" },
-        ),
+    async updateIdea(id: string, input: UpdateIdeaInput): Promise<IdeaProject> {
+      const data = await readOk(
+        await fetchFn(apiUrl(baseUrl, `/api/ideas/${encodeURIComponent(id)}`), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        }),
+        "Save failed",
+      );
+      return parseIdeaProject(data.idea) ?? invalidResponse("Save failed");
+    },
+
+    async deleteIdea(id: string): Promise<void> {
+      await readOk(
+        await fetchFn(apiUrl(baseUrl, `/api/ideas/${encodeURIComponent(id)}`), {
+          method: "DELETE",
+        }),
         "Could not delete prototype",
       );
-      return data.ideas ?? [];
     },
 
-    async promote(input: PromoteInput): Promise<PromoteResult> {
-      const data = await readOk<{ slug?: string }>(
-        await fetchFn(apiUrl(baseUrl, "/api/promote"), {
+    async publishIdea(id: string, input: PublishIdeaInput): Promise<PublishIdeaResult> {
+      const data = await readOk(
+        await fetchFn(apiUrl(baseUrl, `/api/ideas/${encodeURIComponent(id)}/publish`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(input),
         }),
-        "Promote failed",
+        "Publish failed",
       );
-      if (!data.slug) throw new PlaygroundApiError("Promote failed");
-      return { slug: data.slug };
+      if (
+        typeof data.slug !== "string" ||
+        (data.catalogStatus !== "ready" && data.catalogStatus !== "refresh-failed")
+      ) {
+        invalidResponse("Publish failed");
+      }
+      return { slug: data.slug, catalogStatus: data.catalogStatus };
     },
   };
 }
