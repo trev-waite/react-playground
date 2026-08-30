@@ -1,13 +1,5 @@
-/**
- * Promote an Experimental idea into a Live component.
- * Never mutates ConfigurableShell or Experimental tooling.
- */
-import { type IdeaProject } from "@react-playground/api";
+import type { IdeaProject } from "@react-playground/api";
 
-/**
- * Turn studio export source into a named component module.
- * Requires exactly one `export function Example`.
- */
 export function buildComponentModule(
   componentName: string,
   source: string,

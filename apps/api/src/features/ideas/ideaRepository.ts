@@ -11,7 +11,6 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import {
-  coerceIdeaDraftState,
   defaultIdeaDraftState,
   IDEA_SCHEMA_VERSION,
   isSafeComponentName,
@@ -19,8 +18,6 @@ import {
   parseIdeaDocument,
   parseIdeaDraft,
   parseIdeaProject,
-  parseIdeaSummary,
-  toComponentName,
   type IdeaDocument,
   type IdeaDraft,
   type IdeaDraftState,
@@ -30,17 +27,9 @@ import { IdeaError } from "./ideaError";
 
 const PROJECT_FILE = "project.json";
 const SOURCE_FILE = "source.tsx";
-const LEGACY_META_FILE = "idea.json";
-
-const UUID_DIRECTORY_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isUuidDirectory(name: string): boolean {
-  return UUID_DIRECTORY_RE.test(name);
-}
 
 function isIdeaDirectoryName(name: string): boolean {
-  return !name.startsWith(".") && (isSafeComponentName(name) || isUuidDirectory(name));
+  return isSafeComponentName(name);
 }
 
 function uniqueDirectoryName(
@@ -53,7 +42,6 @@ function uniqueDirectoryName(
   }
   if (
     current &&
-    !isUuidDirectory(current) &&
     taken.has(preferred) &&
     current !== preferred
   ) {
@@ -110,32 +98,49 @@ async function listIdeaDirectoryNames(root: string): Promise<string[]> {
     .map(entry => entry.name);
 }
 
-async function readDirectoryIdeaId(directory: string): Promise<string | null> {
+async function readProjectMetadata(
+  directory: string,
+): Promise<Record<string, unknown> | null> {
+  let source: string;
   try {
-    const parsed: unknown = JSON.parse(
-      await readFile(path.join(directory, PROJECT_FILE), "utf8"),
-    );
-    if (typeof parsed !== "object" || parsed == null) return null;
-    const id = (parsed as Record<string, unknown>).id;
-    return typeof id === "string" && isSafeIdeaId(id) ? id : null;
-  } catch {
-    return null;
+    source = await readFile(path.join(directory, PROJECT_FILE), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
+
+  try {
+    const parsed: unknown = JSON.parse(source);
+    if (typeof parsed === "object" && parsed != null) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch (error) {
+    throw new IdeaError(
+      "invalid_document",
+      `Saved project ${path.basename(directory)} has invalid JSON`,
+      500,
+    );
+  }
+  throw new IdeaError(
+    "invalid_document",
+    `Saved project ${path.basename(directory)} has invalid metadata`,
+    500,
+  );
+}
+
+async function readDirectoryIdeaId(directory: string): Promise<string | null> {
+  const parsed = await readProjectMetadata(directory);
+  if (!parsed) return null;
+  const id = parsed.id;
+  return typeof id === "string" && isSafeIdeaId(id) ? id : null;
 }
 
 async function readDirectoryComponentName(directory: string): Promise<string | null> {
-  try {
-    const parsed: unknown = JSON.parse(
-      await readFile(path.join(directory, PROJECT_FILE), "utf8"),
-    );
-    if (typeof parsed !== "object" || parsed == null) return null;
-    const componentName = (parsed as Record<string, unknown>).componentName;
-    return typeof componentName === "string" && isSafeComponentName(componentName)
-      ? componentName
-      : null;
-  } catch {
-    return null;
-  }
+  const parsed = await readProjectMetadata(directory);
+  const componentName = parsed?.componentName;
+  return typeof componentName === "string" && isSafeComponentName(componentName)
+    ? componentName
+    : null;
 }
 
 async function findDirectoryById(root: string, id: string): Promise<string | null> {
@@ -273,38 +278,6 @@ async function replaceProjectDirectory(
   }
 }
 
-function legacyStudioToDraft(input: unknown): IdeaDraftState {
-  if (typeof input !== "object" || input == null) return defaultIdeaDraftState();
-  const value = input as Record<string, unknown>;
-  const offset =
-    typeof value.offset === "object" && value.offset != null
-      ? (value.offset as Record<string, unknown>)
-      : null;
-  if (
-    typeof value.form !== "number" ||
-    typeof value.soft !== "number" ||
-    typeof value.drift !== "number" ||
-    typeof offset?.x !== "number" ||
-    typeof offset.y !== "number"
-  ) {
-    return defaultIdeaDraftState();
-  }
-  const clamp = (number: number) => Math.min(100, Math.max(0, number));
-  return (
-    coerceIdeaDraftState({
-      kind: "emerald-construct",
-      version: 1,
-      editorState: {
-        formationSpeed: clamp(value.form),
-        detail: clamp(value.soft),
-        color: clamp(value.drift),
-        origin: { x: 0.5, y: 0.68 },
-        variant: "bird",
-      },
-    }) ?? defaultIdeaDraftState()
-  );
-}
-
 function projectFromParts(
   document: Omit<IdeaDocument, "schemaVersion" | "sourceFile" | "sourceDigest" | "draft"> & {
     draft: IdeaDraftState;
@@ -320,90 +293,6 @@ function projectFromParts(
   };
 }
 
-async function migrateEmbeddedSourceProject(
-  ideasRoot: string,
-  id: string,
-  input: unknown,
-): Promise<IdeaProject | null> {
-  if (typeof input !== "object" || input == null) return null;
-  const value = input as Record<string, unknown>;
-  if (value.schemaVersion !== 1) return null;
-  const summary = parseIdeaSummary(input);
-  const draft = parseIdeaDraft(value.draft);
-  const createdAt =
-    typeof value.createdAt === "string" && Number.isFinite(Date.parse(value.createdAt))
-      ? value.createdAt
-      : null;
-  if (!summary || summary.id !== id || !draft || !createdAt) return null;
-  const project = projectFromParts(
-    {
-      ...summary,
-      createdAt,
-      draft: draftState(draft),
-    },
-    draft.portableSourceTemplate,
-  );
-  await replaceProjectDirectory(ideasRoot, project);
-  return project;
-}
-
-async function migrateLegacyDirectory(
-  ideasRoot: string,
-  directoryName: string,
-): Promise<void> {
-  if (!isSafeComponentName(directoryName)) return;
-  const legacyDir = path.join(path.resolve(ideasRoot), directoryName);
-  const metaPath = path.join(legacyDir, LEGACY_META_FILE);
-  if (!(await pathExists(metaPath))) return;
-
-  try {
-    const parsed = JSON.parse(await readFile(metaPath, "utf8")) as Record<string, unknown>;
-    const legacySource = await readFile(
-      path.join(legacyDir, `${directoryName}.tsx`),
-      "utf8",
-    );
-    const source = legacySource.replace(
-      new RegExp(`export\\s+function\\s+${directoryName}\\b`),
-      "export function Example",
-    );
-    const name =
-      typeof parsed.name === "string" && parsed.name.trim()
-        ? parsed.name.trim()
-        : directoryName;
-    const componentName = toComponentName(name);
-    if (!componentName) throw new Error("invalid name");
-    const legacyDate =
-      typeof parsed.savedAt === "string" && Number.isFinite(Date.parse(parsed.savedAt))
-        ? parsed.savedAt
-        : new Date().toISOString();
-    const editorState = legacyStudioToDraft(parsed.studio);
-    const id = crypto.randomUUID();
-    const project = projectFromParts(
-      {
-        id,
-        revision: 1,
-        name,
-        componentName,
-        draft: editorState,
-        createdAt: legacyDate,
-        updatedAt: legacyDate,
-      },
-      source,
-    );
-    const root = path.resolve(ideasRoot);
-    const staging = temporaryPath(root, id, "stage");
-    try {
-      await writeProjectDirectory(staging, project);
-      await rm(legacyDir, { recursive: true, force: true });
-      await rename(staging, await allocateDirectory(root, project));
-    } finally {
-      await rm(staging, { recursive: true, force: true });
-    }
-  } catch (error) {
-    console.warn(`[ideas] could not migrate ${legacyDir}`, error);
-  }
-}
-
 function displayNameFromComponent(componentName: string): string {
   return componentName
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -417,7 +306,7 @@ async function adoptHandCreatedDirectory(
   if (!isSafeComponentName(directoryName)) return;
   try {
     const directory = path.join(path.resolve(ideasRoot), directoryName);
-    if (await readDirectoryIdeaId(directory)) return;
+    if (await pathExists(path.join(directory, PROJECT_FILE))) return;
 
     let source: string;
     try {
@@ -427,11 +316,10 @@ async function adoptHandCreatedDirectory(
       throw error;
     }
 
-    const draft = parseIdeaDraft({
+    if (!parseIdeaDraft({
       ...defaultIdeaDraftState(),
       portableSourceTemplate: source,
-    });
-    if (!draft) return;
+    })) return;
 
     const now = new Date().toISOString();
     const project = projectFromParts(
@@ -463,33 +351,6 @@ async function adoptHandCreatedDirectory(
   }
 }
 
-async function migrateSchema2Document(
-  ideasRoot: string,
-  directory: string,
-  id: string,
-  input: unknown,
-): Promise<IdeaProject | null> {
-  if (typeof input !== "object" || input == null) return null;
-  const value = input as Record<string, unknown>;
-  if (value.schemaVersion !== 2) return null;
-  const summary = parseIdeaSummary(input);
-  const draft = coerceIdeaDraftState(value.draft);
-  const createdAt =
-    typeof value.createdAt === "string" && Number.isFinite(Date.parse(value.createdAt))
-      ? value.createdAt
-      : null;
-  if (!summary || summary.id !== id || !draft || !createdAt) return null;
-  let source: string;
-  try {
-    source = await readFile(path.join(directory, SOURCE_FILE), "utf8");
-  } catch {
-    return null;
-  }
-  const project = projectFromParts({ ...summary, createdAt, draft }, source);
-  await replaceProjectDirectory(ideasRoot, project);
-  return project;
-}
-
 export async function readIdeaProject(
   ideasRoot: string,
   id: string,
@@ -511,12 +372,6 @@ export async function readIdeaProject(
   } catch {
     throw new IdeaError("invalid_document", `Saved idea ${id} has invalid JSON`, 500);
   }
-
-  const migrated = await migrateEmbeddedSourceProject(ideasRoot, id, parsed);
-  if (migrated) return migrated;
-
-  const schema2 = await migrateSchema2Document(ideasRoot, directory, id, parsed);
-  if (schema2) return schema2;
 
   const document = parseIdeaDocument(parsed);
   if (!document || document.id !== id) {
@@ -566,28 +421,21 @@ export async function listIdeaProjects(ideasRoot: string): Promise<IdeaProject[]
   }
 
   for (const entry of entries) {
-    if (entry.isDirectory()) {
-      await migrateLegacyDirectory(ideasRoot, entry.name);
-      await adoptHandCreatedDirectory(ideasRoot, entry.name);
-    }
+    if (entry.isDirectory()) await adoptHandCreatedDirectory(ideasRoot, entry.name);
   }
 
-  const migratedEntries = await readdir(root, { withFileTypes: true });
+  const projectEntries = await readdir(root, { withFileTypes: true });
   const projects: IdeaProject[] = [];
   const seen = new Set<string>();
-  for (const entry of migratedEntries) {
+  for (const entry of projectEntries) {
     if (!entry.isDirectory() || !isIdeaDirectoryName(entry.name)) continue;
-    const directory = path.join(root, entry.name);
-    const id = await readDirectoryIdeaId(directory);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
     try {
+      const directory = path.join(root, entry.name);
+      const id = await readDirectoryIdeaId(directory);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
       const project = await readIdeaProject(ideasRoot, id);
       if (!project) continue;
-      if (isUuidDirectory(entry.name)) {
-        const dest = await allocateDirectory(root, project, directory);
-        if (dest !== directory) await rename(directory, dest);
-      }
       projects.push(project);
     } catch (error) {
       console.warn(`[ideas] skipped invalid project ${entry.name}`, error);

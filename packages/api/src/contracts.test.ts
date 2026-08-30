@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
-  coerceIdeaDraftState,
   parseCreateIdeaInput,
   parseIdeaDocument,
   parseIdeaDraft,
   parsePublishIdeaInput,
 } from "./contracts";
-import { defaultIdeaDraft, defaultIdeaDraftState } from "./ideaDraft";
+import { defaultIdeaDraft } from "./ideaDraft";
 
 describe("idea contracts", () => {
   test("accepts a versioned dock draft with one Example export", () => {
@@ -35,29 +34,8 @@ describe("idea contracts", () => {
     ).toBeNull();
   });
 
-  test("migrates source and construct kinds into dock settings", () => {
-    expect(coerceIdeaDraftState({ kind: "source", version: 1 })).toEqual(
-      defaultIdeaDraftState(),
-    );
-    const migrated = coerceIdeaDraftState({
-      kind: "emerald-construct",
-      version: 1,
-      editorState: {
-        formationSpeed: 39,
-        detail: 93,
-        color: 42,
-        origin: { x: 0.5, y: 0.5 },
-        variant: "bird",
-      },
-    });
-    expect(migrated?.sliders[0]?.id).toBe("formationSpeed");
-    expect(migrated?.sliders[0]?.value).toBe(39);
-    expect(migrated?.actions[0]?.label).toBe("Build");
-    expect(migrated?.actions.map(action => action.mock)).toEqual([
-      "form",
-      "unform",
-      "replay",
-    ]);
+  test("rejects obsolete draft shapes", () => {
+    expect(parseIdeaDraft({ kind: "source", version: 1 })).toBeNull();
     expect(
       parseIdeaDraft({
         ...defaultIdeaDraft(),

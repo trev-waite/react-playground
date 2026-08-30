@@ -1,4 +1,3 @@
-/** Tracks whether local edits happened after an async save captured its draft. */
 export class EditSequence {
   private value = 0;
 

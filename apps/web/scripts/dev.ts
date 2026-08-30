@@ -1,7 +1,3 @@
-/**
- * Dev entry: keep generated registries in sync, watch Live and Experimental
- * sources, run the UI server.
- */
 import { watch } from "node:fs";
 import path from "node:path";
 import { syncIdeaRegistry, syncPlaygroundRegistry } from "./sync-playground";
@@ -25,19 +21,25 @@ console.log(
 
 let syncing = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let pendingReason: string | null = null;
 
 function scheduleResync(reason: string) {
+  pendingReason = reason;
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
-    if (syncing) return;
+    timer = null;
+    if (syncing || !pendingReason) return;
+    const nextReason = pendingReason;
+    pendingReason = null;
     syncing = true;
     try {
       const next = await syncAll();
       console.log(
-        `[playground] synced ${next.live} Live, ${next.ideas} ideas (${reason})`,
+        `[playground] synced ${next.live} Live, ${next.ideas} ideas (${nextReason})`,
       );
     } finally {
       syncing = false;
+      if (pendingReason) scheduleResync(pendingReason);
     }
   }, 80);
 }

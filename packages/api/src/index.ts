@@ -41,7 +41,6 @@ export {
   parseIdeaDocument,
   parseIdeaDraft,
   parseIdeaDraftState,
-  coerceIdeaDraftState,
   parseIdeaProject,
   parseIdeaSummary,
   parsePublishIdeaInput,

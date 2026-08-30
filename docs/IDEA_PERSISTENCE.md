@@ -62,7 +62,7 @@ Direct edits to `source.tsx` are supported. The next Open, Save, or Make Live va
 
 Each app save replaces `project.json` and `source.tsx` together. Save and Copy bake the current slider numbers into the `SLIDERS` block only. Interrupted saves keep the last complete version.
 
-Older project formats migrate automatically when opened.
+The repository uses schema 3 projects only. Convert older project files before placing them in `ideas/`.
 
 ## Git and agents
 

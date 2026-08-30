@@ -20,9 +20,6 @@ export class PlaygroundApiError extends Error {
   }
 }
 
-/**
- * UI-facing contract for saved Experimental projects and Live publishing.
- */
 export interface PlaygroundApi {
   listIdeas(): Promise<IdeaSummary[]>;
   loadIdea(id: string): Promise<IdeaProject>;

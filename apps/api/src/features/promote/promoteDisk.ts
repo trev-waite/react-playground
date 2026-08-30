@@ -41,7 +41,6 @@ async function destinationMatches(
   }
 }
 
-/** Atomically publish the two-file portable Live artifact. */
 export async function publishIdeaToDisk(
   liveRoot: string,
   document: IdeaProject,
@@ -68,14 +67,12 @@ export async function publishIdeaToDisk(
   }
 
   try {
-    const existing = await readdir(dir);
-    if (existing) {
-      throw new IdeaError(
-        "destination_exists",
-        `${slug} already exists with different content. Rename the idea or choose another folder.`,
-        409,
-      );
-    }
+    await readdir(dir);
+    throw new IdeaError(
+      "destination_exists",
+      `${slug} already exists with different content. Rename the idea or choose another folder.`,
+      409,
+    );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }

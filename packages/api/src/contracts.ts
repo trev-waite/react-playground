@@ -1,4 +1,4 @@
-import { IDEA_SCHEMA_VERSION, defaultIdeaDraftState } from "./ideaDraft";
+import { IDEA_SCHEMA_VERSION } from "./ideaDraft";
 import { isSafeComponentName, normalizeFolder, toComponentName } from "./naming";
 import type {
   CreateIdeaInput,
@@ -108,66 +108,13 @@ export function parseIdeaDraftState(input: unknown): IdeaDraftState | null {
   return { version: 1, actions, sliders };
 }
 
-function migrateEmeraldConstruct(input: unknown): IdeaDraftState | null {
-  const value = record(input);
-  const editor = record(value?.editorState);
-  if (!value || value.kind !== "emerald-construct" || !editor) return null;
-  const formationSpeed = finiteNumber(editor.formationSpeed);
-  const detail = finiteNumber(editor.detail);
-  const color = finiteNumber(editor.color);
-  if (formationSpeed == null || detail == null || color == null) return null;
-  return {
-    version: 1,
-    actions: [
-      { id: "build", label: "Build", mock: "form" },
-      { id: "dissolve", label: "Dissolve", mock: "unform" },
-      { id: "construct", label: "Construct", mock: "replay" },
-    ],
-    sliders: [
-      {
-        id: "formationSpeed",
-        label: "Formation speed",
-        min: 0,
-        max: 100,
-        step: 1,
-        value: Math.min(100, Math.max(0, formationSpeed)),
-      },
-      {
-        id: "detail",
-        label: "Detail",
-        min: 0,
-        max: 100,
-        step: 1,
-        value: Math.min(100, Math.max(0, detail)),
-      },
-      {
-        id: "color",
-        label: "Color",
-        min: 0,
-        max: 100,
-        step: 1,
-        value: Math.min(100, Math.max(0, color)),
-      },
-    ],
-  };
-}
-
-export function coerceIdeaDraftState(input: unknown): IdeaDraftState | null {
-  const modern = parseIdeaDraftState(input);
-  if (modern) return modern;
-  const value = record(input);
-  if (!value || value.version !== 1) return null;
-  if (value.kind === "source") return defaultIdeaDraftState();
-  return migrateEmeraldConstruct(input);
-}
-
 function hasOneExampleExport(source: string): boolean {
   return (source.match(/export\s+function\s+Example\b/g)?.length ?? 0) === 1;
 }
 
 export function parseIdeaDraft(input: unknown): IdeaDraft | null {
   const value = record(input);
-  const draft = coerceIdeaDraftState(input);
+  const draft = parseIdeaDraftState(input);
   const source = value?.portableSourceTemplate;
   if (
     !draft ||

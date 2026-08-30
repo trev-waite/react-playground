@@ -1,6 +1,4 @@
-/** Catalog group reserved for ConfigurableShell and other editing structure. */
 export const SHELLS_FOLDER = "shells";
-/** Reserved Live destination name. WIP ideas live under apps/web/src/experimental/ideas. */
 export const EXPERIMENTAL_FOLDER = "experimental";
 
 export const RESERVED_LIVE_FOLDERS = new Set([
@@ -10,7 +8,6 @@ export const RESERVED_LIVE_FOLDERS = new Set([
 
 const COMPONENT_NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
 
-/** Folder segment: lowercase letters, digits, and hyphens. */
 export function normalizeFolder(input: string): string | null {
   const cleaned = input
     .trim()
@@ -22,7 +19,6 @@ export function normalizeFolder(input: string): string | null {
   return cleaned.length > 0 ? cleaned : null;
 }
 
-/** PascalCase component name from an idea title. */
 export function toComponentName(input: string): string | null {
   const parts = input
     .trim()

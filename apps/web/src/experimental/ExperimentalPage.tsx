@@ -26,7 +26,7 @@ const IdeaWorkbench = lazy(() => import("./IdeaWorkbench"));
 
 const DEFAULT_IDEA_NAME = "Untitled idea";
 
-function existingFolders(): string[] {
+const LIVE_FOLDERS = (() => {
   const folders = new Set<string>();
   for (const entry of liveEntries) {
     const [folder] = entry.slug.split("/");
@@ -35,7 +35,7 @@ function existingFolders(): string[] {
     }
   }
   return [...folders].sort((a, b) => a.localeCompare(b));
-}
+})();
 
 export function ExperimentalPage() {
   const { mode } = useView();
@@ -48,9 +48,8 @@ export function ExperimentalPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const folders = useMemo(() => existingFolders(), []);
   const [ideaName, setIdeaName] = useState(DEFAULT_IDEA_NAME);
-  const [liveFolder, setLiveFolder] = useState(() => existingFolders()[0] ?? "");
+  const [liveFolder, setLiveFolder] = useState(LIVE_FOLDERS[0] ?? "");
   const [studioKey, setStudioKey] = useState(0);
   const [ideas, setIdeas] = useState<IdeaSummary[]>([]);
   const [activeIdea, setActiveIdea] = useState<IdeaProject | null>(null);
@@ -122,7 +121,7 @@ export function ExperimentalPage() {
 
   function clearStudio() {
     setIdeaName(DEFAULT_IDEA_NAME);
-    setLiveFolder(existingFolders()[0] ?? "");
+    setLiveFolder(LIVE_FOLDERS[0] ?? "");
     setActiveIdea(null);
     activeIdRef.current = null;
     draftRef.current = null;
@@ -298,7 +297,7 @@ export function ExperimentalPage() {
     }
   }
 
-  async function onMakeLive() {
+  function onMakeLive() {
     if (!componentName) {
       setSaveError("Name the idea before publishing");
       return;
@@ -459,7 +458,7 @@ export function ExperimentalPage() {
                     aria-label="Choose Live folder"
                   >
                     <FolderEditor
-                      folders={folders}
+                      folders={LIVE_FOLDERS}
                       initialFolder={liveFolder}
                       submitLabel="Publish"
                       destinationHint={`apps/web/src/live/<folder>/${componentName}/`}
