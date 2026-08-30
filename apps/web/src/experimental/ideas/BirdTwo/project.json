@@ -1,9 +1,9 @@
 {
   "id": "9ebe8ee7-b865-4925-b46c-5aa99c1bfe8a",
-  "revision": 6,
+  "revision": 7,
   "name": "Bird Two",
   "componentName": "BirdTwo",
-  "updatedAt": "2026-08-30T21:18:48.881Z",
+  "updatedAt": "2026-08-30T23:16:26.286Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -31,7 +31,7 @@
         "min": 0,
         "max": 100,
         "step": 1,
-        "value": 39
+        "value": 17
       },
       {
         "id": "detail",
@@ -39,7 +39,7 @@
         "min": 0,
         "max": 100,
         "step": 1,
-        "value": 93
+        "value": 100
       },
       {
         "id": "color",
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "f1b17c5af00990abcb9f3d023c407f098823ec4796dc5ad48bc51ae434f0b16e",
+  "sourceDigest": "f1559f3ef957df64d5a23c114b55c5645c3f6ed31f871f2e18a992497cefe135",
   "createdAt": "2026-08-30T00:31:19.595Z"
 }
