@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "@react-playground/api": "workspace:*",
+    "@webgpu/types": "^0.1.72",
     "motion": "^13.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.3.0"
+    "react-router": "^8.3.0",
+    "vgpu": "^0.3.1"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",

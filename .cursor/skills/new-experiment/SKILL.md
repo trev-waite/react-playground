@@ -34,7 +34,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 
 - `<IdeaName>` is a PascalCase component name (`QuietButton`). If that folder exists, use `QuietButton2`.
 - Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
-- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`. See [WebGPU with vgpu](../../../docs/WEBGPU.md).
 - Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
 - After writing files, the next Experimental list or Open adopts the folder and writes `project.json`.
 
@@ -51,7 +51,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 - Edit `source.tsx`. That is the usual way you and agents tweak an idea.
 - Leave `id`, `revision`, and `sourceDigest` alone. The app reconciles them after a source edit.
 - Keep exactly one `export function Example` declaration. Play passes live slider numbers into `Example`; baked `SLIDERS` defaults are what Make Live ships.
-- Keep the source portable: no imports from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Keep the source portable: no imports from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`.
 - Do not rename the project directory by hand. The app names it from the idea and may rename it when the idea is renamed.
 
 The app adopts a valid direct source edit the next time it reads the project.
@@ -77,6 +77,10 @@ ConfigurableShell is a portable Live catalog card at `apps/web/src/live/shells/C
 - Do not import `ConfigurableShell.module.css`.
 - Do not add Experimental save, open, switch, or Make Live behavior to ConfigurableShell.
 - Experimental may import `ProximityControl`, `linearScale`, and icons from that Live folder so the controls feel the same.
+
+## GPU ideas
+
+Hang a canvas and call `useGpu` from `@/gpu`. Shaders and the frame loop come from `vgpu`. Call `useGpu` instead of `navigator.gpu`. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md).
 
 ## Define the idea
 

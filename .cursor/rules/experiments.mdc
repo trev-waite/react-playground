@@ -13,6 +13,7 @@ Author ideas in **Experimental**, or add `apps/web/src/experimental/ideas/<Name>
 
 - `apps/web/src/app/` — playground chrome (layout, Live catalog UI). Not ConfigurableShell.
 - `apps/web/src/experimental/` — studio page, shared dock, and `ideas/` projects.
+- `apps/web/src/gpu/` — WebGPU host for ideas (`useGpu`). See `docs/WEBGPU.md`.
 - `apps/web/src/live/` — published catalog only.
 
 ## Never

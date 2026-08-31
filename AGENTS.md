@@ -22,7 +22,7 @@ These are separate surfaces that share look and feel, not one component used twi
 - **Experimental view** (`apps/web/src/experimental/`) is the studio: page, shared dock, and `ideas/` projects. Echo ConfigurableShell's visual language in Experimental's own CSS and layout. Do not render `<ConfigurableShell>` in Experimental, and do not import `ConfigurableShell.module.css`.
 - **`apps/web/src/app/`** is playground chrome (layout, Live catalog UI). It is not ConfigurableShell.
 
-Experimental may import `ProximityControl`, `linearScale`, and icons so the controls feel the same. It must not import the `ConfigurableShell` component.
+Experimental may import `ProximityControl`, `linearScale`, and icons so the controls feel the same. It must not import the `ConfigurableShell` component. GPU ideas import `@/gpu` and use `vgpu`. See `docs/WEBGPU.md`.
 
 **Workflow:** create and play in Experimental (dock sliders/buttons are studio-only). Add `apps/web/src/experimental/ideas/<Name>/source.tsx` on disk or via Save. Make Live asks for a Live folder, then writes only the portable component — current slider numbers baked in, no dock or mocks — into `apps/web/src/live/<folder>/<Name>/`. Live `preview.tsx` renders `<Name />` and nothing else.
 

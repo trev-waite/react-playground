@@ -1,0 +1,57 @@
+{
+  "id": "66afaee4-2a61-4e1c-88f3-8fe0d3050e9d",
+  "revision": 14,
+  "name": "Light Dispersion",
+  "componentName": "LightDispersion",
+  "updatedAt": "2026-08-31T01:15:04.752Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "illuminate",
+        "label": "Illuminate",
+        "mock": "form"
+      },
+      {
+        "id": "fade",
+        "label": "Fade",
+        "mock": "unform"
+      },
+      {
+        "id": "reignite",
+        "label": "Reignite",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "slider1",
+        "label": "Dispersion",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 3
+      },
+      {
+        "id": "slider2",
+        "label": "Bloom",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 100
+      },
+      {
+        "id": "slider3",
+        "label": "Motion",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 9
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "7de63d2740035c42ff6dbc96a0883c800cf92c1b45908b833bed45e638c92981",
+  "createdAt": "2026-08-30T23:58:39.059Z"
+}

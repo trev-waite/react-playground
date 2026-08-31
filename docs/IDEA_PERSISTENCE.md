@@ -54,7 +54,7 @@ export function Example({
 }
 ```
 
-The source should be portable React code. It must not import from `apps/web/src/app/` or `apps/web/src/lib/`. Slider widgets and mock button effects belong to the Experimental harness, not this file. The harness passes `progress` from 0 to 1 for form, unform, and replay actions; components that do not need staged playback can ignore it.
+The source should be portable React code. It must not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu` so they can run in the stacked Experimental layer and after Make Live; see [WebGPU with vgpu](WEBGPU.md). Slider widgets and mock button effects belong to the Experimental harness, not this file. The harness passes `progress` from 0 to 1 for form, unform, and replay actions; components that do not need staged playback can ignore it.
 
 ## Editing and saving
 
@@ -93,6 +93,6 @@ apps/web/src/live/<folder>/<Name>/
 └── preview.tsx
 ```
 
-The component is portable. `preview.tsx` only renders `<Name />`. No sliders, Experimental chrome, mock triggers, or ConfigurableShell. The published file should look like it was written by hand at the current dock values.
+The component is portable. `preview.tsx` only renders `<Name />`. No sliders, Experimental chrome, mock triggers, or ConfigurableShell. The published file should look like it was written by hand at the current dock values. GPU components keep their `@/gpu` import; see [WebGPU with vgpu](WEBGPU.md).
 
 Publishing the same unchanged project again is safe. Publishing never deletes the Experimental project.
