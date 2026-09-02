@@ -49,14 +49,36 @@ function waitForLayout(canvas: HTMLCanvasElement, signal: AbortSignal) {
   });
 }
 
+async function initClient(label: string, features: readonly GPUFeatureName[]): Promise<GpuClient> {
+  const create = (requiredFeatures: readonly GPUFeatureName[]) =>
+    Promise.race([
+      init({ powerPreference: "high-performance", label, requiredFeatures }),
+      initTimeout(label),
+    ]);
+  if (features.length === 0) return create([]);
+  try {
+    return await create(features);
+  } catch (caught) {
+    // Optional features (timestamp-query for timers) are nice-to-have; run without them.
+    console.warn(`${label}: WebGPU features unavailable, retrying without ${features.join(", ")}`, caught);
+    return create([]);
+  }
+}
+
+export type UseGpuOptions = {
+  label: string;
+  alphaMode?: GPUCanvasAlphaMode;
+  clearColor?: readonly [number, number, number, number];
+  /** Device pixel ratio clamp. Defaults to `GPU_DPR_RANGE`; heavy effects can pass `[1, 1.5]`. */
+  dpr?: readonly [number, number];
+  /** Optional device features. Init falls back to none if the adapter lacks them. */
+  features?: readonly GPUFeatureName[];
+  start: (session: GpuSession) => (() => void) | void;
+};
+
 export function useGpu(
   canvasRef: RefObject<HTMLCanvasElement | null>,
-  options: {
-    label: string;
-    alphaMode?: GPUCanvasAlphaMode;
-    clearColor?: readonly [number, number, number, number];
-    start: (session: GpuSession) => (() => void) | void;
-  },
+  options: UseGpuOptions,
 ): { status: GpuStatus; error: string | null } {
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -92,13 +114,7 @@ export function useGpu(
         await waitForLayout(canvas, abort.signal);
         if (mine !== epoch || abort.signal.aborted) return;
 
-        const created = await Promise.race([
-          init({
-            powerPreference: "high-performance",
-            label: optionsRef.current.label,
-          }),
-          initTimeout(optionsRef.current.label),
-        ]);
+        const created = await initClient(optionsRef.current.label, optionsRef.current.features ?? []);
         if (mine !== epoch || abort.signal.aborted) {
           created.dispose();
           return;
@@ -108,7 +124,7 @@ export function useGpu(
         const gpuSurface = surface(gpu, canvas, {
           alphaMode: optionsRef.current.alphaMode ?? "premultiplied",
           clearColor: optionsRef.current.clearColor ?? TRANSPARENT,
-          dpr: GPU_DPR_RANGE,
+          dpr: optionsRef.current.dpr ?? GPU_DPR_RANGE,
           label: optionsRef.current.label,
         });
         sessionCleanup = optionsRef.current.start({ gpu, surface: gpuSurface, canvas }) ?? (() => {});

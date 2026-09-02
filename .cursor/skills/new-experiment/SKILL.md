@@ -80,7 +80,7 @@ ConfigurableShell is a portable Live catalog card at `apps/web/src/live/shells/C
 
 ## GPU ideas
 
-Hang a canvas and call `useGpu` from `@/gpu`. Shaders and the frame loop come from `vgpu`. Call `useGpu` instead of `navigator.gpu`. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md).
+Hang a canvas and call `useGpu` from `@/gpu`. Shaders come from `vgpu`; the loop is `pausableLoop` from `@/gpu`. Call `useGpu` instead of `navigator.gpu`. For the GPU implementation itself, follow the `gpu-idea` skill. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md).
 
 ## Define the idea
 
