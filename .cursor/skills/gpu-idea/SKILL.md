@@ -24,6 +24,7 @@ Copy this and track it:
 - [ ] reduced motion honoured: time frozen, pointer influence off
 - [ ] transparent output is premultiplied (rgb <= alpha)
 - [ ] budget: texture taps per pixel, DPR, offscreen target sizes
+- [ ] Live host: catalog frame fills the stage; GPU surface has a non-zero layout box (content-sized plaque or explicit min-height), not a 0-height `height: 100%` child of a centered auto grid
 - [ ] verified headless (vgpu/node compile + pixels) and in a browser; see Verify
 ```
 
@@ -98,9 +99,11 @@ export function Example({
   });
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", background: "#000" }}>
-      {/* HTML fallback goes here; fade it out when status === "running" */}
-      <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+    <div style={{ display: "grid", placeItems: "center", width: "100%", height: "100%", containerType: "size" }}>
+      <div style={{ position: "relative", padding: "1.15rem 1.85rem", borderRadius: "1rem", background: "#000" }}>
+        <span style={{ fontSize: "min(30cqh, 16.1cqw)", visibility: "hidden", whiteSpace: "nowrap" }}>Label</span>
+        <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
+      </div>
     </div>
   );
 }
@@ -158,7 +161,9 @@ Binding notes:
 - `navigator.gpu` outside `useGpu`.
 - `GPUTextureUsage` at module scope. Read it inside `start` or a helper.
 - `frame()` or `gpu` work inside `surface.onResize`.
-- CSS 3D transforms, `perspective`, or `mix-blend-mode` on the canvas or its ancestors.
+- CSS 3D transforms, `perspective`, or `mix-blend-mode` on the canvas or its ancestors. Live’s layer uses `isolation: isolate`, not `translateZ(0)`.
+- A module-level `Map` of `lazy()` Live previews built once at import. Load `preview.tsx` from the current slug so Make Live entries appear without a full reload.
+- A GPU root of `height: 100%` inside a centered auto-height Live cell. `useGpu` never starts if `clientHeight` stays under 2px. LiveStage `.frame` already stretches. For a plaque, size type from the stage (`cqh`/`cqw` on the outer 100% wrapper) and size the black box from in-flow content; raise `createTextMask` `scale` so the raster fills the plaque, not 30% of it.
 - Imports from `apps/web/src/app/` or `apps/web/src/lib/`. `@/gpu` is the only host import.
 - ConfigurableShell in an idea.
 
@@ -175,6 +180,7 @@ When asked to review an existing GPU idea, walk the checklist and the shader rul
 5. Inspect edges at pixel level with CDP `Page.captureScreenshot` using `clip` and `scale: 2`, decode the base64 to a PNG and read it. Full-page screenshots hide fringe and grain detail.
 6. Exercise pointer effects without a mouse: `canvas.dispatchEvent(new PointerEvent("pointermove", { clientX, clientY, pointerId: 1, pointerType: "mouse", bubbles: true }))` in a 16ms loop, then screenshot the region around the final position.
 7. Resize the window, scroll the idea off screen (loop should stop), toggle reduced motion.
+8. After Make Live, open the Live slug. Confirm the GPU canvas `clientHeight` is at least 2 and the idea is visible (not an empty stage with a sidebar entry).
 
 ## Worked example
 

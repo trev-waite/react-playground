@@ -105,6 +105,8 @@ apps/web/src/live/<folder>/<Name>/
 
 `<Name>.tsx` contains only the portable component. `preview.tsx` only renders `<Name />`. Neither file may contain Experimental controls, app chrome, or ConfigurableShell.
 
+GPU ideas: LiveStage’s preview frame already fills the catalog canvas so `useGpu` gets a real layout. After publishing, open Live and confirm the component paints. If it should be a plaque rather than full-bleed, size that box from content (padding + in-flow fallback); do not rely on a 0-height `height: 100%` child. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md) and the `gpu-idea` skill.
+
 Publishing keeps the saved Experimental project so it can continue evolving.
 
 ## Verify

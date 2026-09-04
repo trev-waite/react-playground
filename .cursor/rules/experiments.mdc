@@ -35,3 +35,5 @@ apps/web/src/live/<folder>/<Name>/
 ```
 
 See `apps/web/src/live/buttons/PrimaryButton/preview.tsx`.
+
+GPU Live ideas sit in `LiveStage`. The preview frame must fill the catalog canvas (`LiveStage.module.css` `.frame`) so WebGPU can start. The Live layer must not use CSS 3D (`translateZ(0)` blanks canvases); it uses `isolation: isolate`. Load previews by slug, not a one-shot import-time map.

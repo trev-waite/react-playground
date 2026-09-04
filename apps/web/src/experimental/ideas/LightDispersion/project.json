@@ -1,9 +1,9 @@
 {
   "id": "66afaee4-2a61-4e1c-88f3-8fe0d3050e9d",
-  "revision": 19,
+  "revision": 21,
   "name": "Light Dispersion",
   "componentName": "LightDispersion",
-  "updatedAt": "2026-09-02T01:39:19.362Z",
+  "updatedAt": "2026-09-04T00:30:07.519Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -31,7 +31,7 @@
         "min": 0,
         "max": 100,
         "step": 1,
-        "value": 10
+        "value": 0
       },
       {
         "id": "slider2",
@@ -39,7 +39,7 @@
         "min": 0,
         "max": 100,
         "step": 1,
-        "value": 90
+        "value": 55
       },
       {
         "id": "slider3",
@@ -47,11 +47,11 @@
         "min": 0,
         "max": 100,
         "step": 1,
-        "value": 9
+        "value": 0
       }
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "b47052b03dfa82f307ae835915096d952fe46195f841c299d35b3b0e1b837645",
+  "sourceDigest": "fefff1aa0f55a8d3e8667c15c957199af9ac550a30129ff5b264824fee2a52c1",
   "createdAt": "2026-08-30T23:58:39.059Z"
 }

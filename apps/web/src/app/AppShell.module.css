@@ -20,10 +20,10 @@
   overflow: hidden;
 }
 
-/* Live needs a containing block for the mask and fixed sidebar.
-   Leave Experimental untransformed: WebGPU canvases go black under CSS 3D. */
+/* Stacking context for the Live mask without CSS 3D. translateZ(0) blanks
+   WebGPU canvases (published GPU ideas live on this layer). */
 .layer[data-layer="live"] {
-  transform: translateZ(0);
+  isolation: isolate;
   will-change: mask-image, -webkit-mask-image, opacity;
 }
 

@@ -11,7 +11,7 @@ import {
   WGSL_TONEMAP,
 } from "@/gpu";
 
-const SLIDERS = {"slider1":0,"slider2":55,"slider3":0};
+const SLIDERS = {"slider1":80,"slider2":68,"slider3":35};
 const TEXT = "Hello There";
 const FONT_FAMILY = 'system-ui, "SF Pro Display", "Segoe UI", Arial, Helvetica, sans-serif';
 
@@ -140,7 +140,7 @@ fn sampleMask(tex: texture_2d<f32>, uv: vec2f) -> f32 {
 
 type Point = { x: number; y: number };
 
-export function Example({
+export function LightDispersion({
   sliders = SLIDERS,
   progress = 1,
 }: { sliders?: Record<string, number>; progress?: number } = {}) {

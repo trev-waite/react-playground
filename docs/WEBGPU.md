@@ -111,7 +111,9 @@ vgpu's canvas alpha mode is already `premultiplied`. Its clear color is opaque b
 
 Pass `clearColor: [0, 0, 0, 1]` only when the shader is supposed to own the whole frame.
 
-Do not put `transform: translateZ(0)`, `perspective`, or other CSS 3D on ancestors of a WebGPU canvas. Live uses that trick for its mask; Experimental does not. Size the stage with `inset` / `top` / `bottom`, not `transform`. `mix-blend-mode` on a WebGPU canvas is unreliable.
+Do not put `transform: translateZ(0)`, `perspective`, or other CSS 3D on ancestors of a WebGPU canvas. Live’s mask stacking uses `isolation: isolate` on the Live layer for that reason. Size the stage with `inset` / `top` / `bottom`, not `transform`. `mix-blend-mode` on a WebGPU canvas is unreliable.
+
+Live catalogs GPU ideas in `LiveStage`. The preview frame stretches to the canvas (`width`/`height` 100%, `align-self: stretch`) so `useGpu` sees a real `clientWidth`/`clientHeight`. Do not rebuild a module-level map of lazy previews at import time: load the slug’s `preview.tsx` when the slug changes, or a newly published idea can appear in the sidebar and still fail to render. A component that should be a plaque, not a full-bleed surface, must size type from the stage (`container-type: size` on the outer 100% wrapper, `cqh`/`cqw` for font size) and size the black box from in-flow content. Raise `createTextMask` `scale` so the raster fills that plaque; the default 0.3 of canvas height is for a full-stage canvas.
 
 ## Where to run it
 
