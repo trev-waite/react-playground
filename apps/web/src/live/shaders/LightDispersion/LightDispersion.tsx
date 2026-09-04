@@ -140,13 +140,8 @@ fn sampleMask(tex: texture_2d<f32>, uv: vec2f) -> f32 {
 
 type Point = { x: number; y: number };
 
-export function LightDispersion({
-  sliders = SLIDERS,
-  progress = 1,
-}: { sliders?: Record<string, number>; progress?: number } = {}) {
+export function LightDispersion() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const settingsRef = useRef({ sliders, progress });
-  settingsRef.current = { sliders, progress };
 
   const { status } = useGpu(canvasRef, {
     label: "Light dispersion",
@@ -285,17 +280,15 @@ export function LightDispersion({
         const heatRate = heatTarget > heat ? 6 : 2.5;
         heat += (heatTarget - heat) * (1 - Math.exp(-deltaSeconds * heatRate));
 
-        const currentSliders = settingsRef.current.sliders;
-        const reveal = Math.min(1, Math.max(0, settingsRef.current.progress));
         dispersionEffect.set({
           params: {
             pointer: [pointerCurrent.x, pointerCurrent.y],
             velocity: [pointerVelocity.x, pointerVelocity.y],
             time: still ? 0 : time.time,
-            dispersion: sliderUnit(currentSliders, "slider1"),
-            bloom: sliderUnit(currentSliders, "slider2"),
-            motion: still ? 0 : sliderUnit(currentSliders, "slider3"),
-            presence: reveal,
+            dispersion: sliderUnit(SLIDERS, "slider1"),
+            bloom: sliderUnit(SLIDERS, "slider2"),
+            motion: still ? 0 : sliderUnit(SLIDERS, "slider3"),
+            presence: 1,
             pointerStrength,
             heat: pointerStrength * heat,
           },

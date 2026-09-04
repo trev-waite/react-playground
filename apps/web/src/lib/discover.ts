@@ -18,6 +18,14 @@ function buildEntries(): PlaygroundEntry[] {
 
 export const liveEntries: PlaygroundEntry[] = buildEntries();
 
+export function livePreviewLoader(
+  slug: string | null,
+  entries: PlaygroundEntry[] = liveEntries,
+): PlaygroundEntry["load"] | undefined {
+  if (!slug) return undefined;
+  return entries.find(entry => entry.slug === slug)?.load;
+}
+
 type MutableFolder = {
   name: string;
   folders: Map<string, MutableFolder>;

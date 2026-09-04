@@ -5,6 +5,7 @@ describe("syncPlaygroundRegistry", () => {
   test("treats every preview under Live as a Live entry", async () => {
     const slugs = await syncPlaygroundRegistry();
     expect(slugs).toContain("buttons/PrimaryButton");
+    expect(slugs).toContain("shaders/LightDispersion");
     const generated = await Bun.file(
       new URL("../src/lib/playground.gen.ts", import.meta.url),
     ).text();

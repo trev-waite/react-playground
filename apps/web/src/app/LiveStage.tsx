@@ -1,11 +1,7 @@
 import { lazy, Suspense, useMemo } from "react";
-import { liveEntries } from "../lib/discover";
+import { livePreviewLoader } from "../lib/discover";
 import { Canvas } from "./Canvas";
 import styles from "./LiveStage.module.css";
-
-export function EmptyStage() {
-  return <Canvas empty />;
-}
 
 type LiveStageProps = {
   slug?: string | null;
@@ -14,11 +10,10 @@ type LiveStageProps = {
 export function LiveStage({ slug: slugProp }: LiveStageProps) {
   const slug = slugProp ?? null;
   const Preview = useMemo(() => {
-    if (!slug) return undefined;
-    const entry = liveEntries.find(candidate => candidate.slug === slug);
-    if (!entry) return undefined;
+    const load = livePreviewLoader(slug);
+    if (!load) return undefined;
     return lazy(() =>
-      entry.load().then(module => ({
+      load().then(module => ({
         default: module.default,
       })),
     );

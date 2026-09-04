@@ -18,12 +18,13 @@ export function pausableLoop(
   options: FrameLoopOptions = {},
 ): PausableLoop {
   let handle: FrameLoopHandle | null = null;
-  let intersecting = true;
+  let intersecting: boolean | null = null;
   let stopped = false;
 
   const sync = () => {
     if (stopped) return;
-    const shouldRun = intersecting && document.visibilityState === "visible";
+    const visible = typeof document === "undefined" || document.visibilityState !== "hidden";
+    const shouldRun = intersecting === true && visible;
     if (shouldRun && !handle) {
       handle = frameLoop(gpu, cb, options);
     } else if (!shouldRun && handle) {
@@ -38,8 +39,9 @@ export function pausableLoop(
     sync();
   });
   observer.observe(canvas);
-  document.addEventListener("visibilitychange", sync);
-  sync();
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", sync);
+  }
 
   return {
     get running() {
@@ -48,7 +50,9 @@ export function pausableLoop(
     stop() {
       stopped = true;
       observer.disconnect();
-      document.removeEventListener("visibilitychange", sync);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", sync);
+      }
       handle?.stop();
       handle = null;
     },
