@@ -34,7 +34,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 
 - `<IdeaName>` is a PascalCase component name (`QuietButton`). If that folder exists, use `QuietButton2`.
 - Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
-- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`. See [WebGPU with vgpu](../../../docs/WEBGPU.md).
 - Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
 - After writing files, the next Experimental list or Open adopts the folder and writes `project.json`.
 
@@ -51,7 +51,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 - Edit `source.tsx`. That is the usual way you and agents tweak an idea.
 - Leave `id`, `revision`, and `sourceDigest` alone. The app reconciles them after a source edit.
 - Keep exactly one `export function Example` declaration. Play passes live slider numbers into `Example`; baked `SLIDERS` defaults are what Make Live ships.
-- Keep the source portable: no imports from `apps/web/src/app/` or `apps/web/src/lib/`.
+- Keep the source portable: no imports from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`.
 - Do not rename the project directory by hand. The app names it from the idea and may rename it when the idea is renamed.
 
 The app adopts a valid direct source edit the next time it reads the project.
@@ -78,6 +78,10 @@ ConfigurableShell is a portable Live catalog card at `apps/web/src/live/shells/C
 - Do not add Experimental save, open, switch, or Make Live behavior to ConfigurableShell.
 - Experimental may import `ProximityControl`, `linearScale`, and icons from that Live folder so the controls feel the same.
 
+## GPU ideas
+
+Hang a canvas and call `useGpu` from `@/gpu`. Shaders come from `vgpu`; the loop is `pausableLoop` from `@/gpu`. Call `useGpu` instead of `navigator.gpu`. For the GPU implementation itself, follow the `gpu-idea` skill. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md).
+
 ## Define the idea
 
 Before implementation, determine any details the user has not supplied:
@@ -100,6 +104,8 @@ apps/web/src/live/<folder>/<Name>/
 ```
 
 `<Name>.tsx` contains only the portable component. `preview.tsx` only renders `<Name />`. Neither file may contain Experimental controls, app chrome, or ConfigurableShell.
+
+GPU ideas: LiveStage’s preview frame already fills the catalog canvas so `useGpu` gets a real layout. After publishing, open Live and confirm the component paints. If it should be a plaque rather than full-bleed, size that box from content (padding + in-flow fallback); do not rely on a 0-height `height: 100%` child. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md) and the `gpu-idea` skill.
 
 Publishing keeps the saved Experimental project so it can continue evolving.
 

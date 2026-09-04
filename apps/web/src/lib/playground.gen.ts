@@ -4,5 +4,6 @@ import type { PreviewModule } from "./types";
 
 export const previewModules: Record<string, () => Promise<PreviewModule>> = {
   "buttons/PrimaryButton": () => import("../live/buttons/PrimaryButton/preview.tsx"),
+  "shaders/LightDispersion": () => import("../live/shaders/LightDispersion/preview.tsx"),
   "shells/ConfigurableShell": () => import("../live/shells/ConfigurableShell/preview.tsx"),
 };

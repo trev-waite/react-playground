@@ -10,7 +10,7 @@ Use Effects only to synchronize with something outside React (browser APIs, subs
 
 Author WIP in Experimental. Humans and agents may create `apps/web/src/experimental/ideas/<Name>/source.tsx` or Save from the UI. The app mints `project.json` when it is missing and reconciles digest and revision after source edits. Make Live asks for a Live folder and publishes only the portable component.
 
-Portable components may use CSS Modules but must not import from `apps/web/src/app/` or `apps/web/src/lib/`. Do not put WIP in `apps/web/src/live/shells/` or render ConfigurableShell in Experimental.
+Portable components may use CSS Modules but must not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu` (see [WebGPU with vgpu](WEBGPU.md)). Do not put WIP in `apps/web/src/live/shells/` or render ConfigurableShell in Experimental.
 
 ## Backend
 

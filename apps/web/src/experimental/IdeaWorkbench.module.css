@@ -29,11 +29,24 @@
   position: absolute;
   inset: 0;
   background: #ececee;
-  transition: transform 420ms var(--cs-ease);
 }
 
-.stageWell[data-mock="scroll"] {
-  transform: translateY(-10%);
+/* Size with inset/top/bottom, not transform. CSS 3D blanks WebGPU canvases inside. */
+.stageViewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.stageViewport > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stageWell[data-mock="scroll"] .stageViewport {
+  top: -10%;
+  bottom: 10%;
 }
 
 .stage[data-blank] .stageWell {

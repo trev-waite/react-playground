@@ -12,4 +12,5 @@ export const ideaModules: Record<
   () => Promise<{ Example?: IdeaExample }>
 > = {
   "BirdTwo": () => import("./ideas/BirdTwo/source.tsx"),
+  "LightDispersion": () => import("./ideas/LightDispersion/source.tsx"),
 };

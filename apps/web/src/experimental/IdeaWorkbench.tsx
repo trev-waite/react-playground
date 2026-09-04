@@ -220,9 +220,11 @@ export default function IdeaWorkbench({
           data-mock={scrollMock ? "scroll" : undefined}
         >
           {Stage ? (
-            <Suspense fallback={<p className={styles.blankHint}>Loading…</p>}>
-              <Stage sliders={liveSliders} progress={progress} />
-            </Suspense>
+            <div className={styles.stageViewport}>
+              <Suspense fallback={<p className={styles.blankHint}>Loading…</p>}>
+                <Stage sliders={liveSliders} progress={progress} />
+              </Suspense>
+            </div>
           ) : (
             <EmptyStage />
           )}

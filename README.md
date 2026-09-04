@@ -41,7 +41,7 @@ Do not put WIP in `apps/web/src/live/shells/`, render ConfigurableShell in Exper
 
 ## Export
 
-Copy the Live component folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/app/` or `apps/web/src/lib/`.
+Copy the Live component folder into your app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU components also need `vgpu` and `apps/web/src/gpu/` (see [WebGPU with vgpu](docs/WEBGPU.md)).
 
 ## Layout
 
@@ -61,7 +61,7 @@ packages/api      PlaygroundApi contract + HTTP client
 
 The UI talks only to `PlaygroundApi` (`apps/web/src/lib/playgroundApi.ts`). Runtime parsers validate both sides. See [Experimental Projects](docs/IDEA_PERSISTENCE.md) for the storage and publishing rules.
 
-More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
+More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md). WebGPU ideas: [`docs/WEBGPU.md`](docs/WEBGPU.md)
 
 ## Commands
 
@@ -75,4 +75,4 @@ More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md)
 
 ## Stack
 
-Turborepo + Bun 1.4 workspaces · React 19.2 · CSS Modules · React Router · Motion
+Turborepo + Bun 1.4 workspaces · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU)

@@ -6,8 +6,14 @@
 }
 
 .frame {
+  /* Fill the Live canvas. GPU ideas size from clientWidth/clientHeight;
+     a centered auto-height frame collapses them to 0 and useGpu never starts. */
   display: grid;
   place-items: center;
   width: 100%;
-  max-width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  justify-self: stretch;
 }
