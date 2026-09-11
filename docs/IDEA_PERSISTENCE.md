@@ -95,4 +95,6 @@ apps/web/src/live/<folder>/<Name>/
 
 The component is portable. `preview.tsx` only renders `<Name />`. No sliders, Experimental chrome, mock triggers, or ConfigurableShell. The published file should look like it was written by hand at the current dock values. GPU components keep their `@/gpu` import; see [WebGPU with vgpu](WEBGPU.md).
 
+Under `bun run dev`, Vite’s Live glob picks up the new `preview.tsx`. Production `bun run start` serves a frozen `dist/` until the next build.
+
 Publishing the same unchanged project again is safe. Publishing never deletes the Experimental project.

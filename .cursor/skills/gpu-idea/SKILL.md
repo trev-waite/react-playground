@@ -162,7 +162,7 @@ Binding notes:
 - `GPUTextureUsage` at module scope. Read it inside `start` or a helper.
 - `frame()` or `gpu` work inside `surface.onResize`.
 - CSS 3D transforms, `perspective`, or `mix-blend-mode` on the canvas or its ancestors. Live’s layer uses `isolation: isolate`, not `translateZ(0)`.
-- A module-level `Map` of `lazy()` Live previews built once at import. Load `preview.tsx` from the current slug so Make Live entries appear without a full reload.
+- Eager imports of every Live `preview.tsx`. Keep the Vite glob in `discover.ts` (lazy loaders keyed by slug). Under `bun run dev`, new Make Live folders show up without editing a registry file.
 - A GPU root of `height: 100%` inside a centered auto-height Live cell. `useGpu` never starts if `clientHeight` stays under 2px. LiveStage `.frame` already stretches. For a plaque, size type from the stage (`cqh`/`cqw` on the outer 100% wrapper) and size the black box from in-flow content; raise `createTextMask` `scale` so the raster fills the plaque, not 30% of it.
 - Imports from `apps/web/src/app/` or `apps/web/src/lib/`. `@/gpu` is the only host import.
 - ConfigurableShell in an idea.

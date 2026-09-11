@@ -36,7 +36,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 - Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
 - Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`. See [WebGPU with vgpu](../../../docs/WEBGPU.md).
 - Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
-- After writing files, the next Experimental list or Open adopts the folder and writes `project.json`.
+- After writing files, the next Experimental list or Open adopts the folder and writes `project.json`. Vite’s glob picks up new `source.tsx` folders; do not add a registry file.
 
 ### Edit one saved idea
 
@@ -112,6 +112,6 @@ Publishing keeps the saved Experimental project so it can continue evolving.
 ## Verify
 
 - For authoring-tool changes, open `/experimental` and exercise the dock, including Make Live folder pick.
-- For a new on-disk idea, confirm it appears after reload and that `project.json` was minted.
+- For a new on-disk idea, confirm it appears after Vite picks up the folder and that `project.json` was minted.
 - For saved-source changes, confirm the placeholder export and portable imports.
 - Run the repository's relevant tests and build checks.

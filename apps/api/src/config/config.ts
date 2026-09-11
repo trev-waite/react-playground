@@ -35,6 +35,5 @@ const config = resolveApiConfig();
 
 export const PORT = config.port;
 export const CORS_ORIGIN = config.corsOrigin;
-export const WEB_ROOT = config.webRoot;
 export const EXPERIMENTAL_ROOT = config.experimentalRoot;
 export const LIVE_ROOT = config.liveRoot;
