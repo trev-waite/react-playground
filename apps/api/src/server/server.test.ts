@@ -13,17 +13,16 @@ async function tempPlayground(): Promise<string> {
   return directory;
 }
 
-function apiHandler(root: string, refreshRegistry?: () => Promise<void>) {
+function apiHandler(root: string) {
   return createPlaygroundApiHandler({
     experimentalRoot: root,
     liveRoot: root,
     corsOrigin: "http://localhost:3000",
-    refreshRegistry,
   });
 }
 
-function apiClient(playgroundRoot: string, refreshRegistry?: () => Promise<void>) {
-  const handler = apiHandler(playgroundRoot, refreshRegistry);
+function apiClient(playgroundRoot: string) {
+  const handler = apiHandler(playgroundRoot);
   return createHttpPlaygroundApi({
     baseUrl: "http://api.test",
     fetch: (input, init) => handler(new Request(input, init)),
@@ -95,40 +94,28 @@ describe("playground API handler", () => {
     expect((await api.loadIdea(created.id)).name).toBe("First edit");
   });
 
-  test("publishes idempotently and reports a recoverable registry failure", async () => {
+  test("publishes idempotently into the Live folder", async () => {
     const root = await tempPlayground();
-    let refreshCount = 0;
-    const originalConsoleError = console.error;
-    console.error = () => {};
-    const api = apiClient(root, async () => {
-      refreshCount += 1;
-      if (refreshCount === 1) throw new Error("sync failed");
+    const api = apiClient(root);
+    const created = await api.createIdea({
+      name: "Morph Blob",
+      draft,
     });
-    try {
-      const created = await api.createIdea({
-        name: "Morph Blob",
-        draft,
-      });
 
-      const publishInput = { expectedRevision: 1, targetFolder: "shapes" };
-      expect(await api.publishIdea(created.id, publishInput)).toEqual({
-        slug: "shapes/MorphBlob",
-        catalogStatus: "refresh-failed",
-      });
-      expect(await api.publishIdea(created.id, publishInput)).toEqual({
-        slug: "shapes/MorphBlob",
-        catalogStatus: "ready",
-      });
-      expect(
-        await readFile(
-          path.join(root, "shapes", "MorphBlob", "MorphBlob.tsx"),
-          "utf8",
-        ),
-      ).toContain("function MorphBlob");
-      expect(await api.listIdeas()).toHaveLength(1);
-    } finally {
-      console.error = originalConsoleError;
-    }
+    const publishInput = { expectedRevision: 1, targetFolder: "shapes" };
+    expect(await api.publishIdea(created.id, publishInput)).toEqual({
+      slug: "shapes/MorphBlob",
+    });
+    expect(await api.publishIdea(created.id, publishInput)).toEqual({
+      slug: "shapes/MorphBlob",
+    });
+    expect(
+      await readFile(
+        path.join(root, "shapes", "MorphBlob", "MorphBlob.tsx"),
+        "utf8",
+      ),
+    ).toContain("function MorphBlob");
+    expect(await api.listIdeas()).toHaveLength(1);
   });
 
   test("rejects invalid ids and supports loopback CORS aliases", async () => {

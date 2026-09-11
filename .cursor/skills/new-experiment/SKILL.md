@@ -63,9 +63,9 @@ Use this when adding or changing the stage, dock, controls, or generated source:
 - `apps/web/src/experimental/ExperimentalPage.tsx` — save, open, and Make Live (folder picker)
 - `apps/web/src/experimental/FolderEditor.tsx` — Live folder select used by Make Live
 - `apps/web/src/experimental/IdeaWorkbench.tsx` — shared play dock and stage harness for every idea
-- `apps/web/scripts/sync-playground.ts` — writes `ideas.gen.ts` lazy imports (Bun has no Vite glob)
+- `apps/web/src/experimental/ideaModules.ts` — lazy `import.meta.glob` of idea `source.tsx` files
 
-Report dock settings through `onDraftChange`. Bake current slider numbers into the `const SLIDERS` block in `portableSourceTemplate`. Do not put mock button logic or slider widgets in `source.tsx`. The dock is a fixed template (three actions, Copy, three sliders); this idea’s `project.json` fills labels, ranges, values, and optional `mock` (`none`, `scroll`, `form`, `unform`, or `replay`). Do not hand-edit `ideas.gen.ts`.
+Report dock settings through `onDraftChange`. Bake current slider numbers into the `const SLIDERS` block in `portableSourceTemplate`. Do not put mock button logic or slider widgets in `source.tsx`. The dock is a fixed template (three actions, Copy, three sliders); this idea’s `project.json` fills labels, ranges, values, and optional `mock` (`none`, `scroll`, `form`, `unform`, or `replay`).
 
 Do not hand-edit `id`, `revision`, or `sourceDigest` in `project.json`.
 

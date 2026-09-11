@@ -59,11 +59,8 @@ export type PublishIdeaInput = {
   targetFolder: string;
 };
 
-export type CatalogStatus = "ready" | "refresh-failed";
-
 export type PublishIdeaResult = {
   slug: string;
-  catalogStatus: CatalogStatus;
 };
 
 export type ApiErrorCode =

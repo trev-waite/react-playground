@@ -4,12 +4,7 @@ import {
 } from "@react-playground/api";
 
 function apiBaseUrl(): string {
-  const env = import.meta.env;
-  const fromEnv =
-    env && typeof env === "object" && "BUN_PUBLIC_API_URL" in env
-      ? env.BUN_PUBLIC_API_URL
-      : undefined;
-  return fromEnv || "http://localhost:3001";
+  return import.meta.env.VITE_API_URL || "http://localhost:3001";
 }
 
 /**

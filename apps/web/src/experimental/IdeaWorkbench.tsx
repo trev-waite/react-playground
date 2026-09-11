@@ -16,7 +16,7 @@ import {
   type ShellControl,
 } from "../live/shells/ConfigurableShell/ProximityControl";
 import { linearScale } from "../live/shells/ConfigurableShell/scales";
-import { ideaModules } from "./ideas.gen";
+import { ideaModules } from "./ideaModules";
 import styles from "./IdeaWorkbench.module.css";
 
 const COPIED_MS = 1600;

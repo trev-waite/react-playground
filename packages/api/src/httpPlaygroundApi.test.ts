@@ -94,7 +94,7 @@ describe("createHttpPlaygroundApi", () => {
     }
   });
 
-  test("returns catalog refresh state from publish", async () => {
+  test("returns the published Live slug", async () => {
     const api = createHttpPlaygroundApi({
       baseUrl: "http://api.test",
       fetch: async (url, init) => {
@@ -103,7 +103,6 @@ describe("createHttpPlaygroundApi", () => {
         return jsonResponse({
           ok: true,
           slug: "shapes/MorphBlob",
-          catalogStatus: "refresh-failed",
         });
       },
     });
@@ -112,7 +111,6 @@ describe("createHttpPlaygroundApi", () => {
       targetFolder: "shapes",
     })).toEqual({
       slug: "shapes/MorphBlob",
-      catalogStatus: "refresh-failed",
     });
   });
 });

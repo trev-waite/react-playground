@@ -1,5 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { buildTree, liveEntries, livePreviewLoader } from "./discover";
+import { Glob } from "bun";
+import path from "node:path";
+import {
+  buildTree,
+  catalogEntriesFromLoaders,
+  livePreviewLoader,
+  slugFromPreviewPath,
+  titleFromSlug,
+} from "./catalog";
+
+const liveRoot = path.join(import.meta.dir, "../live");
 
 describe("livePreviewLoader", () => {
   const entries = [
@@ -21,13 +31,31 @@ describe("livePreviewLoader", () => {
 });
 
 describe("live catalog", () => {
-  test("registers Light Dispersion so Make Live is not a sidebar-only entry", () => {
-    expect(livePreviewLoader("shaders/LightDispersion")).toBeTypeOf("function");
-    expect(liveEntries.some(entry => entry.slug === "shaders/LightDispersion")).toBe(true);
+  test("maps Vite glob paths to Live slugs", () => {
+    const entries = catalogEntriesFromLoaders({
+      "../live/shaders/LightDispersion/preview.tsx": async () => ({ default: () => null }),
+    });
+    expect(entries).toEqual([
+      {
+        slug: "shaders/LightDispersion",
+        title: "Light Dispersion",
+        load: expect.any(Function),
+      },
+    ]);
+    expect(slugFromPreviewPath("../live/buttons/PrimaryButton/preview.tsx")).toBe(
+      "buttons/PrimaryButton",
+    );
+    expect(titleFromSlug("buttons/PrimaryButton")).toBe("Primary Button");
   });
 
   test("puts GPU ideas under their Live folder in the tree", () => {
-    const shaders = buildTree().find(node => node.type === "folder" && node.name === "shaders");
+    const shaders = buildTree([
+      {
+        slug: "shaders/LightDispersion",
+        title: "Light Dispersion",
+        load: async () => ({ default: () => null }),
+      },
+    ]).find(node => node.type === "folder" && node.name === "shaders");
     expect(shaders?.type).toBe("folder");
     if (shaders?.type !== "folder") return;
     expect(shaders.children).toContainEqual({
@@ -36,5 +64,16 @@ describe("live catalog", () => {
       title: "Light Dispersion",
       slug: "shaders/LightDispersion",
     });
+  });
+
+  test("keeps a Light Dispersion preview on disk for the Vite glob", async () => {
+    const slugs: string[] = [];
+    for await (const file of new Glob("**/preview.tsx").scan({
+      cwd: liveRoot,
+      onlyFiles: true,
+    })) {
+      slugs.push(file.replace(/\/preview\.tsx$/, "").replace(/\\/g, "/"));
+    }
+    expect(slugs).toContain("shaders/LightDispersion");
   });
 });

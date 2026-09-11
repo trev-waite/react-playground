@@ -4,10 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync:playground": "bun scripts/sync-playground.ts",
-    "dev": "bun scripts/dev.ts",
-    "build": "bun scripts/sync-playground.ts && bun build ./src/index.html --outdir=dist --sourcemap --target=browser --minify --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*'",
-    "start": "NODE_ENV=production bun src/index.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite preview --port 3000 --strictPort",
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json"
   },
@@ -23,6 +22,8 @@
   "devDependencies": {
     "@types/bun": "1.4.0",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5"
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.2.2"
   }
 }

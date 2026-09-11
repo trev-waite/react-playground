@@ -17,14 +17,14 @@ export function useIdeaPublishing() {
     setPublishError(null);
 
     try {
-      const { slug, catalogStatus } = await playgroundApi.publishIdea(id, input);
-      if (catalogStatus === "refresh-failed") {
+      const { slug } = await playgroundApi.publishIdea(id, input);
+      // Vite's Live glob is compile-time. `vite` watches src/; `vite preview` serves dist/.
+      if (import.meta.env.PROD) {
         setPublishError(
-          "Published files, but the Live catalog refresh failed. Try Make Live again.",
+          "Published the Live files. Run bun run start again so the production build includes the new entry.",
         );
         return false;
       }
-
       window.location.assign(`/${slug}`);
       return true;
     } catch (error) {
