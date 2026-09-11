@@ -1,6 +1,5 @@
 export type {
   ApiErrorCode,
-  CatalogStatus,
   CreateIdeaInput,
   IdeaAction,
   IdeaActionMock,

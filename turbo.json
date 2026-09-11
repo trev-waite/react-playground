@@ -17,11 +17,9 @@
       "outputs": []
     },
     "start": {
+      "dependsOn": ["build"],
       "cache": false,
       "persistent": true
-    },
-    "sync:playground": {
-      "cache": false
     }
   }
 }

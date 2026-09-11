@@ -35,7 +35,7 @@ Projects live under `apps/web/src/experimental/ideas/`. Use **Open** to switch p
 
 ## Add an experiment
 
-Work at `/experimental`. Play on the shared dock (this idea’s JSON fills the labels and values). When the component is ready, use **Make Live**.
+Work at `/experimental` under `bun run dev`. Play on the shared dock (this idea’s JSON fills the labels and values). When the component is ready, use **Make Live**. Vite will pick up the new Live folder while the dev server is running.
 
 Do not put WIP in `apps/web/src/live/shells/`, render ConfigurableShell in Experimental, or include authoring controls in a Live component. See `apps/web/src/live/buttons/PrimaryButton/preview.tsx` for a Live preview.
 
@@ -46,12 +46,14 @@ Copy the Live component folder into your app. Keep the component and `*.module.c
 ## Layout
 
 ```
-apps/web          UI (port 3000)
+apps/web          Vite React app (port 3000)
+  index.html
+  src/main.tsx        React entry
   src/app/            playground chrome (layout, Live catalog UI)
   src/experimental/   studio page, shared dock, ideas/
   src/live/           published catalog
-apps/api          local HTTP API (port 3001)
-  src/config/     ports, paths, Live registry refresh
+apps/api          Bun HTTP API (port 3001)
+  src/config/     ports, paths to idea and Live folders
   src/server/     Bun.serve routes + CORS
   src/features/   business logic
     ideas/        project validation, atomic storage, revisions, migration
@@ -67,12 +69,11 @@ More conventions: [`docs/BEST_PRACTICES.md`](docs/BEST_PRACTICES.md). WebGPU ide
 
 | Command | Description |
 |---------|-------------|
-| `bun run dev` | UI + API |
-| `bun run sync:playground` | Rebuild the Live registry |
+| `bun run dev` | Vite UI + Bun API. Author ideas and Make Live here. |
 | `bun run test` | All package tests |
 | `bun run typecheck` | Strict TypeScript checks |
-| `bun run build` / `bun run start` | Production |
+| `bun run build` / `bun run start` | Production snapshot (`vite preview` + API). Rebuilds on start; new Live entries are not hot-loaded. |
 
 ## Stack
 
-Turborepo + Bun 1.4 workspaces · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU)
+Turborepo · Vite · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU) · Bun API

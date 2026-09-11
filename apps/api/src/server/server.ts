@@ -14,13 +14,12 @@ export type PlaygroundApiServerOptions = {
   liveRoot: string;
   corsOrigin: string;
   port?: number;
-  refreshRegistry?: () => Promise<void>;
 };
 
 export function createPlaygroundApiHandler(
   options: Omit<PlaygroundApiServerOptions, "port">,
 ) {
-  const { experimentalRoot, liveRoot, corsOrigin, refreshRegistry } = options;
+  const { experimentalRoot, liveRoot, corsOrigin } = options;
   const { json, handleOptions, readJsonBody } = createHttp(corsOrigin);
   const ideas = createIdeaService(experimentalRoot);
 
@@ -97,16 +96,7 @@ export function createPlaygroundApiHandler(
       idea => publishIdeaToDisk(liveRoot, idea, input.targetFolder),
     );
 
-    let catalogStatus: "ready" | "refresh-failed" = "ready";
-    if (refreshRegistry) {
-      try {
-        await refreshRegistry();
-      } catch (error) {
-        catalogStatus = "refresh-failed";
-        console.error("[publish] registry sync failed", error);
-      }
-    }
-    return json(req, { ok: true, slug: published.slug, catalogStatus });
+    return json(req, { ok: true, slug: published.slug });
   });
 
   return async function handleRequest(req: Request): Promise<Response> {

@@ -133,13 +133,10 @@ export function createHttpPlaygroundApi(
         }),
         "Publish failed",
       );
-      if (
-        typeof data.slug !== "string" ||
-        (data.catalogStatus !== "ready" && data.catalogStatus !== "refresh-failed")
-      ) {
+      if (typeof data.slug !== "string") {
         invalidResponse("Publish failed");
       }
-      return { slug: data.slug, catalogStatus: data.catalogStatus };
+      return { slug: data.slug };
     },
   };
 }
