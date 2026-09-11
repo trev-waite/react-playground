@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { PublishIdeaInput } from "@react-playground/api";
+import { waitForLiveCatalogReady } from "../lib/liveCatalog";
 import { playgroundApi } from "../lib/playgroundApi";
 
 export function useIdeaPublishing() {
@@ -25,6 +26,7 @@ export function useIdeaPublishing() {
         );
         return false;
       }
+      await waitForLiveCatalogReady(import.meta.hot);
       window.location.assign(`/${slug}`);
       return true;
     } catch (error) {
