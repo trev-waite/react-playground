@@ -5,6 +5,36 @@
   color: var(--shell-ink-muted);
 }
 
+.missingBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.refresh {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 550;
+  color: var(--shell-accent);
+  cursor: pointer;
+}
+
+.refresh:hover {
+  text-decoration: underline;
+}
+
+.refresh:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
 .frame {
   /* Fill the Live canvas. GPU ideas size from clientWidth/clientHeight;
      a centered auto-height frame collapses them to 0 and useGpu never starts. */

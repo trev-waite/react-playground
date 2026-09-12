@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { motion, useReducedMotion } from "motion/react";
+import { reloadLiveCatalog } from "../../lib/liveCatalog";
 import type { TreeNode } from "../../lib/types";
 import { Tree } from "./Tree";
 import styles from "./Sidebar.module.css";
@@ -142,7 +143,17 @@ export function Sidebar({ tree }: SidebarProps) {
         <span className={styles.handle} aria-hidden="true" />
         <header className={styles.header}>
           <p className={styles.brand}>Playground</p>
-          <p className={styles.caption}>Live</p>
+          <div className={styles.headerRow}>
+            <p className={styles.caption}>Live</p>
+            <button
+              type="button"
+              className={styles.refresh}
+              aria-label="Reload Live catalog"
+              onClick={() => void reloadLiveCatalog()}
+            >
+              Refresh
+            </button>
+          </div>
         </header>
         <nav className={styles.nav} aria-label="Live components">
           {tree.length === 0 ? (
