@@ -24,6 +24,7 @@ import {
   type IdeaProject,
 } from "@react-playground/api";
 import { IdeaError } from "./ideaError";
+import { writeChangedFile } from "../../files/writeChangedFile";
 
 const PROJECT_FILE = "project.json";
 const SOURCE_FILE = "source.tsx";
@@ -256,6 +257,16 @@ async function replaceProjectDirectory(
     throw new IdeaError("not_found", "Prototype not found", 404);
   }
   const finalDirectory = await allocateDirectory(root, project, current);
+  if (finalDirectory === current) {
+    // Source is canonical. If metadata writing is interrupted, the next read
+    // reconciles its digest and revision without rewriting the source.
+    await writeChangedFile(path.join(current, SOURCE_FILE), project.draft.portableSourceTemplate);
+    await writeChangedFile(
+      path.join(current, PROJECT_FILE),
+      `${JSON.stringify(documentFromProject(project), null, 2)}\n`,
+    );
+    return;
+  }
   const staging = temporaryPath(root, project.id, "stage");
   const backup = temporaryPath(root, project.id, "backup");
   await writeProjectDirectory(staging, project);
@@ -355,9 +366,12 @@ export async function readIdeaProject(
   ideasRoot: string,
   id: string,
 ): Promise<IdeaProject | null> {
-  await recoverProjectDirectory(ideasRoot, id);
-  const directory = await findDirectoryById(path.resolve(ideasRoot), id);
+  const directory = await recoverProjectDirectory(ideasRoot, id);
   if (!directory) return null;
+  return readDirectoryProject(directory, id);
+}
+
+async function readDirectoryProject(directory: string, expectedId?: string): Promise<IdeaProject | null> {
   let metadataSource: string;
   try {
     metadataSource = await readFile(path.join(directory, PROJECT_FILE), "utf8");
@@ -370,17 +384,18 @@ export async function readIdeaProject(
   try {
     parsed = JSON.parse(metadataSource);
   } catch {
-    throw new IdeaError("invalid_document", `Saved idea ${id} has invalid JSON`, 500);
+    throw new IdeaError("invalid_document", `Saved idea ${path.basename(directory)} has invalid JSON`, 500);
   }
 
   const document = parseIdeaDocument(parsed);
-  if (!document || document.id !== id) {
+  if (!document || (expectedId && document.id !== expectedId)) {
     throw new IdeaError(
       "invalid_document",
-      `Saved idea ${id} is invalid or uses an unsupported schema`,
+      `Saved idea ${path.basename(directory)} is invalid or uses an unsupported schema`,
       500,
     );
   }
+  const id = document.id;
 
   let source: string;
   try {
@@ -406,7 +421,10 @@ export async function readIdeaProject(
     sourceDigest: actualDigest,
     updatedAt: new Date().toISOString(),
   };
-  await replaceProjectDirectory(ideasRoot, reconciled);
+  await writeChangedFile(
+    path.join(directory, PROJECT_FILE),
+    `${JSON.stringify(documentFromProject(reconciled), null, 2)}\n`,
+  );
   return reconciled;
 }
 
@@ -431,11 +449,9 @@ export async function listIdeaProjects(ideasRoot: string): Promise<IdeaProject[]
     if (!entry.isDirectory() || !isIdeaDirectoryName(entry.name)) continue;
     try {
       const directory = path.join(root, entry.name);
-      const id = await readDirectoryIdeaId(directory);
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      const project = await readIdeaProject(ideasRoot, id);
-      if (!project) continue;
+      const project = await readDirectoryProject(directory);
+      if (!project || seen.has(project.id)) continue;
+      seen.add(project.id);
       projects.push(project);
     } catch (error) {
       console.warn(`[ideas] skipped invalid project ${entry.name}`, error);

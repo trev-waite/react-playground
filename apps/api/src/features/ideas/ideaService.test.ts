@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { defaultIdeaDraft } from "@react-playground/api";
@@ -75,10 +75,14 @@ describe("idea service", () => {
     const sourcePath = path.join(root, created.componentName, "source.tsx");
     const editedSource = "\nexport function Example() { return <div>agent edit</div>; }\n";
     await writeFile(sourcePath, editedSource);
+    const before = await stat(sourcePath);
 
     const loaded = await service.load(created.id);
     expect(loaded.revision).toBe(2);
     expect(loaded.draft.portableSourceTemplate).toBe(editedSource);
+    const after = await stat(sourcePath);
+    expect(after.ino).toBe(before.ino);
+    expect(after.mtimeMs).toBe(before.mtimeMs);
     expect(
       service.update(created.id, {
         name: "Stale browser edit",
@@ -86,6 +90,40 @@ describe("idea service", () => {
         expectedRevision: 1,
       }),
     ).rejects.toMatchObject({ code: "revision_conflict" });
+  });
+
+  test("metadata-only saves preserve the directory, source and supporting files", async () => {
+    const root = await tempPlayground();
+    const service = createIdeaService(root);
+    const created = await service.create({ name: "Study", draft });
+    const directory = path.join(root, "Study");
+    const source = path.join(directory, "source.tsx");
+    await writeFile(path.join(directory, "notes.txt"), "Keep this");
+    const beforeDirectory = await stat(directory);
+    const beforeSource = await stat(source);
+    const updated = await service.update(created.id, {
+      name: created.name,
+      expectedRevision: created.revision,
+      draft: { ...draft, actions: draft.actions.map(action => ({ ...action, label: "Updated" })) as typeof draft.actions },
+    });
+    expect((await stat(directory)).ino).toBe(beforeDirectory.ino);
+    expect((await stat(source)).ino).toBe(beforeSource.ino);
+    expect((await stat(source)).mtimeMs).toBe(beforeSource.mtimeMs);
+    expect(await readFile(path.join(directory, "notes.txt"), "utf8")).toBe("Keep this");
+    expect((await service.load(updated.id)).draft.actions[0].label).toBe("Updated");
+    expect((await readdir(directory)).some(name => name.startsWith("."))).toBe(false);
+  });
+
+  test("list reconciles external edits once without rewriting source", async () => {
+    const root = await tempPlayground();
+    const service = createIdeaService(root);
+    const created = await service.create({ name: "Study", draft });
+    const source = path.join(root, "Study", "source.tsx");
+    await writeFile(source, "export function Example() { return <div>Updated</div>; }\n");
+    const before = await stat(source);
+    expect((await service.list())[0]?.revision).toBe(created.revision + 1);
+    expect((await service.list())[0]?.revision).toBe(created.revision + 1);
+    expect((await stat(source)).ino).toBe(before.ino);
   });
 
   test("adopts a hand-created source.tsx folder", async () => {

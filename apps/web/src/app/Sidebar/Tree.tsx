@@ -29,7 +29,7 @@ export function Tree({ nodes, depth = 0, onNavigate }: TreeProps) {
                   .filter(Boolean)
                   .join(" ")
               }
-              style={{ paddingLeft: `${10 + depth * 14}px` }}
+              style={{ paddingLeft: `${8 + Math.max(0, depth - 1) * 16}px` }}
               onClick={onNavigate}
             >
               <span className={styles.label}>{node.title}</span>
@@ -57,7 +57,7 @@ function FolderNode({
       <button
         type="button"
         className={`${styles.row} ${styles.folder}`}
-        style={{ paddingLeft: `${10 + depth * 14}px` }}
+        style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
       >

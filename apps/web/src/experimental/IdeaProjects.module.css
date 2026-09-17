@@ -1,8 +1,8 @@
 .root {
   position: relative;
   display: block;
-  width: 13.5rem;
-  height: 2.5rem;
+  width: 100%;
+  height: var(--shell-control-height);
   min-width: 0;
 }
 
@@ -25,7 +25,7 @@
   inset: 0;
   display: flex;
   align-items: center;
-  padding: 0 0.7rem 0 2.75rem;
+  padding: 0 var(--space-1) 0 calc(var(--shell-control-height) + var(--space-1));
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -45,8 +45,8 @@
   background: transparent;
   color: var(--exp-ink);
   font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 620;
+  font-size: var(--text-ui);
+  font-weight: var(--weight-semibold);
   letter-spacing: -0.01em;
   outline: none;
 }
@@ -57,7 +57,7 @@
 
 .surface {
   --menu-height: 10rem;
-  --menu-width: min(19rem, calc(100vw - 2rem));
+  --menu-width: calc(var(--shell-studio-rail-width) - var(--space-4));
   --morph-open-duration: 350ms;
   --morph-close-duration: 250ms;
   --morph-open-ease: cubic-bezier(0.34, 1.25, 0.64, 1);
@@ -66,8 +66,8 @@
   position: absolute;
   z-index: 5;
   inset: 0 auto auto 0;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--shell-control-height);
+  height: var(--shell-control-height);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 2.5rem;
@@ -88,7 +88,7 @@
 .surface[data-open] {
   width: var(--menu-width);
   height: min(var(--menu-height), calc(100dvh - 5.5rem));
-  border-radius: 20px;
+  border-radius: var(--space-2);
   box-shadow:
     0 1px 1px rgba(15, 15, 17, 0.04),
     0 18px 42px rgba(15, 15, 17, 0.16);
@@ -107,11 +107,11 @@
   left: 0;
   display: grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: var(--shell-control-height);
+  height: var(--shell-control-height);
   padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--shell-radius-pill);
   background: transparent;
   color: var(--exp-ink);
   cursor: pointer;
@@ -206,7 +206,7 @@
   display: flex;
   align-items: center;
   min-height: 2.15rem;
-  padding: 0.15rem 0.5rem 0.35rem 2.55rem;
+  padding: 0.15rem var(--space-1) 0.35rem calc(var(--shell-control-height) + var(--space-1));
 }
 
 .menuHeading {

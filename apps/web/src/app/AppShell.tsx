@@ -70,5 +70,3 @@ export function AppShell() {
     </ViewProvider>
   );
 }
-
-export { Canvas } from "./Canvas";

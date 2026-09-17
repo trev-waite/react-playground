@@ -1,44 +1,36 @@
-import {
-  LIVE_CATALOG_READY,
-  LIVE_CATALOG_REFRESH,
-  LIVE_CATALOG_TIMEOUT_MS,
-} from "./liveCatalogPath";
+import { useSyncExternalStore } from "react";
+import { liveEntries } from "./discover";
+import { requestCatalogRefresh } from "./devRefresh";
+import { moduleStore } from "./moduleStore";
 
-export {
-  isPublishedLivePreview,
-  LIVE_CATALOG_READY,
-  LIVE_CATALOG_REFRESH,
-  LIVE_CATALOG_TIMEOUT_MS,
-} from "./liveCatalogPath";
+const catalog = moduleStore(liveEntries);
 
-export type LiveCatalogHot = {
-  send: (event: string, data?: unknown) => void;
-  on: (event: string, cb: () => void) => void;
-  off: (event: string, cb: () => void) => void;
-};
-
-export function waitForLiveCatalogReady(
-  hot: LiveCatalogHot | undefined | null,
-  timeoutMs = LIVE_CATALOG_TIMEOUT_MS,
-): Promise<void> {
-  if (!hot) return Promise.resolve();
-
-  return new Promise(resolve => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      hot.off(LIVE_CATALOG_READY, finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, timeoutMs);
-    hot.on(LIVE_CATALOG_READY, finish);
-    hot.send(LIVE_CATALOG_REFRESH);
+if (import.meta.hot) {
+  import.meta.hot.accept("./discover", next => {
+    if (next) {
+      const entries: typeof liveEntries = next.liveEntries;
+      const current = new Map(catalog.getSnapshot().map(entry => [entry.slug, entry]));
+      catalog.update(entries.map(entry => current.get(entry.slug) ?? entry));
+    }
   });
 }
 
-export async function reloadLiveCatalog(): Promise<void> {
-  await waitForLiveCatalogReady(import.meta.hot);
-  window.location.reload();
+export function useLiveEntries() {
+  return useSyncExternalStore(catalog.subscribe, catalog.getSnapshot);
+}
+
+export async function refreshLiveCatalog(slug?: string): Promise<void> {
+  const timestamp = await requestCatalogRefresh(import.meta.hot, slug);
+  const next: typeof import("./discover") = await import(
+    /* @vite-ignore */ `/src/lib/discover.ts?t=${timestamp}`
+  );
+  if (slug) {
+    const entry = next.liveEntries.find(entry => entry.slug === slug);
+    if (!entry) throw new Error("Published files are not yet in the Live catalog. Try again.");
+    await entry.load();
+  }
+  const current = new Map(catalog.getSnapshot().map(entry => [entry.slug, entry]));
+  catalog.update(next.liveEntries.map(entry =>
+    entry.slug === slug ? entry : current.get(entry.slug) ?? entry,
+  ));
 }

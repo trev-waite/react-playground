@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { liveEntries } from "../../lib/discover";
+import { useLiveEntries } from "../../lib/liveCatalog";
 import type { PlaygroundEntry } from "../../lib/types";
 import {
   DEFAULT_DURATION_MS,
@@ -71,6 +71,7 @@ type ViewProviderProps = {
 };
 
 export function ViewProvider({ children }: ViewProviderProps) {
+  const liveEntries = useLiveEntries();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -129,7 +130,7 @@ export function ViewProvider({ children }: ViewProviderProps) {
   useEffect(() => {
     if (urlMode !== "live") return;
     const slug = pathToSlug(location.pathname);
-    if (slug && liveEntries.some(e => e.slug === slug)) {
+    if (slug) {
       setLiveSlug(slug);
     }
   }, [location.pathname, urlMode, liveEntries]);
