@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <title>React Playground</title>
+  <rect width="1024" height="1024" rx="200" fill="#0f1218" />
   <rect x="242" y="306" width="236" height="236" rx="44" fill="#33bfff" />
   <rect x="242" y="576" width="236" height="236" rx="44" fill="#f5f6fa" />
   <rect x="510" y="576" width="236" height="236" rx="44" fill="#4befc0" />
