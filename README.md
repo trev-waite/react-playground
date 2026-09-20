@@ -12,11 +12,11 @@ bun run dev
 ```
 
 - UI: [http://localhost:3000](http://localhost:3000)
-- API: [http://localhost:3001](http://localhost:3001) (writes experiment files)
+- API: [http://localhost:3001](http://localhost:3001) (writes experiment files). The UI uses same-origin `/api`, proxied by Vite in both dev and preview. Set `API_PROXY_TARGET` in `apps/web/.env` if the API uses another port; `VITE_API_URL` optionally bypasses the proxy.
 
 Hover the left edge for the component browser. Use the **Live / Experimental** toggle.
 
-The repo pins **Bun 1.4** via `bun install` (project-local, does not change your global Bun). Prefer `bun run …` so scripts use that binary.
+The repo pins **Bun 1.4** via `bun install` (project-local, does not change your global Bun). Workspace scripts resolve that binary through the local `node_modules/.bin`. For direct tests and commands, use `./node_modules/.bin/bun` rather than a potentially older global `bun`. Check it with `./node_modules/.bin/bun --version`.
 
 ## Live vs Experimental
 

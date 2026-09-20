@@ -14,6 +14,7 @@ import {
 } from "@react-playground/api";
 import { IdeaError } from "../ideas/ideaError";
 import { buildLiveArtifact } from "./promote";
+import { writeChangedFile } from "../../files/writeChangedFile";
 
 async function destinationMatches(
   dir: string,
@@ -67,12 +68,21 @@ export async function publishIdeaToDisk(
   }
 
   try {
-    await readdir(dir);
-    throw new IdeaError(
-      "destination_exists",
-      `${slug} already exists with different content. Rename the idea or choose another folder.`,
-      409,
-    );
+    const existing = (await readdir(dir)).sort();
+    const isLiveComponent =
+      existing.length === 2 &&
+      existing[0] === `${document.componentName}.tsx` &&
+      existing[1] === "preview.tsx";
+    if (!isLiveComponent) {
+      throw new IdeaError(
+        "destination_exists",
+        `${slug} already exists with different content. Rename the idea or choose another folder.`,
+        409,
+      );
+    }
+    await writeChangedFile(path.join(dir, `${document.componentName}.tsx`), artifact.component);
+    await writeChangedFile(path.join(dir, "preview.tsx"), artifact.preview);
+    return { slug, dir, reused: false };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }

@@ -22,8 +22,10 @@ import {
   type IdeaProject,
   type IdeaSummary,
 } from "@react-playground/api";
+import { Canvas } from "../app/Canvas";
+import { EdgePanel, STUDIO_RAIL_WIDTH } from "../app/EdgePanel";
 import { useView } from "../app/view/ViewController";
-import { liveEntries } from "../lib/discover";
+import type { PlaygroundEntry } from "../lib/types";
 import { emptyIdeaDraft } from "../lib/ideaSession";
 import { playgroundApi } from "../lib/playgroundApi";
 import { EditSequence } from "./editSequence";
@@ -31,13 +33,14 @@ import { FolderEditor } from "./FolderEditor";
 import { IdeaProjects } from "./IdeaProjects";
 import { ideaIdFromPath, initialIdeaId } from "./projectSwitch";
 import { useIdeaPublishing } from "./useIdeaPublishing";
+import { useIdeaSync } from "./useIdeaSync";
 import styles from "./ExperimentalPage.module.css";
 
 const IdeaWorkbench = lazy(() => import("./IdeaWorkbench"));
 
 const DEFAULT_IDEA_NAME = "Untitled idea";
 
-const LIVE_FOLDERS = (() => {
+function liveFolders(liveEntries: PlaygroundEntry[]) {
   const folders = new Set<string>();
   for (const entry of liveEntries) {
     const [folder] = entry.slug.split("/");
@@ -46,10 +49,27 @@ const LIVE_FOLDERS = (() => {
     }
   }
   return [...folders].sort((a, b) => a.localeCompare(b));
-})();
+}
+
+function publishedLiveEntry(componentName: string | null, liveEntries: PlaygroundEntry[]) {
+  if (!componentName) return null;
+  return (
+    liveEntries.find(entry => {
+      const segments = entry.slug.split("/");
+      const folder = segments[0];
+      const name = segments.at(-1);
+      return (
+        name === componentName &&
+        folder !== SHELLS_FOLDER &&
+        folder !== EXPERIMENTAL_FOLDER
+      );
+    }) ?? null
+  );
+}
 
 export function ExperimentalPage() {
-  const { mode } = useView();
+  const { mode, liveEntries } = useView();
+  const folders = useMemo(() => liveFolders(liveEntries), [liveEntries]);
   const {
     publish,
     publishing,
@@ -60,7 +80,7 @@ export function ExperimentalPage() {
   const navigate = useNavigate();
 
   const [ideaName, setIdeaName] = useState(DEFAULT_IDEA_NAME);
-  const [liveFolder, setLiveFolder] = useState(LIVE_FOLDERS[0] ?? "");
+  const [liveFolder, setLiveFolder] = useState(folders[0] ?? "");
   const [studioKey, setStudioKey] = useState(0);
   const [ideas, setIdeas] = useState<IdeaSummary[]>([]);
   const [activeIdea, setActiveIdea] = useState<IdeaProject | null>(null);
@@ -84,6 +104,7 @@ export function ExperimentalPage() {
   const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
   const activeIdRef = useRef<string | null>(null);
   const makeLivePanelRef = useRef<HTMLDivElement>(null);
+  const makeLiveHostRef = useRef<HTMLDivElement>(null);
   const makeLivePanelId = useId();
   const [makeLivePanelHeight, setMakeLivePanelHeight] = useState(0);
 
@@ -119,7 +140,7 @@ export function ExperimentalPage() {
     ]);
   }
 
-  function showIdea(idea: IdeaProject) {
+  function showIdea(idea: IdeaProject, open = true) {
     setIdeaName(idea.name);
     setActiveIdea(idea);
     activeIdRef.current = idea.id;
@@ -128,14 +149,18 @@ export function ExperimentalPage() {
     setHasDraft(true);
     setDirty(false);
     setSaveError(null);
+    const publishedFolder = publishedLiveEntry(idea.componentName, liveEntries)?.slug.split(
+      "/",
+    )[0];
+    if (publishedFolder) setLiveFolder(publishedFolder);
     setStudioKey(key => key + 1);
-    navigate(`/experimental/${idea.id}`, { replace: true });
+    if (open) navigate(`/experimental/${idea.id}`, { replace: true });
   }
   showIdeaRef.current = showIdea;
 
-  function clearStudio() {
+  function clearStudio(open = true) {
     setIdeaName(DEFAULT_IDEA_NAME);
-    setLiveFolder(LIVE_FOLDERS[0] ?? "");
+    setLiveFolder(folders[0] ?? "");
     setActiveIdea(null);
     activeIdRef.current = null;
     draftRef.current = null;
@@ -144,8 +169,20 @@ export function ExperimentalPage() {
     setHasDraft(false);
     setSaveError(null);
     setStudioKey(key => key + 1);
-    navigate("/experimental", { replace: true });
+    if (open) navigate("/experimental", { replace: true });
   }
+
+  const disk = useIdeaSync({
+    enabled: hydrated,
+    activeIdea,
+    dirty,
+    busy: saving || publishing || deletingIdeaId != null,
+    editVersion: editSequenceRef.current.capture(),
+    onList: setIdeas,
+    onReload: idea => showIdea(idea, false),
+    onDeleted: () => clearStudio(mode === "experimental"),
+    onError: setSaveError,
+  });
 
   useEffect(() => {
     if (mode === "experimental") setActivated(true);
@@ -343,10 +380,19 @@ export function ExperimentalPage() {
     if (!pickingLiveFolder) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      event.preventDefault();
       setPickingLiveFolder(false);
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    function onPointerDown(event: PointerEvent) {
+      if (makeLiveHostRef.current?.contains(event.target as Node)) return;
+      setPickingLiveFolder(false);
+    }
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("pointerdown", onPointerDown, true);
+    };
   }, [pickingLiveFolder]);
 
   useLayoutEffect(() => {
@@ -386,174 +432,218 @@ export function ExperimentalPage() {
   }, [dirty, hasDraft]);
 
   const saveLabel = !dirty && activeIdea ? "Saved" : "Save";
+  const alreadyLive = publishedLiveEntry(componentName, liveEntries) != null;
+  const makeLiveLabel = alreadyLive ? "Update Live" : "Make Live";
+
+  const toolbar = (
+    <div
+      className={styles.identity}
+      data-loading={!hydrated || undefined}
+      aria-busy={!hydrated}
+      inert={!hydrated ? true : undefined}
+    >
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarRow}>
+          <IdeaProjects
+            ideas={displayedIdeas}
+            ideaName={ideaName}
+            activeIdeaId={activeIdea?.id ?? null}
+            open={ideasMenuOpen}
+            disabled={
+              !hydrated || saving || publishing || deletingIdeaId != null
+            }
+            deletingIdeaId={deletingIdeaId}
+            onIdeaNameChange={name => {
+              setIdeaName(name);
+              markDirty();
+            }}
+            onOpenChange={setIdeasMenuOpen}
+            onOpen={name => void switchTo(name)}
+            onNew={name => void startNewIdea(name)}
+            onDelete={name => void onDelete(name)}
+          />
+
+          <div
+            className={styles.editorActions}
+            inert={ideasMenuOpen ? true : undefined}
+            aria-hidden={ideasMenuOpen || undefined}
+          >
+            <button
+              type="button"
+              className={`${styles.iconButton} ${styles.delete}`}
+              onClick={() => {
+                if (activeIdea) void onDelete(activeIdea.id);
+              }}
+              disabled={
+                !activeIdea ||
+                saving ||
+                publishing ||
+                deletingIdeaId != null
+              }
+              aria-label={deletingIdeaId ? "Deleting idea" : "Delete idea"}
+              title="Delete idea"
+            >
+              {deletingIdeaId ? (
+                <span className={styles.spinner} aria-hidden="true" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+                  <path d="M3.75 5.25h10.5M7 5.25V3.5h4v1.75M5.25 5.25l.65 9.25h6.2l.65-9.25M7.5 7.75v4.5M10.5 7.75v4.5" />
+                </svg>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`${styles.iconButton} ${styles.save}`}
+              onClick={() => void saveIdea()}
+              disabled={!canSave || disk.change != null}
+              title="Save (⌘S)"
+              data-saved={!dirty && activeIdea ? true : undefined}
+              aria-label={saving ? "Saving idea" : saveLabel}
+            >
+              {saving ? (
+                <span className={styles.spinner} aria-hidden="true" />
+              ) : !dirty && activeIdea ? (
+                <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+                  <path d="M4 9.25l3.15 3.15L14 5.75" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+                  <path d="M3.5 3.5h9l2 2v9h-11zM6 3.5v4h6v-4M6 14.5v-4h6v4" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div
+          ref={makeLiveHostRef}
+          className={styles.makeLiveHost}
+          data-open={pickingLiveFolder || undefined}
+          inert={ideasMenuOpen ? true : undefined}
+          aria-hidden={ideasMenuOpen || undefined}
+        >
+          <div
+            className={styles.makeLiveSurface}
+            data-open={pickingLiveFolder || undefined}
+            style={
+              makeLivePanelHeight > 0
+                ? ({
+                    "--make-live-panel-height": `${makeLivePanelHeight}px`,
+                  } as CSSProperties)
+                : undefined
+            }
+          >
+            <div
+              id={makeLivePanelId}
+              className={styles.makeLivePanel}
+              ref={makeLivePanelRef}
+              role="dialog"
+              aria-label="Choose Live folder"
+              inert={pickingLiveFolder ? undefined : true}
+            >
+              <FolderEditor
+                folders={folders}
+                initialFolder={liveFolder}
+                autoFocus={pickingLiveFolder}
+                tone="dark"
+                submitLabel={alreadyLive ? "Update" : "Publish"}
+                destinationHint={`apps/web/src/live/<folder>/${componentName}/`}
+                onCancel={() => setPickingLiveFolder(false)}
+                onSubmit={nextFolder => void publishToFolder(nextFolder)}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            className={styles.makeLive}
+            disabled={publishing || saving || !hydrated || !hasDraft || disk.change != null}
+            aria-expanded={pickingLiveFolder}
+            aria-controls={makeLivePanelId}
+            onClick={() => {
+              if (pickingLiveFolder) setPickingLiveFolder(false);
+              else onMakeLive();
+            }}
+          >
+            {publishing
+              ? alreadyLive
+                ? "Updating…"
+                : "Publishing…"
+              : makeLiveLabel}
+          </button>
+        </div>
+      </div>
+
+      {disk.change && (
+        <p className={styles.error} role="alert">
+          {disk.change === "deleted"
+            ? "This project was deleted on disk. Your unsaved edits are still here."
+            : "This project changed on disk. Your unsaved edits are still here."}
+          {disk.change === "updated" ? (
+            <button type="button" onClick={disk.reload}>Discard edits and reload</button>
+          ) : (
+            <button type="button" onClick={() => {
+              setActiveIdea(null);
+              activeIdRef.current = null;
+              markDirty();
+              navigate("/experimental", { replace: true });
+            }}>Keep as a new idea</button>
+          )}
+        </p>
+      )}
+
+      {errorMessage ? (
+        <p className={styles.error} role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className={styles.page}>
-      <div className={styles.atmosphere} aria-hidden="true" />
-
-      <header className={styles.topBar}>
-        <div
-          className={styles.identity}
-          data-loading={!hydrated || undefined}
-          aria-busy={!hydrated}
-          inert={!hydrated ? true : undefined}
-        >
-          <div className={styles.toolbar}>
-            <IdeaProjects
-              ideas={displayedIdeas}
-              ideaName={ideaName}
-              activeIdeaId={activeIdea?.id ?? null}
-              open={ideasMenuOpen}
-              disabled={
-                !hydrated || saving || publishing || deletingIdeaId != null
-              }
-              deletingIdeaId={deletingIdeaId}
-              onIdeaNameChange={name => {
-                setIdeaName(name);
-                markDirty();
-              }}
-              onOpenChange={setIdeasMenuOpen}
-              onOpen={name => void switchTo(name)}
-              onNew={name => void startNewIdea(name)}
-              onDelete={name => void onDelete(name)}
-            />
-
-            <div
-              className={styles.editorActions}
-              inert={ideasMenuOpen ? true : undefined}
-              aria-hidden={ideasMenuOpen || undefined}
-            >
-              <button
-                type="button"
-                className={`${styles.iconButton} ${styles.delete}`}
-                onClick={() => {
-                  if (activeIdea) void onDelete(activeIdea.id);
-                }}
-                disabled={
-                  !activeIdea ||
-                  saving ||
-                  publishing ||
-                  deletingIdeaId != null
-                }
-                aria-label={deletingIdeaId ? "Deleting idea" : "Delete idea"}
-                title="Delete idea"
-              >
-                {deletingIdeaId ? (
-                  <span className={styles.spinner} aria-hidden="true" />
-                ) : (
-                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
-                    <path d="M3.75 5.25h10.5M7 5.25V3.5h4v1.75M5.25 5.25l.65 9.25h6.2l.65-9.25M7.5 7.75v4.5M10.5 7.75v4.5" />
-                  </svg>
-                )}
-              </button>
-              <button
-                type="button"
-                className={`${styles.iconButton} ${styles.save}`}
-                onClick={() => void saveIdea()}
-                disabled={!canSave}
-                title="Save (⌘S)"
-                data-saved={!dirty && activeIdea ? true : undefined}
-                aria-label={saving ? "Saving idea" : saveLabel}
-              >
-                {saving ? (
-                  <span className={styles.spinner} aria-hidden="true" />
-                ) : !dirty && activeIdea ? (
-                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
-                    <path d="M4 9.25l3.15 3.15L14 5.75" />
-                  </svg>
-                ) : (
-                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
-                    <path d="M3.5 3.5h9l2 2v9h-11zM6 3.5v4h6v-4M6 14.5v-4h6v4" />
-                  </svg>
-                )}
-              </button>
-              <div
-                className={styles.makeLiveHost}
-                data-open={pickingLiveFolder || undefined}
-              >
-                {pickingLiveFolder ? (
-                  <div
-                    className={styles.makeLiveBackdrop}
-                    aria-hidden="true"
-                    onClick={() => setPickingLiveFolder(false)}
-                  />
-                ) : null}
-                <div
-                  className={styles.makeLiveSurface}
-                  data-open={pickingLiveFolder || undefined}
-                  style={
-                    makeLivePanelHeight > 0
-                      ? ({
-                          "--make-live-panel-height": `${makeLivePanelHeight}px`,
-                        } as CSSProperties)
-                      : undefined
-                  }
+      <Suspense
+        fallback={
+          <Canvas>
+            <p className={styles.status}>Loading…</p>
+          </Canvas>
+        }
+      >
+        {hydrated ? (
+          <IdeaWorkbench
+            key={studioKey}
+            componentName={activeIdea?.componentName ?? null}
+            draft={draftRef.current ?? emptyIdeaDraft}
+            onMutate={markDirty}
+            onDraftChange={next => {
+              draftRef.current = next;
+              setHasDraft(true);
+            }}
+          >
+            {({ stage, dock }) => (
+              <>
+                <Canvas>{stage}</Canvas>
+                <EdgePanel
+                  side="right"
+                  label="Studio controls"
+                  width={STUDIO_RAIL_WIDTH}
+                  defaultOpen
+                  reveal="toggle"
+                  enabled={mode === "experimental"}
                 >
-                  <div
-                    id={makeLivePanelId}
-                    className={styles.makeLivePanel}
-                    ref={makeLivePanelRef}
-                    role="dialog"
-                    aria-label="Choose Live folder"
-                    inert={pickingLiveFolder ? undefined : true}
-                  >
-                    <FolderEditor
-                      folders={LIVE_FOLDERS}
-                      initialFolder={liveFolder}
-                      autoFocus={pickingLiveFolder}
-                      tone="dark"
-                      submitLabel="Publish"
-                      destinationHint={`apps/web/src/live/<folder>/${componentName}/`}
-                      onCancel={() => setPickingLiveFolder(false)}
-                      onSubmit={nextFolder => void publishToFolder(nextFolder)}
-                    />
+                  <div className={styles.rail}>
+                    <header className={styles.railHeader}>{toolbar}</header>
+                    {dock}
                   </div>
-                </div>
-                <button
-                  type="button"
-                  className={styles.makeLive}
-                  disabled={publishing || saving || !hydrated || !hasDraft}
-                  aria-expanded={pickingLiveFolder}
-                  aria-controls={makeLivePanelId}
-                  onClick={() => {
-                    if (pickingLiveFolder) setPickingLiveFolder(false);
-                    else onMakeLive();
-                  }}
-                >
-                  {publishing ? "Publishing…" : "Make Live"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {errorMessage ? (
-            <p className={styles.error} role="alert">
-              {errorMessage}
-            </p>
-          ) : null}
-        </div>
-      </header>
-
-      <main className={styles.main} aria-label="Idea studio">
-        <Suspense fallback={<p className={styles.status}>Loading…</p>}>
-          <div className={styles.workbench}>
-            {hydrated ? (
-              <IdeaWorkbench
-                key={studioKey}
-                componentName={activeIdea?.componentName ?? null}
-                draft={draftRef.current ?? emptyIdeaDraft}
-                onMutate={markDirty}
-                onDraftChange={next => {
-                  draftRef.current = next;
-                  setHasDraft(true);
-                }}
-              />
-            ) : (
-              <p className={styles.status}>Loading…</p>
+                </EdgePanel>
+              </>
             )}
-          </div>
-        </Suspense>
-      </main>
+          </IdeaWorkbench>
+        ) : (
+          <Canvas>
+            <p className={styles.status}>Loading…</p>
+          </Canvas>
+        )}
+      </Suspense>
     </div>
   );
 }

@@ -1,98 +1,17 @@
-.hotzone {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--shell-hotzone);
-  height: 100%;
-  z-index: 40;
-  /* Invisible hit target for edge reveal */
-}
-
-.sidebar {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  bottom: 12px;
-  width: var(--shell-sidebar-width);
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--shell-radius);
-  background: var(--shell-surface);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid var(--shell-border);
-  /* Soft lift so the closed peek reads as a floating edge */
-  box-shadow:
-    0 1px 2px rgba(28, 36, 48, 0.06),
-    0 8px 24px rgba(28, 36, 48, 0.1),
-    0 20px 48px rgba(28, 36, 48, 0.12);
-  overflow: hidden;
-  will-change: transform;
-  pointer-events: auto;
-}
-
-.sidebar:not([data-open]) {
-  /* Slightly heavier when docked so the peek has clear depth */
-  box-shadow:
-    2px 0 8px rgba(28, 36, 48, 0.08),
-    6px 0 20px rgba(28, 36, 48, 0.12),
-    12px 0 36px rgba(28, 36, 48, 0.1);
-}
-
-.handle {
-  position: absolute;
-  top: 50%;
-  right: 5px;
-  z-index: 2;
-  width: 3px;
-  height: 28px;
-  margin-top: -14px;
-  border-radius: 999px;
-  background: rgba(92, 102, 120, 0.45);
-  pointer-events: none;
-}
-
-.sidebar[data-open] .handle {
-  opacity: 0.35;
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .sidebar {
-    background: var(--shell-surface-solid);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border-color: var(--shell-border-subtle);
-  }
-}
-
 .header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
   flex-shrink: 0;
-  padding: 1.1rem 1rem 0.75rem;
+  padding: var(--space-2);
   border-bottom: 1px solid var(--shell-border-subtle);
 }
 
 .brand {
   margin: 0;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--shell-ink-faint);
-}
-
-.headerRow {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0.2rem 0 0;
-}
-
-.caption {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 600;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
   letter-spacing: -0.02em;
   line-height: 1.2;
   color: var(--shell-ink);
@@ -106,8 +25,8 @@
   border: 0;
   background: transparent;
   font: inherit;
-  font-size: 0.75rem;
-  font-weight: 550;
+  font-size: var(--text-ui);
+  font-weight: var(--weight-medium);
   letter-spacing: 0.02em;
   color: var(--shell-ink-muted);
   cursor: pointer;
@@ -127,13 +46,13 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 0.5rem 0.4rem 0.75rem;
+  padding: var(--space-1) var(--space-1) var(--space-2);
   scrollbar-width: thin;
 }
 
 .empty {
-  margin: 1rem 0.75rem;
-  font-size: 0.8125rem;
+  margin: var(--space-2);
+  font-size: var(--text-ui);
   color: var(--shell-ink-muted);
 }
 
@@ -144,45 +63,54 @@
 }
 
 .row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px 16px minmax(0, 1fr);
   align-items: center;
-  gap: 0.45rem;
+  column-gap: var(--space-1);
   width: 100%;
-  min-height: 34px;
+  min-height: 32px;
   margin: 1px 0;
-  padding: 0.4rem 0.55rem;
+  padding: var(--space-1) var(--space-1);
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--space-1);
   background: transparent;
   text-decoration: none;
   text-align: left;
   cursor: pointer;
   color: var(--shell-ink);
   transition:
-    background 100ms ease-out,
-    transform 100ms ease-out;
+    background 100ms var(--ease-out),
+    transform 100ms var(--ease-out);
 }
 
 .row:active {
   transform: scale(0.97);
 }
 
+.folder:active {
+  transform: none;
+}
+
 .folder {
-  color: var(--shell-ink-muted);
+  color: var(--shell-ink);
 }
 
 .folder .label {
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   letter-spacing: -0.015em;
 }
 
 .folder:hover {
   background: rgba(28, 36, 48, 0.04);
-  color: var(--shell-ink);
+}
+
+.leaf {
+  color: var(--shell-ink-muted);
 }
 
 .leaf .label {
-  font-weight: 450;
+  grid-column: 2 / -1;
+  font-weight: var(--weight-regular);
 }
 
 .leaf:hover {
@@ -195,14 +123,14 @@
 }
 
 .leaf.active .label {
-  font-weight: 550;
+  font-weight: var(--weight-medium);
 }
 
 .label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.875rem;
+  font-size: var(--text-body);
   letter-spacing: -0.01em;
 }
 
@@ -231,7 +159,7 @@
   flex-shrink: 0;
   color: var(--shell-ink-muted);
   transform: rotate(0deg);
-  transition: transform 160ms ease-out;
+  transition: transform 160ms var(--ease-out);
 }
 
 .chevron[data-open] {

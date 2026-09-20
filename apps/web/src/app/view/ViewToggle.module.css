@@ -1,6 +1,6 @@
 .wrap {
   position: fixed;
-  top: 14px;
+  top: var(--space-2);
   left: 50%;
   z-index: 80;
   transform: translateX(-50%);
@@ -34,8 +34,8 @@
   border-radius: 999px;
   background: transparent;
   color: #5c6678;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--text-ui);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.01em;
   line-height: 1;
   transition: color 160ms cubic-bezier(0.23, 1, 0.32, 1);

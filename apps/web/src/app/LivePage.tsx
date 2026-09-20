@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { buildTree } from "../lib/discover";
+import { buildTree } from "../lib/catalog";
 import { LiveStage } from "./LiveStage";
 import { Sidebar } from "./Sidebar/Sidebar";
 import { useView } from "./view/ViewController";

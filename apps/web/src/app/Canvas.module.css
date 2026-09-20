@@ -16,7 +16,7 @@
   inset: 0;
   pointer-events: none;
   background-image: radial-gradient(var(--shell-dot) 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-size: var(--shell-dot-size) var(--shell-dot-size);
   mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 35%, transparent 85%);
 }
 
@@ -26,15 +26,30 @@
   display: grid;
   place-items: center;
   height: 100%;
-  padding: 2.5rem;
+  padding: var(--shell-stage-inset);
+  padding-right: var(--stage-end-inset, var(--shell-stage-inset));
+  transition: padding-right 280ms var(--ease-drawer);
 }
 
 .hint {
   margin: 0;
   max-width: 22rem;
   text-align: center;
-  font-size: 0.9375rem;
+  font-size: var(--text-body);
   line-height: 1.45;
   letter-spacing: 0.01em;
   color: var(--shell-ink-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage {
+    transition: none;
+  }
+}
+
+@media (max-width: 880px) {
+  /* Overlay the rail instead of shrinking the playboard to a sliver. */
+  .stage {
+    padding-right: var(--shell-stage-inset);
+  }
 }

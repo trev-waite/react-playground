@@ -1,9 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 import type { PublishIdeaInput } from "@react-playground/api";
-import { waitForLiveCatalogReady } from "../lib/liveCatalog";
+import { refreshLiveCatalog } from "../lib/liveCatalog";
+import { useNavigate } from "react-router";
 import { playgroundApi } from "../lib/playgroundApi";
 
 export function useIdeaPublishing() {
+  const navigate = useNavigate();
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const publishingRef = useRef(false);
@@ -19,15 +21,15 @@ export function useIdeaPublishing() {
 
     try {
       const { slug } = await playgroundApi.publishIdea(id, input);
-      // Vite's Live glob is compile-time. `vite` watches src/; `vite preview` serves dist/.
+      // Preview serves a production snapshot; only the dev server can refresh it.
       if (import.meta.env.PROD) {
         setPublishError(
           "Published the Live files. Run bun run start again so the production build includes the new entry.",
         );
         return false;
       }
-      await waitForLiveCatalogReady(import.meta.hot);
-      window.location.assign(`/${slug}`);
+      await refreshLiveCatalog(slug);
+      navigate(`/${slug}`);
       return true;
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : "Publish failed");
@@ -36,7 +38,7 @@ export function useIdeaPublishing() {
       publishingRef.current = false;
       setPublishing(false);
     }
-  }, []);
+  }, [navigate]);
 
   return {
     publish,

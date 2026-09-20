@@ -1,8 +1,37 @@
 :root {
+  /* 8px spacing system */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+  --space-5: 40px;
+  --space-6: 48px;
+  --space-7: 64px;
+
+  --shell-stage-inset: var(--space-5);
+
+  /* Shared control rhythm */
+  --shell-control-height: var(--space-5);
+  --shell-radius: var(--space-2);
+  --shell-radius-pill: 999px;
+
+  /* Type: heading, body, UI, and micro. Components use at most three. */
+  --text-micro: 0.6875rem;
+  --text-ui: 0.75rem;
+  --text-body: 0.875rem;
+  --text-title: 1rem;
+  --weight-regular: 450;
+  --weight-medium: 550;
+  --weight-semibold: 600;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
   /* Shell tokens — cool neutral canvas, not purple / cream cliché */
   --shell-bg: #e8eaee;
-  --shell-bg-deep: #dde0e6;
   --shell-dot: rgba(40, 48, 64, 0.14);
+  /* Dot pitch is a texture, not spacing; 16px keeps it on the 8px grid. */
+  --shell-dot-size: 16px;
   --shell-ink: #1c2430;
   --shell-ink-muted: #5c6678;
   --shell-ink-faint: #8b93a3;
@@ -12,10 +41,9 @@
   --shell-surface-solid: #f4f5f7;
   --shell-border: rgba(255, 255, 255, 0.55);
   --shell-border-subtle: rgba(28, 36, 48, 0.08);
-  --shell-shadow: 0 12px 40px rgba(28, 36, 48, 0.12);
-  --shell-sidebar-width: 260px;
+  --shell-sidebar-width: 256px;
+  --shell-studio-rail-width: 320px;
   --shell-hotzone: 56px;
-  --shell-radius: 14px;
   --shell-font: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
 
   color-scheme: light;

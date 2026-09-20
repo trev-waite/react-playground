@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   bakeSliders,
   defaultIdeaDraft,
@@ -16,7 +16,8 @@ import {
   type ShellControl,
 } from "../live/shells/ConfigurableShell/ProximityControl";
 import { linearScale } from "../live/shells/ConfigurableShell/scales";
-import { ideaModules } from "./ideaModules";
+import { useIdeaModules } from "./ideaCatalog";
+import type { IdeaExample } from "./ideaModules";
 import styles from "./IdeaWorkbench.module.css";
 
 const COPIED_MS = 1600;
@@ -25,30 +26,6 @@ const PLAYBACK_RATE_PER_SECOND = 2.1;
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
-
-const ideaStages = Object.fromEntries(
-  Object.entries(ideaModules).map(([name, load]) => [
-    name,
-    lazy(async () => {
-      const module = await load();
-      const Example = module.Example;
-      if (!Example) {
-        return { default: EmptyStage };
-      }
-      return {
-        default: function IdeaExample({
-          sliders,
-          progress,
-        }: {
-          sliders: Record<string, number>;
-          progress: number;
-        }) {
-          return <Example sliders={sliders} progress={progress} />;
-        },
-      };
-    }),
-  ]),
-);
 
 function EmptyStage() {
   return (
@@ -84,11 +61,17 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
+export type IdeaStudioParts = {
+  stage: ReactNode;
+  dock: ReactNode;
+};
+
 type IdeaWorkbenchProps = {
   componentName: string | null;
   draft?: IdeaDraft;
   onMutate?: () => void;
   onDraftChange?: (draft: IdeaDraft) => void;
+  children: (parts: IdeaStudioParts) => ReactNode;
 };
 
 export default function IdeaWorkbench({
@@ -96,6 +79,7 @@ export default function IdeaWorkbench({
   draft = defaultIdeaDraft(),
   onMutate,
   onDraftChange,
+  children,
 }: IdeaWorkbenchProps) {
   const [sliders, setSliders] = useState(draft.sliders);
   const [pressedId, setPressedId] = useState<string | null>(null);
@@ -147,7 +131,12 @@ export default function IdeaWorkbench({
     return () => cancelAnimationFrame(frame);
   }, [target, motionNonce]);
 
-  const Stage = componentName ? ideaStages[componentName] : null;
+  const modules = useIdeaModules();
+  const load = componentName ? modules[componentName] : undefined;
+  const Stage = useMemo(() => load ? lazy<IdeaExample>(async () => {
+    const module = await load();
+    return { default: module.Example ?? EmptyStage };
+  }) : null, [load]);
   const liveSliders = sliderRecord(sliders);
   const scrollMock =
     pressedId != null &&
@@ -212,62 +201,60 @@ export default function IdeaWorkbench({
     copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
   }
 
-  return (
-    <div className={styles.studio}>
-      <div className={styles.stage} data-blank={!Stage || undefined}>
-        <div
-          className={styles.stageWell}
-          data-mock={scrollMock ? "scroll" : undefined}
-        >
-          {Stage ? (
-            <div className={styles.stageViewport}>
-              <Suspense fallback={<p className={styles.blankHint}>Loading…</p>}>
-                <Stage sliders={liveSliders} progress={progress} />
-              </Suspense>
-            </div>
-          ) : (
-            <EmptyStage />
-          )}
+  const stage = (
+    <div
+      className={styles.frame}
+      data-blank={!Stage || undefined}
+      data-mock={scrollMock ? "scroll" : undefined}
+    >
+      {Stage ? (
+        <div className={styles.stageViewport}>
+          <Suspense fallback={<p className={styles.blankHint}>Loading…</p>}>
+            <Stage sliders={liveSliders} progress={progress} />
+          </Suspense>
         </div>
-        <div className={styles.stageFrost} aria-hidden="true" />
-      </div>
+      ) : (
+        <EmptyStage />
+      )}
+    </div>
+  );
 
-      <div className={styles.dock}>
-        <div className={styles.dockGlass}>
-          <div className={styles.actions}>
-            {draft.actions.map(action => {
-              const pressed = actionPressed(action.mock, action.id);
-              return (
-                <button
-                  key={action.id}
-                  type="button"
-                  className={styles.action}
-                  aria-pressed={pressed}
-                  data-pressed={pressed ? true : undefined}
-                  onClick={() => onAction(action.mock, action.id)}
-                >
-                  {action.label}
-                </button>
-              );
-            })}
+  const dock = (
+    <div className={styles.dock}>
+      <div className={styles.actions}>
+        {draft.actions.map(action => {
+          const pressed = actionPressed(action.mock, action.id);
+          return (
             <button
+              key={action.id}
               type="button"
               className={styles.action}
-              aria-label="Copy component"
-              onClick={() => void onCopy()}
+              aria-pressed={pressed}
+              data-pressed={pressed ? true : undefined}
+              onClick={() => onAction(action.mock, action.id)}
             >
-              {copied ? <CheckIcon /> : <CopyIcon />}
-              {copied ? "Copied" : "Copy"}
+              {action.label}
             </button>
-          </div>
+          );
+        })}
+        <button
+          type="button"
+          className={styles.action}
+          aria-label="Copy component"
+          onClick={() => void onCopy()}
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
 
-          <div className={styles.controls}>
-            {controls.map(control => (
-              <ProximityControl key={control.id} control={control} barCount={39} />
-            ))}
-          </div>
-        </div>
+      <div className={styles.controls}>
+        {controls.map(control => (
+          <ProximityControl key={control.id} control={control} barCount={29} />
+        ))}
       </div>
     </div>
   );
+
+  return children({ stage, dock });
 }

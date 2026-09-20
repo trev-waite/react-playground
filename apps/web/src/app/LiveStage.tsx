@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo } from "react";
-import { livePreviewLoader } from "../lib/discover";
-import { reloadLiveCatalog } from "../lib/liveCatalog";
+import { livePreviewLoader } from "../lib/catalog";
+import { useLiveEntries } from "../lib/liveCatalog";
+import { RefreshCatalogButton } from "./RefreshCatalogButton";
 import { Canvas } from "./Canvas";
 import styles from "./LiveStage.module.css";
 
@@ -10,15 +11,16 @@ type LiveStageProps = {
 
 export function LiveStage({ slug: slugProp }: LiveStageProps) {
   const slug = slugProp ?? null;
+  const entries = useLiveEntries();
+  const load = livePreviewLoader(slug, entries);
   const Preview = useMemo(() => {
-    const load = livePreviewLoader(slug);
     if (!load) return undefined;
     return lazy(() =>
       load().then(module => ({
         default: module.default,
       })),
     );
-  }, [slug]);
+  }, [load]);
 
   if (!slug) {
     return <Canvas empty />;
@@ -29,13 +31,7 @@ export function LiveStage({ slug: slugProp }: LiveStageProps) {
       <Canvas>
         <div className={styles.missingBlock}>
           <p className={styles.missing}>No Live component at “{slug}”.</p>
-          <button
-            type="button"
-            className={styles.refresh}
-            onClick={() => void reloadLiveCatalog()}
-          >
-            Refresh catalog
-          </button>
+          <RefreshCatalogButton className={styles.refresh} />
         </div>
       </Canvas>
     );

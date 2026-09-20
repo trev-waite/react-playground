@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IdeaProject } from "@react-playground/api";
@@ -36,6 +36,30 @@ describe("publishIdeaToDisk", () => {
     const playground = await root();
     expect((await publishIdeaToDisk(playground, idea, "shapes")).reused).toBe(false);
     expect((await publishIdeaToDisk(playground, idea, "shapes")).reused).toBe(true);
+  });
+
+  test("overwrites a Live component whose files already exist", async () => {
+    const playground = await root();
+    await publishIdeaToDisk(playground, idea, "shapes");
+    const componentPath = path.join(
+      playground,
+      "shapes",
+      "MorphBlob",
+      "MorphBlob.tsx",
+    );
+    await writeFile(componentPath, "export function MorphBlob() {}\n");
+    const previewPath = path.join(path.dirname(componentPath), "preview.tsx");
+    const previewBefore = await stat(previewPath);
+    const componentBefore = await stat(componentPath);
+    const published = await publishIdeaToDisk(playground, idea, "shapes");
+    expect(published.reused).toBe(false);
+    const next = await readFile(componentPath, "utf8");
+    expect(next).not.toBe("export function MorphBlob() {}\n");
+    expect(next).toContain("export function MorphBlob");
+    expect((await stat(previewPath)).ino).toBe(previewBefore.ino);
+    expect((await stat(previewPath)).mtimeMs).toBe(previewBefore.mtimeMs);
+    expect((await stat(componentPath)).ino).not.toBe(componentBefore.ino);
+    expect((await readdir(path.dirname(componentPath))).sort()).toEqual(["MorphBlob.tsx", "preview.tsx"]);
   });
 
   test("rejects partial or different destinations", async () => {
