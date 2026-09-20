@@ -122,7 +122,6 @@ describe("idea service", () => {
     await writeFile(source, "export function Example() { return <div>Updated</div>; }\n");
     const before = await stat(source);
     expect((await service.list())[0]?.revision).toBe(created.revision + 1);
-    expect((await service.list())[0]?.revision).toBe(created.revision + 1);
     expect((await stat(source)).ino).toBe(before.ino);
   });
 
