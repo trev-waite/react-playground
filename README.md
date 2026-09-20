@@ -14,4 +14,4 @@ bun run dev
 - UI: http://localhost:3000
 - API: http://localhost:3001
 
-Authoring, export, layout, and commands: [Using the playground](docs/PLAYGROUND.md).
+Authoring, export, layout, and commands: [Using the playground](docs/USING_THE_PLAYGROUND.md).
