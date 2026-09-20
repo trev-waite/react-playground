@@ -1,6 +1,6 @@
 # Best Practices
 
-Stable conventions only. Versions, commands, and folder maps live in the README and the code.
+Stable conventions only. Versions, commands, and folder maps live in [Using the playground](PLAYGROUND.md) and the code.
 
 ## React
 
