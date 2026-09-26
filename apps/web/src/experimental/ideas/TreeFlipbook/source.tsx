@@ -4,13 +4,11 @@ const SLIDERS = {"wind":55,"leaves":60,"frameRate":12};
 
 type Point = { x: number; y: number };
 type Layer = "canopy" | "trunk" | "ground" | "river" | "grass" | "ripple";
-type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type Stroke = {
   layer: Layer;
   color: string;
   width: number;
   subpaths: Point[][];
-  bounds: Bounds;
 };
 
 // Every motion below is periodic over FRAME_COUNT, so the frame after the last is the first.
@@ -20,7 +18,6 @@ const VIEW_BOX = "0 0 1024 952";
 const TRUNK_BASE = { x: 430, y: 588 };
 const TREE_HEIGHT = 498;
 const GUST_TRAVEL = 4000;
-const BOIL = 1.6;
 const MAX_LEAVES = 30;
 const STREAK_DASH = 0.3;
 
@@ -214,19 +211,12 @@ function pathData(subpaths: Point[][]): string {
     .join("");
 }
 
-function boundsOf(points: Point[]): Bounds {
-  return {
-    minX: Math.min(...points.map(p => p.x)),
-    maxX: Math.max(...points.map(p => p.x)),
-    minY: Math.min(...points.map(p => p.y)),
-    maxY: Math.max(...points.map(p => p.y)),
-  };
-}
-
-const STROKES: Stroke[] = SCENE.map(({ layer, width, color = INK, d }) => {
-  const subpaths = parsePath(d);
-  return { layer, width, color, subpaths, bounds: boundsOf(subpaths.flat()) };
-});
+const STROKES: Stroke[] = SCENE.map(({ layer, width, color = INK, d }) => ({
+  layer,
+  width,
+  color,
+  subpaths: parsePath(d),
+}));
 
 const CANOPY_ANCHORS = STROKES.filter(stroke => stroke.layer === "canopy").flatMap(
   stroke => stroke.subpaths.flatMap(points => points.filter((_, i) => i % 3 === 0)),
@@ -251,6 +241,17 @@ const LEAVES = Array.from({ length: MAX_LEAVES }, (_, i) => {
 });
 
 type Leaf = (typeof LEAVES)[number];
+
+const CANOPY_LEAVES = Array.from({ length: 48 }, (_, i) => {
+  const r = (k: number) => hash(i * 17 + k + 400);
+  return {
+    anchor: CANOPY_ANCHORS[Math.floor(r(1) * CANOPY_ANCHORS.length)] ?? TRUNK_BASE,
+    rotation: r(2) * 360,
+    size: 0.55 + r(3) * 0.45,
+    color: LEAF_COLORS[Math.floor(r(4) * LEAF_COLORS.length)]?.[0] ?? "#7C8F3A",
+    seed: r(5),
+  };
+});
 
 /** One gust per loop, peaking mid-loop so the seam sits in the calm. */
 function gust(phase: number) {
@@ -290,51 +291,6 @@ function treeOffset(p: Point, phase: number, wind: number): Point {
   return { x: dx + rustle, y: Math.abs(dx) * 0.14 * h + rustle * 0.7 };
 }
 
-function grassOffset(p: Point, bounds: Bounds, phase: number, wind: number): Point {
-  const height = Math.max(10, bounds.maxY - bounds.minY);
-  const h = clamp((bounds.maxY - p.y) / height, 0, 1);
-  const center = (bounds.minX + bounds.maxX) / 2;
-  const flutter = 0.25 * Math.sin(TAU * 6 * phase + center * 0.02);
-  const dx = wind * height * 0.16 * (breeze(phase, center) + flutter) * h ** 1.5;
-  return { x: dx, y: Math.abs(dx) * 0.2 * h };
-}
-
-function rippleOffset(p: Point, phase: number, ripple: number): Point {
-  return {
-    x: 2.2 * Math.sin(TAU * 3 * phase + ripple * 1.9 + p.x * 0.01),
-    y: 0.35 * Math.sin(TAU * 2 * phase + ripple),
-  };
-}
-
-/** Three hand-traced "drawings" cycling, like a boiling line in cel animation. */
-function boil(p: Point, variant: number): Point {
-  const s = variant * 2.4;
-  return {
-    x: BOIL * Math.sin(p.x * 0.021 + p.y * 0.013 + s) * Math.cos(p.y * 0.017 - s * 1.7),
-    y: BOIL * Math.sin(p.y * 0.019 - p.x * 0.011 + s * 2.3) * Math.cos(p.x * 0.015 + s),
-  };
-}
-
-function strokeOffset(
-  stroke: Stroke,
-  p: Point,
-  phase: number,
-  wind: number,
-  ripple: number,
-): Point {
-  switch (stroke.layer) {
-    case "canopy":
-    case "trunk":
-      return treeOffset(p, phase, wind);
-    case "grass":
-      return grassOffset(p, stroke.bounds, phase, wind);
-    case "ripple":
-      return rippleOffset(p, phase, ripple);
-    default:
-      return { x: 0, y: 0 };
-  }
-}
-
 function leafAt(leaf: Leaf, phase: number, wind: number) {
   const t = fract(phase * leaf.cycles + leaf.offset);
   const free = smoothstep(0, 0.3, t);
@@ -364,25 +320,21 @@ function leafAt(leaf: Leaf, phase: number, wind: number) {
   };
 }
 
-function drawFrame(frame: number, wind: number, leafCount: number) {
+function drawFrame(frame: number, wind: number) {
   const index = ((frame % FRAME_COUNT) + FRAME_COUNT) % FRAME_COUNT;
   const phase = index / FRAME_COUNT;
-  const variant = index % 3;
-  let rippleCount = 0;
 
-  const strokes = STROKES.map((stroke, strokeIndex) => {
-    const ripple = stroke.layer === "ripple" ? rippleCount++ : -1;
+  const strokes = STROKES.map(stroke => {
     const move = (p: Point): Point => {
-      const jitter = boil(p, variant);
-      const offset = strokeOffset(stroke, p, phase, wind, ripple);
-      return { x: p.x + jitter.x + offset.x, y: p.y + jitter.y + offset.y };
+      if (stroke.layer !== "canopy" && stroke.layer !== "trunk") return p;
+      const offset = treeOffset(p, phase, wind);
+      const branch = stroke.layer === "trunk" ? smoothstep(465, 315, p.y) : 1;
+      return { x: p.x + offset.x * branch, y: p.y + offset.y * branch };
     };
     return {
       d: pathData(stroke.subpaths.map(points => points.map(move))),
       color: stroke.color,
-      width: stroke.width * (0.88 + 0.24 * hash(strokeIndex * 7 + variant)),
-      opacity:
-        ripple < 0 ? 1 : 0.4 + 0.3 * (1 + Math.sin(TAU * 3 * phase + ripple * 2.3)),
+      width: stroke.width,
     };
   });
 
@@ -398,10 +350,9 @@ function drawFrame(frame: number, wind: number, leafCount: number) {
 
   return {
     index,
-    shift: { x: round((hash(index + 91) - 0.5) * 2.4), y: round((hash(index + 37) - 0.5) * 2) },
+    phase,
     strokes,
     streaks,
-    leaves: LEAVES.slice(0, leafCount).map(leaf => leafAt(leaf, phase, wind)),
   };
 }
 
@@ -435,22 +386,39 @@ export function Example({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const scene = useMemo(() => drawFrame(frame, wind, leafCount), [frame, wind, leafCount]);
+  const scene = useMemo(() => drawFrame(frame, wind), [frame, wind]);
+  const leaves = useMemo(
+    () => LEAVES.slice(0, leafCount).map(leaf => leafAt(leaf, scene.phase, wind)),
+    [leafCount, scene.phase, wind],
+  );
+  const canopyLeaves = useMemo(
+    () => CANOPY_LEAVES.map(leaf => {
+      const breezeOffset = treeOffset(leaf.anchor, scene.phase, wind);
+      const rustle = wind * 3 * Math.sin(TAU * 4 * scene.phase + leaf.seed * TAU);
+      const position = {
+        x: leaf.anchor.x + breezeOffset.x + rustle,
+        y: leaf.anchor.y + breezeOffset.y,
+      };
+      return {
+        transform: `translate(${round(position.x)} ${round(position.y)}) rotate(${round(leaf.rotation + rustle * 2)}) scale(${leaf.size.toFixed(2)})`,
+        color: leaf.color,
+      };
+    }),
+    [scene.phase, wind],
+  );
 
   return (
     <div
-      role="img"
-      aria-label="Hand-drawn tree swaying in the wind as leaves blow past, looping like a flipbook"
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: PAPER }}
     >
       <svg
         viewBox={VIEW_BOX}
         preserveAspectRatio="xMidYMid meet"
-        aria-hidden="true"
+        role="img"
+        aria-label="Hand-drawn tree with branches and leaves moving in the wind over a still landscape"
         style={{ display: "block", width: "100%", height: "100%" }}
       >
         <g
-          transform={`translate(${scene.shift.x} ${scene.shift.y})`}
           fill="none"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -461,8 +429,13 @@ export function Example({
               d={stroke.d}
               stroke={stroke.color}
               strokeWidth={stroke.width}
-              opacity={stroke.opacity}
             />
+          ))}
+          {canopyLeaves.map((leaf, i) => (
+            <g key={i} transform={leaf.transform} pointerEvents="none">
+              <path d={LEAF_SHAPE} fill={leaf.color} stroke={LEAF_INK} strokeWidth={1.1} />
+              <path d={LEAF_RIB} stroke={LEAF_INK} strokeWidth={0.8} />
+            </g>
           ))}
           {scene.streaks.map((streak, i) => (
             <path
@@ -476,8 +449,8 @@ export function Example({
               opacity={streak.opacity}
             />
           ))}
-          {scene.leaves.map((leaf, i) => (
-            <g key={i} transform={leaf.transform} opacity={leaf.opacity}>
+          {leaves.map((leaf, i) => (
+            <g key={i} transform={leaf.transform} opacity={leaf.opacity} pointerEvents="none">
               <path d={LEAF_SHAPE} fill={leaf.fill} stroke={LEAF_INK} strokeWidth={1.1} />
               <path d={LEAF_RIB} stroke={LEAF_INK} strokeWidth={0.8} />
             </g>
