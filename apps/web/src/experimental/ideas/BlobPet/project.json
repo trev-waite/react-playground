@@ -1,0 +1,57 @@
+{
+  "id": "12927743-79be-4f3b-a56d-a90069cb4da4",
+  "revision": 21,
+  "name": "Blob Pet",
+  "componentName": "BlobPet",
+  "updatedAt": "2026-09-26T17:46:02.110Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "morph",
+        "label": "Morph",
+        "mock": "form"
+      },
+      {
+        "id": "rest",
+        "label": "Rest",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Replay",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "bounce",
+        "label": "Bounce",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 71
+      },
+      {
+        "id": "wobble",
+        "label": "Wobble",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "tempo",
+        "label": "Tempo",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 58
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "c35b231340787dba4e058b42b49b642afccffca0b8d5d010cf205da7aa9da2b3",
+  "createdAt": "2026-09-26T16:20:12.512Z"
+}

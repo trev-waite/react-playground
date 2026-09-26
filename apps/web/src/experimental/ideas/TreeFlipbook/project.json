@@ -1,0 +1,57 @@
+{
+  "id": "bcc8217e-9c44-480d-9488-13ae5861cbcc",
+  "revision": 2,
+  "name": "Tree Flipbook",
+  "componentName": "TreeFlipbook",
+  "updatedAt": "2026-09-26T17:20:05.798Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "flip",
+        "label": "Flip",
+        "mock": "form"
+      },
+      {
+        "id": "hold",
+        "label": "Hold",
+        "mock": "unform"
+      },
+      {
+        "id": "riffle",
+        "label": "Riffle",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "wind",
+        "label": "Wind",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 55
+      },
+      {
+        "id": "leaves",
+        "label": "Leaves",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 60
+      },
+      {
+        "id": "frameRate",
+        "label": "Frame rate",
+        "min": 4,
+        "max": 24,
+        "step": 1,
+        "value": 12
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "0aebd1a5dba112185bf24f7272f30163cc34863537b1183db662d668faac31c1",
+  "createdAt": "2026-09-26T16:20:12.516Z"
+}
