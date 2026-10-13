@@ -11,12 +11,10 @@ import {
   CheckIcon,
   CopyIcon,
 } from "../live/shells/ConfigurableShell/icons";
-import {
-  ProximityControl,
-  type ShellControl,
-} from "../live/shells/ConfigurableShell/ProximityControl";
+import type { ShellControl } from "../live/shells/ConfigurableShell/ProximityControl";
 import { linearScale } from "../live/shells/ConfigurableShell/scales";
 import { useIdeaModules } from "./ideaCatalog";
+import { DockSlider } from "./DockSlider";
 import type { IdeaExample } from "./ideaModules";
 import styles from "./IdeaWorkbench.module.css";
 
@@ -250,7 +248,7 @@ export default function IdeaWorkbench({
 
       <div className={styles.controls}>
         {controls.map(control => (
-          <ProximityControl key={control.id} control={control} barCount={29} />
+          <DockSlider key={control.id} control={control} />
         ))}
       </div>
     </div>
