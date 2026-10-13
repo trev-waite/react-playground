@@ -56,6 +56,10 @@ const TEXT_FONT =
   '900 200px "Arial Rounded MT Bold", "SF Pro Rounded", ui-rounded, "Nunito", system-ui, sans-serif';
 const STIFFNESS = 190;
 const FACE_STIFFNESS = 300;
+const GOAL_BLEND_SECONDS = 0.16;
+// While the outline is this far (RMS) from its goal it is fully softened, by up to this many points.
+const SOFT_LAG = 28;
+const SOFT_SIGMA = 14;
 const COLOR_OMEGA = 6.5;
 const BLINK_SECONDS = 0.18;
 const FACE_COLOR = "#FFFFFF";
@@ -585,13 +589,26 @@ function alignOffset(particles: Particle[], shape: Contour): number {
   return ((best % n) + n) % n;
 }
 
+/**
+ * Eases from the previous goal to the next. A hard switch would start every particle
+ * whose stagger falls in the same frame together, stepping the outline like stairs.
+ */
+function goalOf(p: Particle, now: number): Point {
+  const t = clamp((now - p.switchAt) / GOAL_BLEND_SECONDS, 0, 1);
+  const eased = t * t * (3 - 2 * t);
+  return { x: p.gx + (p.nx - p.gx) * eased, y: p.gy + (p.ny - p.gy) * eased };
+}
+
 /** Returns the alignment offset: particle i heads to shape index i + offset. */
 function retarget(particles: Particle[], shape: Contour, now: number, stagger: number): number {
   const offset = alignOffset(particles, shape);
   const b = boundsOf(shape);
   const span = Math.max(1, b.maxX - b.minX);
   particles.forEach((p, i) => {
+    const from = goalOf(p, now);
     const goal = pointAt(shape, i + offset);
+    p.gx = from.x;
+    p.gy = from.y;
     p.nx = goal.x;
     p.ny = goal.y;
     p.switchAt = now + (stagger * (goal.x - b.minX)) / span;
@@ -617,6 +634,27 @@ function pathOf(points: Point[]): string {
     d += `${i === 0 ? "M" : "L"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
   });
   return `${d}Z`;
+}
+
+/** Gaussian blur along a closed outline: rounds corners and folds into a continuous curve. */
+function soften(points: Point[], sigma: number): Point[] {
+  const spread = Math.min(sigma, points.length / 10);
+  if (spread < 0.5) return points;
+  const reach = Math.ceil(spread * 3);
+  const kernel = Array.from({ length: 2 * reach + 1 }, (_, k) =>
+    Math.exp(-(((k - reach) / spread) ** 2) / 2),
+  );
+  const total = kernel.reduce((sum, weight) => sum + weight, 0);
+  return points.map((_, i) => {
+    let x = 0;
+    let y = 0;
+    kernel.forEach((weight, k) => {
+      const q = pointAt(points, i + k - reach);
+      x += q.x * weight;
+      y += q.y * weight;
+    });
+    return { x: x / total, y: y / total };
+  });
 }
 
 const lerpPoint = (a: Point, b: Point, t: number): Point => ({
@@ -652,8 +690,8 @@ const piecesJoined = (points: Point[], pieces: Pieces) =>
  * Draws each spliced piece as its own subpath. The bridge is only filled while
  * its ends touch, so pieces pinch off without a thread and rejoin without a seam.
  */
-function bodyPath(points: Point[], pieces: Pieces): string {
-  if (!pieces.bridges.length) return pathOf(points);
+function bodyPath(points: Point[], pieces: Pieces, sigma: number): string {
+  if (!pieces.bridges.length) return pathOf(soften(points, sigma));
   const at = pieceAt(points, pieces);
   const opens = new Set(pieces.bridges.map(bridge => bridge.start));
   const closes = new Map(pieces.bridges.map(bridge => [bridge.end, bridge]));
@@ -677,7 +715,7 @@ function bodyPath(points: Point[], pieces: Pieces): string {
     );
   }
   subpaths.push(current);
-  return subpaths.map(pathOf).join("");
+  return subpaths.map(subpath => pathOf(soften(subpath, sigma))).join("");
 }
 
 function toViewBox(svg: SVGSVGElement | null, clientX: number, clientY: number): Point | null {
@@ -769,16 +807,17 @@ export function Example({
       const squashDamping = 2 * (0.55 - 0.3 * bounce) * Math.sqrt(260);
       const amount = reduce ? 0 : wobble * 2;
       const h = dt / 2;
+      /** Returns the squared distance still left to the goal. */
       const settle = (p: Particle, stiffness: number, damping: number) => {
-        if (now >= p.switchAt) {
-          p.gx = p.nx;
-          p.gy = p.ny;
-        }
-        const goal = idleAt(p.gx, p.gy, form, now, amount);
+        const target = goalOf(p, now);
+        const goal = idleAt(target.x, target.y, form, now, amount);
         stepParticle(p, goal, stiffness, damping, h);
         stepParticle(p, goal, stiffness, damping, h);
+        return (p.x - goal.x) ** 2 + (p.y - goal.y) ** 2;
       };
-      for (const p of body) settle(p, STIFFNESS, bodyDamping);
+      let lag = 0;
+      for (const p of body) lag += settle(p, STIFFNESS, bodyDamping);
+      const softness = clamp(Math.sqrt(lag / body.length) / SOFT_LAG, 0, 1);
       for (const particles of features) {
         for (const p of particles) settle(p, FACE_STIFFNESS, faceDamping);
       }
@@ -806,7 +845,7 @@ export function Example({
       const outline = body.map(p => warp(p.x, p.y));
       const bounds = boundsOf(outline);
       if (!form.bridges.length && piecesJoined(outline, pieces)) pieces = NO_PIECES;
-      bodyRef.current?.setAttribute("d", bodyPath(outline, pieces));
+      bodyRef.current?.setAttribute("d", bodyPath(outline, pieces, SOFT_SIGMA * softness));
       const [L = 0, a = 0, b = 0] = color.map(channel => channel.value);
       bodyRef.current?.style.setProperty("fill", `oklab(${L.toFixed(4)} ${a.toFixed(4)} ${b.toFixed(4)})`);
 
