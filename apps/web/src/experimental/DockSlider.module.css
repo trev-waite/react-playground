@@ -58,5 +58,5 @@
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
   text-anchor: middle;
-  dominant-baseline: central;
+  dominant-baseline: alphabetic;
 }

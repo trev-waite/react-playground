@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import type { ShellControl } from "../live/shells/ConfigurableShell/ProximityControl";
 import {
   applyStep,
@@ -25,7 +25,6 @@ import {
 import styles from "./DockSlider.module.css";
 
 const TRACK_HEIGHT = 32;
-const LABEL_BASELINE = TRACK_HEIGHT - 9;
 const POINTER_IDLE_MS = 700;
 const KEYBOARD_IDLE_MS = 900;
 
@@ -44,12 +43,14 @@ type LiquidBar = {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
+  const valueClipId = useId();
   const sliderRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const barsRef = useRef<SVGPathElement>(null);
   const dropletRef = useRef<SVGPathElement>(null);
   const labelRef = useRef<SVGTextElement>(null);
   const valueRef = useRef<SVGTextElement>(null);
+  const valueClipRef = useRef<SVGPathElement>(null);
   const pointerRef = useRef<number | null>(null);
   const pointerXRef = useRef(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,7 +92,8 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     const dropletPath = dropletRef.current;
     const label = labelRef.current;
     const valueText = valueRef.current;
-    if (!slider || !svg || !barsPath || !dropletPath || !label || !valueText) return;
+    const valueClip = valueClipRef.current;
+    if (!slider || !svg || !barsPath || !dropletPath || !label || !valueText || !valueClip) return;
 
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const textContext = document.createElement("canvas").getContext("2d");
@@ -107,12 +109,37 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     let disposed = false;
     let measuredDisplay = "";
     let valueWidth = 20;
+    let valueBaselineOffset = 0;
     const lastBar = count - 1;
     const sigma = Math.max(1.45, lastBar * 0.085);
     const centerAt = (index: number) => radius + index * (width - 2 * radius) / lastBar;
     const heightAt = (index: number) => TRACK_HEIGHT * (
       0.12 + 0.88 * proximityGain(Math.abs(index - latestRef.current.position * lastBar), sigma)
     );
+
+    const measureGlyphs = (text: SVGTextElement) => {
+      if (textContext) {
+        const font = getComputedStyle(text);
+        textContext.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+        textContext.letterSpacing = font.letterSpacing;
+        const metrics = textContext.measureText(text.textContent ?? "");
+        return {
+          left: metrics.actualBoundingBoxLeft,
+          right: metrics.actualBoundingBoxRight,
+          ascent: metrics.actualBoundingBoxAscent,
+          descent: metrics.actualBoundingBoxDescent,
+        };
+      }
+      const bounds = text.getBBox();
+      const x = Number(text.getAttribute("x") ?? 0);
+      const baseline = Number(text.getAttribute("y") ?? 0);
+      return {
+        left: x - bounds.x,
+        right: bounds.x + bounds.width - x,
+        ascent: baseline - bounds.y,
+        descent: bounds.y + bounds.height - baseline,
+      };
+    };
 
     function advance(state: Spring, target: number, stiffness: number, damping: number, dt: number) {
       if (motion.matches || isSettled(state, target)) {
@@ -173,6 +200,8 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       if (measuredDisplay !== latestRef.current.display) {
         measuredDisplay = latestRef.current.display;
         valueWidth = Math.min(width, valueText.getComputedTextLength() + 14);
+        const metrics = measureGlyphs(valueText);
+        valueBaselineOffset = (metrics.ascent - metrics.descent) / 2;
       }
       const active = activeRef.current && !latestRef.current.disabled;
       moving = advance(form, active ? 1 : 0, 380, 0.76, dt) || moving;
@@ -196,7 +225,8 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
         // Include sideways travel so a quick swipe also pulls the droplet free.
         const stretch = (bottom - peakTop) * 1.6 + Math.abs(dropletX.value - peakX) * 0.3;
         connected = stillConnected(connected, stretch);
-        let droplet = pill(dropletX.value, center, pillWidth, pillHeight, TRACK_HEIGHT);
+        const pillPath = pill(dropletX.value, center, pillWidth, pillHeight, TRACK_HEIGHT);
+        let droplet = pillPath;
         if (connected) {
           droplet += neck(
             { x: peakX, y: peakTop - radius, radius },
@@ -206,12 +236,14 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
           );
         }
         dropletPath.setAttribute("d", droplet);
+        valueClip.setAttribute("d", pillPath);
         valueText.setAttribute("x", String(dropletX.value));
-        valueText.setAttribute("y", String(TRACK_HEIGHT - center));
+        valueText.setAttribute("y", String(TRACK_HEIGHT - center + valueBaselineOffset));
         valueText.setAttribute("opacity", String(clamp((amount - 0.5) / 0.4, 0, 1)));
       } else {
         connected = true;
         dropletPath.setAttribute("d", "");
+        valueClip.setAttribute("d", "");
         valueText.setAttribute("opacity", "0");
       }
       slider.toggleAttribute("data-active", active || amount > 0.002);
@@ -236,26 +268,15 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
           label.textContent = `${shortened}…`;
         } while (shortened && label.getComputedTextLength() > width - 4);
       }
-      const bounds = label.getBBox();
-      if (textContext) {
-        const font = getComputedStyle(label);
-        textContext.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
-        textContext.letterSpacing = font.letterSpacing;
-        const metrics = textContext.measureText(label.textContent ?? control.label);
-        zone = {
-          left: -metrics.actualBoundingBoxLeft - 2,
-          right: metrics.actualBoundingBoxRight + 2,
-          bottom: TRACK_HEIGHT - LABEL_BASELINE - metrics.actualBoundingBoxDescent - 1.5,
-          top: TRACK_HEIGHT - LABEL_BASELINE + metrics.actualBoundingBoxAscent + 1.5,
-        };
-      } else {
-        zone = {
-          left: bounds.x - 2,
-          right: bounds.x + bounds.width + 2,
-          bottom: TRACK_HEIGHT - bounds.y - bounds.height - 1.5,
-          top: TRACK_HEIGHT - bounds.y + 1.5,
-        };
-      }
+      const metrics = measureGlyphs(label);
+      const labelBaseline = TRACK_HEIGHT / 2 + (metrics.ascent - metrics.descent) / 2;
+      label.setAttribute("y", String(labelBaseline));
+      zone = {
+        left: -metrics.left - 2,
+        right: metrics.right + 2,
+        bottom: TRACK_HEIGHT - labelBaseline - metrics.descent - 1.5,
+        top: TRACK_HEIGHT - labelBaseline + metrics.ascent + 1.5,
+      };
       measuredDisplay = "";
       if (!bars.length) {
         for (let i = 0; i < count; i++) {
@@ -401,9 +422,14 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     >
       <svg ref={svgRef} className={styles.track} aria-hidden="true">
         <path ref={barsRef} className={styles.ink} />
-        <text ref={labelRef} className={styles.label} x="0" y={LABEL_BASELINE}>{control.label}</text>
+        <text ref={labelRef} className={styles.label} x="0" y={TRACK_HEIGHT / 2}>{control.label}</text>
         <path ref={dropletRef} className={styles.ink} />
-        <text ref={valueRef} className={styles.value} opacity="0">{display}</text>
+        <text ref={valueRef} className={styles.value} clipPath={`url(#${valueClipId})`} opacity="0">{display}</text>
+        <defs>
+          <clipPath id={valueClipId} clipPathUnits="userSpaceOnUse">
+            <path ref={valueClipRef} />
+          </clipPath>
+        </defs>
       </svg>
     </div>
   );
