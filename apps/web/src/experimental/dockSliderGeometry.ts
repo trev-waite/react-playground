@@ -59,7 +59,7 @@ export const overlapsZone = (cx: number, radius: number, zone: Zone) =>
 export function valuePillLayout(peakTop: number, radius: number, amount: number, maxHeight: number) {
   const form = Math.min(1.04, Math.max(0, amount));
   const height = Math.min(maxHeight, 2 * radius + (maxHeight - 2 * radius) * form);
-  const gap = -2 * radius + (4 + 2 * radius) * Math.min(1, form);
+  const gap = -2 * radius * (1 - Math.min(1, form));
   return {
     height,
     center: peakTop - height / 2,

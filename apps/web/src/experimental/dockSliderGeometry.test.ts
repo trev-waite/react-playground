@@ -26,14 +26,23 @@ describe("contained value pill", () => {
       expect(layout.barTop).toBeGreaterThanOrEqual(0);
     }
     expect(valuePillLayout(32, 1.5, 0, 16).barTop).toBe(32);
-    expect(valuePillLayout(32, 1.5, 1, 16).barTop).toBe(12);
+    expect(valuePillLayout(32, 1.5, 1, 16).barTop).toBe(16);
   });
 
   test("fits the value into the available space above the title", () => {
     const layout = valuePillLayout(32, 1.5, 1.04, 9);
     expect(layout.height).toBe(9);
     expect(layout.center - layout.height / 2).toBe(23);
-    expect(layout.barTop).toBe(19);
+    expect(layout.barTop).toBe(23);
+  });
+
+  test("keeps the value in contact with the stem throughout growth and retraction", () => {
+    for (const amount of [0, 0.2, 0.6, 1, 1.04, 1, 0.6, 0.2, 0]) {
+      const layout = valuePillLayout(32, 1.5, amount, 10);
+      const bottom = layout.center - layout.height / 2;
+      expect(layout.gap).toBeLessThanOrEqual(0);
+      expect(layout.barTop).toBeGreaterThanOrEqual(bottom);
+    }
   });
 });
 
