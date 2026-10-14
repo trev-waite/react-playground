@@ -15,12 +15,11 @@ import {
   neck,
   neckWaist,
   overlapsZone,
-  pill,
-  SNAP_DISTANCE,
   spring,
   stepSpring,
   stillConnected,
-  valuePillLayout,
+  valueBar,
+  valueHeadLayout,
   type Spring,
   type Zone,
 } from "./dockSliderGeometry";
@@ -157,6 +156,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       lastTime = now;
       let moving = false;
       let path = "";
+      let valuePath = "";
 
       if (measuredDisplay !== latestRef.current.display) {
         measuredDisplay = latestRef.current.display;
@@ -172,11 +172,12 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       const stemX = centerAt(peakIndex);
       const peakTop = heightAt(peakIndex);
       const amount = clamp(form.value, 0, 1.04);
-      const pillWidth = Math.min(width, 2 * radius + (valueWidth - 2 * radius) * amount);
-      const valueX = clamp(peakX, pillWidth / 2, width - pillWidth / 2);
-      const maxPillHeight = Math.max(2 * radius, Math.min(16, peakTop - zone.top));
-      const valueLayout = valuePillLayout(peakTop, radius, amount, maxPillHeight);
-      let visiblePeakTop = peakTop;
+      const headWidth = Math.min(width, 2 * radius + (valueWidth - 2 * radius) * amount);
+      const valueX = clamp(
+        stemX + (peakX - stemX) * Math.min(1, amount), headWidth / 2, width - headWidth / 2,
+      );
+      const maxHeadHeight = Math.max(2 * radius, Math.min(16, peakTop - zone.top));
+      const valueLayout = valueHeadLayout(peakTop, radius, amount, maxHeadHeight);
 
       for (let i = 0; i < count; i++) {
         const cx = centerAt(i);
@@ -196,15 +197,26 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
           bar.lower.velocity = bar.gapTop.velocity = bar.top.velocity = 0;
         }
 
-        const influence = i === peakIndex ? 1 : clamp(
-          (pillWidth / 2 + radius - Math.abs(cx - valueX)) / (2 * radius), 0, 1,
-        );
-        const topLimit = height - Math.max(0, height - valueLayout.barTop) * influence;
-        const lower = Math.min(topLimit, Math.max(0, bar.lower.value));
+        if (i === peakIndex) {
+          if (overLabel) path += capsule(cx, 0, zone.bottom, radius, TRACK_HEIGHT);
+          valuePath = valueBar({
+            stemX,
+            bottom: overLabel ? zone.top : 0,
+            top: peakTop,
+            radius,
+            headX: valueX,
+            headWidth,
+            headHeight: valueLayout.height,
+            trackHeight: TRACK_HEIGHT,
+          });
+          path += valuePath;
+          continue;
+        }
+
+        const lower = Math.max(0, bar.lower.value);
         const upperBottom = Math.max(0, bar.gapTop.value);
-        const top = Math.min(topLimit, Math.max(lower, bar.top.value));
+        const top = Math.max(lower, bar.top.value);
         const upperRadius = Math.min(radius, Math.max(0, top - upperBottom) / 2);
-        if (i === peakIndex) visiblePeakTop = upperRadius > 0.025 ? Math.max(lower, top) : lower;
         path += capsule(cx, 0, lower, radius, TRACK_HEIGHT);
         path += capsule(cx, upperBottom, top, radius, TRACK_HEIGHT);
         const gap = upperBottom - lower;
@@ -220,26 +232,13 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
         }
       }
       if (amount > 0.002) {
-        const pillHeight = valueLayout.height;
+        const headHeight = valueLayout.height;
         const center = valueLayout.center;
-        const bottom = center - pillHeight / 2;
-        const pillPath = pill(valueX, center, pillWidth, pillHeight, TRACK_HEIGHT);
-        path += pillPath;
-        // Keep the value joined to its stem; title clearance can split the bar below it.
-        const gap = bottom - visiblePeakTop;
-        if (gap < SNAP_DISTANCE) {
-          path += neck(
-            { x: stemX, y: visiblePeakTop - radius, radius },
-            { x: valueX, y: bottom + radius, radius: radius + 1.5 * amount },
-            neckWaist(gap, radius),
-            TRACK_HEIGHT,
-          );
-        }
-        valueClip.setAttribute("d", pillPath);
+        valueClip.setAttribute("d", valuePath);
         valueText.setAttribute("x", String(valueX));
         valueText.setAttribute("y", String(TRACK_HEIGHT - center + valueBaselineOffset));
         valueText.setAttribute("opacity", String(clamp(
-          (pillHeight - valueGlyphHeight) / Math.max(1, maxPillHeight - valueGlyphHeight), 0, 1,
+          (headHeight - valueGlyphHeight) / Math.max(1, maxHeadHeight - valueGlyphHeight), 0, 1,
         )));
       } else {
         valueClip.setAttribute("d", "");

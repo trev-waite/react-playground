@@ -55,16 +55,13 @@ export function barTargets(height: number, zone: Zone): BarTargets {
 export const overlapsZone = (cx: number, radius: number, zone: Zone) =>
   cx + radius > zone.left && cx - radius < zone.right;
 
-/** The value replaces the bar's top while their combined height stays fixed. */
-export function valuePillLayout(peakTop: number, radius: number, amount: number, maxHeight: number) {
+/** Reserve room for the number inside the bar's growing head, keeping its top fixed. */
+export function valueHeadLayout(peakTop: number, radius: number, amount: number, maxHeight: number) {
   const form = Math.min(1.04, Math.max(0, amount));
   const height = Math.min(maxHeight, 2 * radius + (maxHeight - 2 * radius) * form);
-  const gap = -2 * radius * (1 - Math.min(1, form));
   return {
     height,
     center: peakTop - height / 2,
-    barTop: peakTop - height - gap,
-    gap,
   };
 }
 
@@ -81,6 +78,61 @@ export function neckWaist(gap: number, radius: number) {
 }
 
 const fmt = (n: number) => n.toFixed(2);
+const CIRCLE_CONTROL = 0.5522847498;
+
+/** A single bar outline whose rounded top widens through smooth shoulders into a value head. */
+export function valueBar({
+  stemX, bottom, top, radius, headX, headWidth, headHeight, trackHeight,
+}: {
+  stemX: number;
+  bottom: number;
+  top: number;
+  radius: number;
+  headX: number;
+  headWidth: number;
+  headHeight: number;
+  trackHeight: number;
+}) {
+  const length = top - bottom;
+  if (length <= 0.05 || radius <= 0) return "";
+  const stemRadius = Math.min(radius, length / 2);
+  const height = Math.min(length, Math.max(2 * stemRadius, headHeight));
+  const headHalfWidth = Math.max(2 * stemRadius, headWidth) / 2;
+  const topRadius = Math.min(height / 2, headHalfWidth);
+  // Above a title, the short upper piece widens all the way down as the head fills it.
+  const fill = Math.min(1, Math.max(0, (height - length + 2 * stemRadius) / (2 * stemRadius)));
+  const baseX = stemX + (headX - stemX) * fill;
+  const baseHalfWidth = stemRadius + (headHalfWidth - stemRadius) * fill;
+  const bottomRadius = stemRadius + (topRadius - stemRadius) * fill;
+  const leftBase = baseX - baseHalfWidth;
+  const rightBase = baseX + baseHalfWidth;
+  const leftHead = headX - headHalfWidth;
+  const rightHead = headX + headHalfWidth;
+  const topY = trackHeight - top;
+  const bottomY = trackHeight - bottom;
+  const joinY = Math.min(bottomY - bottomRadius, topY + height + 2 * stemRadius);
+  const flareRoom = Math.max(0, joinY - topY - topRadius);
+  const minFlare = Math.min(stemRadius * (1 - fill), flareRoom);
+  // Keep the head wide through the number's baseline before it flows into the stem.
+  const shoulderY = Math.min(joinY - minFlare, topY + height - Math.min(topRadius, stemRadius));
+  const pull = (joinY - shoulderY) * 0.55;
+  const topControl = topRadius * CIRCLE_CONTROL;
+  const bottomControl = bottomRadius * CIRCLE_CONTROL;
+  return (
+    `M${fmt(leftBase)} ${fmt(bottomY - bottomRadius)}V${fmt(joinY)}` +
+    `C${fmt(leftBase)} ${fmt(joinY - pull)} ${fmt(leftHead)} ${fmt(shoulderY + pull)} ${fmt(leftHead)} ${fmt(shoulderY)}` +
+    `V${fmt(topY + topRadius)}` +
+    `C${fmt(leftHead)} ${fmt(topY + topRadius - topControl)} ${fmt(leftHead + topRadius - topControl)} ${fmt(topY)} ${fmt(leftHead + topRadius)} ${fmt(topY)}` +
+    `H${fmt(rightHead - topRadius)}` +
+    `C${fmt(rightHead - topRadius + topControl)} ${fmt(topY)} ${fmt(rightHead)} ${fmt(topY + topRadius - topControl)} ${fmt(rightHead)} ${fmt(topY + topRadius)}` +
+    `V${fmt(shoulderY)}` +
+    `C${fmt(rightHead)} ${fmt(shoulderY + pull)} ${fmt(rightBase)} ${fmt(joinY - pull)} ${fmt(rightBase)} ${fmt(joinY)}` +
+    `V${fmt(bottomY - bottomRadius)}` +
+    `C${fmt(rightBase)} ${fmt(bottomY - bottomRadius + bottomControl)} ${fmt(rightBase - bottomRadius + bottomControl)} ${fmt(bottomY)} ${fmt(rightBase - bottomRadius)} ${fmt(bottomY)}` +
+    `H${fmt(leftBase + bottomRadius)}` +
+    `C${fmt(leftBase + bottomRadius - bottomControl)} ${fmt(bottomY)} ${fmt(leftBase)} ${fmt(bottomY - bottomRadius + bottomControl)} ${fmt(leftBase)} ${fmt(bottomY - bottomRadius)}Z`
+  );
+}
 
 /** A vertical stadium from `bottom` to `top`, shrinking to a dot and then nothing when short. */
 export function capsule(cx: number, bottom: number, top: number, radius: number, height: number) {

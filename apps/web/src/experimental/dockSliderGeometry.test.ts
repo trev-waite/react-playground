@@ -10,38 +10,73 @@ import {
   spring,
   stepSpring,
   stillConnected,
-  valuePillLayout,
+  valueBar,
+  valueHeadLayout,
   type Zone,
 } from "./dockSliderGeometry";
 
 const zone: Zone = { left: 0, right: 40, bottom: 7, top: 21 };
 
-describe("contained value pill", () => {
-  test("replaces the top of the bar without increasing the combined height", () => {
+describe("morphing value bar", () => {
+  test("reserves room for the number while keeping the original bar top fixed", () => {
     for (const amount of [0, 0.2, 0.6, 1, 1.04]) {
-      const layout = valuePillLayout(32, 1.5, amount, 16);
+      const layout = valueHeadLayout(32, 1.5, amount, 16);
       expect(layout.center + layout.height / 2).toBeCloseTo(32);
-      expect(layout.barTop + layout.gap + layout.height).toBeCloseTo(32);
       expect(layout.height).toBeLessThanOrEqual(16);
-      expect(layout.barTop).toBeGreaterThanOrEqual(0);
     }
-    expect(valuePillLayout(32, 1.5, 0, 16).barTop).toBe(32);
-    expect(valuePillLayout(32, 1.5, 1, 16).barTop).toBe(16);
+    expect(valueHeadLayout(32, 1.5, 0, 16).height).toBe(3);
+    expect(valueHeadLayout(32, 1.5, 1, 16).height).toBe(16);
   });
 
   test("fits the value into the available space above the title", () => {
-    const layout = valuePillLayout(32, 1.5, 1.04, 9);
+    const layout = valueHeadLayout(32, 1.5, 1.04, 9);
     expect(layout.height).toBe(9);
     expect(layout.center - layout.height / 2).toBe(23);
-    expect(layout.barTop).toBe(23);
   });
 
-  test("keeps the value in contact with the stem throughout growth and retraction", () => {
+  test("draws the bar and number head as one continuous outline throughout the morph", () => {
     for (const amount of [0, 0.2, 0.6, 1, 1.04, 1, 0.6, 0.2, 0]) {
-      const layout = valuePillLayout(32, 1.5, amount, 10);
-      const bottom = layout.center - layout.height / 2;
-      expect(layout.gap).toBeLessThanOrEqual(0);
-      expect(layout.barTop).toBeGreaterThanOrEqual(bottom);
+      const layout = valueHeadLayout(32, 1.5, amount, 10);
+      const path = valueBar({
+        stemX: 50, bottom: 0, top: 32, radius: 1.5, headX: 50,
+        headWidth: 3 + 24 * amount, headHeight: layout.height, trackHeight: 32,
+      });
+      expect(path.match(/M/g)).toHaveLength(1);
+      expect(path.match(/Z/g)).toHaveLength(1);
+      expect(path).not.toMatch(/NaN|Infinity/);
+    }
+  });
+
+  test("widens a short upper piece without adding another cap or collapsing its outline", () => {
+    for (const amount of [0, 0.5, 1]) {
+      const path = valueBar({
+        stemX: 1.5, bottom: 23, top: 32, radius: 1.5,
+        headX: 1.5 + 9 * amount, headWidth: 3 + 18 * amount,
+        headHeight: valueHeadLayout(32, 1.5, amount, 9).height, trackHeight: 32,
+      });
+      expect(path.match(/M/g)).toHaveLength(1);
+      expect(path.endsWith("Z")).toBe(true);
+      expect(path).not.toMatch(/NaN|Infinity/);
+    }
+    expect(valueBar({
+      stemX: 1.5, bottom: 32, top: 32, radius: 1.5,
+      headX: 1.5, headWidth: 3, headHeight: 3, trackHeight: 32,
+    })).toBe("");
+  });
+
+  test("keeps the short piece's shoulders curved while its base widens", () => {
+    for (const amount of [0.5, 0.8, 0.95]) {
+      const path = valueBar({
+        stemX: 1.5, bottom: 23, top: 32, radius: 1.5,
+        headX: 1.5 + 9 * amount, headWidth: 3 + 18 * amount,
+        headHeight: valueHeadLayout(32, 1.5, amount, 9).height, trackHeight: 32,
+      });
+      const curves = Array.from(path.matchAll(/C([\d.\s-]+)/g), match =>
+        match[1]!.trim().split(/\s+/).map(Number),
+      );
+      const shoulder = curves[3]!;
+      expect(shoulder[1]!).toBeLessThan(shoulder[5]!);
+      expect(shoulder[2]!).toBe(shoulder[4]!);
     }
   });
 });
