@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import type { ShellControl } from "../live/shells/ConfigurableShell/ProximityControl";
 import {
   applyStep,
@@ -18,16 +18,12 @@ import {
   spring,
   stepSpring,
   stillConnected,
-  valueBar,
-  valueHeadLayout,
   type Spring,
   type Zone,
 } from "./dockSliderGeometry";
 import styles from "./DockSlider.module.css";
 
 const TRACK_HEIGHT = 32;
-const POINTER_IDLE_MS = 700;
-const KEYBOARD_IDLE_MS = 900;
 
 type DockSliderProps = {
   control: ShellControl;
@@ -44,17 +40,14 @@ type LiquidBar = {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
-  const valueClipId = useId();
   const sliderRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const barsRef = useRef<SVGPathElement>(null);
   const labelRef = useRef<SVGTextElement>(null);
   const valueRef = useRef<SVGTextElement>(null);
-  const valueClipRef = useRef<SVGPathElement>(null);
   const pointerRef = useRef<number | null>(null);
   const pointerXRef = useRef(0);
-  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeRef = useRef(false);
+  const measureRef = useRef<(() => void) | null>(null);
   const wakeRef = useRef<(() => void) | null>(null);
 
   const scale: ValueScale = {
@@ -68,46 +61,38 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
   const position = resolvePosition(control.value, scale);
   const display = (scale.format ?? ((value: number) => defaultFormat(value, scale.step)))(control.value);
   const count = Math.max(3, Math.round(control.barCount ?? barCount));
-  const latestRef = useRef({ position, display, disabled: control.disabled });
+  const latestRef = useRef({ position, display });
 
   useLayoutEffect(() => {
-    latestRef.current = { position, display, disabled: control.disabled };
+    const displayChanged = latestRef.current.display !== display;
+    latestRef.current = { position, display };
     if (control.disabled) {
-      activeRef.current = false;
       const pointerId = pointerRef.current;
       pointerRef.current = null;
       if (pointerId !== null && sliderRef.current?.hasPointerCapture(pointerId)) {
         sliderRef.current.releasePointerCapture(pointerId);
       }
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = null;
     }
-    wakeRef.current?.();
+    if (displayChanged) measureRef.current?.();
+    else wakeRef.current?.();
   }, [position, display, control.disabled]);
 
   useLayoutEffect(() => {
-    const slider = sliderRef.current;
     const svg = svgRef.current;
     const barsPath = barsRef.current;
     const label = labelRef.current;
     const valueText = valueRef.current;
-    const valueClip = valueClipRef.current;
-    if (!slider || !svg || !barsPath || !label || !valueText || !valueClip) return;
+    if (!svg || !barsPath || !label || !valueText) return;
 
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const textContext = document.createElement("canvas").getContext("2d");
-    const form = spring(0);
     const bars: LiquidBar[] = [];
     let width = 0;
     let radius = 1.5;
-    let zone: Zone = { left: 0, right: 0, bottom: 0, top: 0 };
+    let zones: Zone[] = [];
     let frame = 0;
     let lastTime = 0;
     let disposed = false;
-    let measuredDisplay = "";
-    let valueWidth = 20;
-    let valueBaselineOffset = 0;
-    let valueGlyphHeight = 0;
     const lastBar = count - 1;
     const sigma = Math.max(1.45, lastBar * 0.085);
     const centerAt = (index: number) => radius + index * (width - 2 * radius) / lastBar;
@@ -122,20 +107,29 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
         textContext.letterSpacing = font.letterSpacing;
         const metrics = textContext.measureText(text.textContent ?? "");
         return {
-          left: metrics.actualBoundingBoxLeft,
-          right: metrics.actualBoundingBoxRight,
           ascent: metrics.actualBoundingBoxAscent,
           descent: metrics.actualBoundingBoxDescent,
         };
       }
       const bounds = text.getBBox();
-      const x = Number(text.getAttribute("x") ?? 0);
       const baseline = Number(text.getAttribute("y") ?? 0);
       return {
-        left: x - bounds.x,
-        right: bounds.x + bounds.width - x,
         ascent: baseline - bounds.y,
         descent: bounds.y + bounds.height - baseline,
+      };
+    };
+
+    const measureZone = (text: SVGTextElement, x: number): Zone => {
+      const metrics = measureGlyphs(text);
+      const baseline = TRACK_HEIGHT / 2 + (metrics.ascent - metrics.descent) / 2;
+      text.setAttribute("x", String(x));
+      text.setAttribute("y", String(baseline));
+      const bounds = text.getBBox();
+      return {
+        left: bounds.x - 2,
+        right: bounds.x + bounds.width + 2,
+        bottom: TRACK_HEIGHT - baseline - metrics.descent - 1.5,
+        top: TRACK_HEIGHT - baseline + metrics.ascent + 1.5,
       };
     };
 
@@ -156,61 +150,21 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       lastTime = now;
       let moving = false;
       let path = "";
-      let valuePath = "";
-
-      if (measuredDisplay !== latestRef.current.display) {
-        measuredDisplay = latestRef.current.display;
-        valueWidth = Math.min(width, valueText.getComputedTextLength() + 14);
-        const metrics = measureGlyphs(valueText);
-        valueBaselineOffset = (metrics.ascent - metrics.descent) / 2;
-        valueGlyphHeight = metrics.ascent + metrics.descent;
-      }
-      const active = activeRef.current && !latestRef.current.disabled;
-      moving = advance(form, active ? 1 : 0, 380, 0.76, dt) || moving;
-      const peakIndex = Math.round(latestRef.current.position * lastBar);
-      const peakX = centerAt(latestRef.current.position * lastBar);
-      const stemX = centerAt(peakIndex);
-      const peakTop = heightAt(peakIndex);
-      const amount = clamp(form.value, 0, 1.04);
-      const headWidth = Math.min(width, 2 * radius + (valueWidth - 2 * radius) * amount);
-      const valueX = clamp(
-        stemX + (peakX - stemX) * Math.min(1, amount), headWidth / 2, width - headWidth / 2,
-      );
-      const maxHeadHeight = Math.max(2 * radius, Math.min(16, peakTop - zone.top));
-      const valueLayout = valueHeadLayout(peakTop, radius, amount, maxHeadHeight);
 
       for (let i = 0; i < count; i++) {
         const cx = centerAt(i);
         const height = heightAt(i);
-        const overLabel = overlapsZone(cx, radius, zone);
-        const targets = overLabel
-          ? barTargets(height, zone)
-          : { lower: height, gapTop: height, top: height };
+        const zone = zones.find(zone => overlapsZone(cx, radius, zone));
+        const targets = barTargets(height, zone);
         const bar = bars[i]!;
         const splitting = targets.gapTop > targets.lower;
-        if (overLabel) {
+        if (zone) {
           moving = advance(bar.lower, targets.lower, 850, 0.9, dt) || moving;
           moving = advance(bar.gapTop, targets.gapTop, splitting ? 420 : 520, 0.76, dt) || moving;
           moving = advance(bar.top, targets.top, splitting ? 600 : 300, 0.8, dt) || moving;
         } else {
           bar.lower.value = bar.gapTop.value = bar.top.value = height;
           bar.lower.velocity = bar.gapTop.velocity = bar.top.velocity = 0;
-        }
-
-        if (i === peakIndex) {
-          if (overLabel) path += capsule(cx, 0, zone.bottom, radius, TRACK_HEIGHT);
-          valuePath = valueBar({
-            stemX,
-            bottom: overLabel ? zone.top : 0,
-            top: peakTop,
-            radius,
-            headX: valueX,
-            headWidth,
-            headHeight: valueLayout.height,
-            trackHeight: TRACK_HEIGHT,
-          });
-          path += valuePath;
-          continue;
         }
 
         const lower = Math.max(0, bar.lower.value);
@@ -231,21 +185,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
           );
         }
       }
-      if (amount > 0.002) {
-        const headHeight = valueLayout.height;
-        const center = valueLayout.center;
-        valueClip.setAttribute("d", valuePath);
-        valueText.setAttribute("x", String(valueX));
-        valueText.setAttribute("y", String(TRACK_HEIGHT - center + valueBaselineOffset));
-        valueText.setAttribute("opacity", String(clamp(
-          (headHeight - valueGlyphHeight) / Math.max(1, maxHeadHeight - valueGlyphHeight), 0, 1,
-        )));
-      } else {
-        valueClip.setAttribute("d", "");
-        valueText.setAttribute("opacity", "0");
-      }
       barsPath.setAttribute("d", path);
-      slider.toggleAttribute("data-active", active || amount > 0.002);
       if (moving) frame = requestAnimationFrame(draw);
       else lastTime = 0;
     };
@@ -259,30 +199,23 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       if (!width) return;
       radius = Math.min(1.5, width / (count * 3));
       svg.setAttribute("viewBox", `0 0 ${width} ${TRACK_HEIGHT}`);
+      const valueZone = measureZone(valueText, width);
+      const labelWidth = Math.max(0, valueZone.left - 12);
       label.textContent = control.label;
-      if (label.getComputedTextLength() > width - 4) {
+      if (label.getComputedTextLength() > labelWidth) {
         let shortened = control.label;
         do {
           shortened = shortened.slice(0, -1);
           label.textContent = `${shortened}…`;
-        } while (shortened && label.getComputedTextLength() > width - 4);
+        } while (shortened && label.getComputedTextLength() > labelWidth);
+        if (label.getComputedTextLength() > labelWidth) label.textContent = "";
       }
-      const metrics = measureGlyphs(label);
-      const labelBaseline = TRACK_HEIGHT / 2 + (metrics.ascent - metrics.descent) / 2;
-      label.setAttribute("y", String(labelBaseline));
-      zone = {
-        left: -metrics.left - 2,
-        right: metrics.right + 2,
-        bottom: TRACK_HEIGHT - labelBaseline - metrics.descent - 1.5,
-        top: TRACK_HEIGHT - labelBaseline + metrics.ascent + 1.5,
-      };
-      measuredDisplay = "";
+      zones = label.textContent ? [measureZone(label, 0), valueZone] : [valueZone];
       if (!bars.length) {
         for (let i = 0; i < count; i++) {
           const height = heightAt(i);
-          const targets = overlapsZone(centerAt(i), radius, zone)
-            ? barTargets(height, zone)
-            : { lower: height, gapTop: height, top: height };
+          const zone = zones.find(zone => overlapsZone(centerAt(i), radius, zone));
+          const targets = barTargets(height, zone);
           bars.push({
             lower: spring(targets.lower),
             gapTop: spring(targets.gapTop),
@@ -295,6 +228,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     };
 
     wakeRef.current = wake;
+    measureRef.current = measure;
     const observer = new ResizeObserver(measure);
     observer.observe(svg);
     motion.addEventListener("change", wake);
@@ -307,26 +241,9 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       observer.disconnect();
       motion.removeEventListener("change", wake);
       wakeRef.current = null;
+      measureRef.current = null;
     };
   }, [count, control.label]);
-
-  useLayoutEffect(() => () => {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-  }, []);
-
-  function hideValue() {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = null;
-    activeRef.current = false;
-    wakeRef.current?.();
-  }
-
-  function showValue(duration: number) {
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-    activeRef.current = true;
-    idleTimerRef.current = setTimeout(hideValue, duration);
-    wakeRef.current?.();
-  }
 
   function setFromClientX(clientX: number) {
     const svg = svgRef.current;
@@ -343,14 +260,12 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     event.currentTarget.setAttribute("data-pointer-focus", "");
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.focus({ preventScroll: true });
-    showValue(POINTER_IDLE_MS);
     setFromClientX(event.clientX);
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     if (pointerRef.current !== event.pointerId || pointerXRef.current === event.clientX) return;
     pointerXRef.current = event.clientX;
-    showValue(POINTER_IDLE_MS);
     setFromClientX(event.clientX);
   }
 
@@ -360,7 +275,6 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    hideValue();
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -394,7 +308,6 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       : scale.step != null && scale.step > 0
         ? applyStep(control.value + direction * scale.step * multiplier, scale.min, scale.max, scale.step)
         : resolveValue(position + direction * 0.01 * multiplier, scale);
-    showValue(KEYBOARD_IDLE_MS);
     control.onChange(nextValue);
   }
 
@@ -418,20 +331,12 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       onPointerCancel={endPointer}
       onLostPointerCapture={endPointer}
       onKeyDown={onKeyDown}
-      onBlur={event => {
-        event.currentTarget.removeAttribute("data-pointer-focus");
-        hideValue();
-      }}
+      onBlur={event => event.currentTarget.removeAttribute("data-pointer-focus")}
     >
       <svg ref={svgRef} className={styles.track} aria-hidden="true">
         <path ref={barsRef} className={styles.ink} />
         <text ref={labelRef} className={styles.label} x="0" y={TRACK_HEIGHT / 2}>{control.label}</text>
-        <text ref={valueRef} className={styles.value} clipPath={`url(#${valueClipId})`} opacity="0">{display}</text>
-        <defs>
-          <clipPath id={valueClipId} clipPathUnits="userSpaceOnUse">
-            <path ref={valueClipRef} />
-          </clipPath>
-        </defs>
+        <text ref={valueRef} className={styles.value} x="0" y={TRACK_HEIGHT / 2}>{display}</text>
       </svg>
     </div>
   );

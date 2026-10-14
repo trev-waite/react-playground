@@ -1,18 +1,12 @@
-/**
- * Geometry for the dock slider's liquid bars. Heights are measured up from the
- * track's floor; paths are emitted in SVG space where y grows down from the top.
- * Every shape winds clockwise so overlapping pieces in one path fill as a union.
- */
+// Heights are measured from the track floor; clockwise paths fill overlapping pieces as a union.
 
 export type Spring = { value: number; velocity: number };
 
-/** Where the title sits, in px from the track's left edge and floor. */
 export type Zone = { left: number; right: number; bottom: number; top: number };
 
 /** A bar's lower piece runs from the floor to `lower`; its upper piece from `gapTop` to `top`. */
 export type BarTargets = { lower: number; gapTop: number; top: number };
 
-/** How far a neck stretches before it pinches, and how close pieces get before it snaps back. */
 export const PINCH_DISTANCE = 6;
 export const SNAP_DISTANCE = 1.2;
 const MIN_UPPER = 3;
@@ -42,28 +36,14 @@ export function stepSpring(
 export const isSettled = (state: Spring, target: number) =>
   Math.abs(state.value - target) < 0.01 && Math.abs(state.velocity) < 0.05;
 
-/**
- * Bars clear of the title rise whole. Over the title they stop short below it,
- * and once they are tall enough the part that would cross the letters resumes above them.
- */
-export function barTargets(height: number, zone: Zone): BarTargets {
-  if (height <= zone.bottom) return { lower: height, gapTop: height, top: height };
+export function barTargets(height: number, zone?: Zone): BarTargets {
+  if (!zone || height <= zone.bottom) return { lower: height, gapTop: height, top: height };
   if (height <= zone.top + MIN_UPPER) return { lower: zone.bottom, gapTop: zone.bottom, top: zone.bottom };
   return { lower: zone.bottom, gapTop: zone.top, top: height };
 }
 
 export const overlapsZone = (cx: number, radius: number, zone: Zone) =>
   cx + radius > zone.left && cx - radius < zone.right;
-
-/** Reserve room for the number inside the bar's growing head, keeping its top fixed. */
-export function valueHeadLayout(peakTop: number, radius: number, amount: number, maxHeight: number) {
-  const form = Math.min(1.04, Math.max(0, amount));
-  const height = Math.min(maxHeight, 2 * radius + (maxHeight - 2 * radius) * form);
-  return {
-    height,
-    center: peakTop - height / 2,
-  };
-}
 
 /** Necks hold until stretched past the pinch distance, and only re-form on near contact. */
 export function stillConnected(connected: boolean, gap: number) {
@@ -78,61 +58,6 @@ export function neckWaist(gap: number, radius: number) {
 }
 
 const fmt = (n: number) => n.toFixed(2);
-const CIRCLE_CONTROL = 0.5522847498;
-
-/** A single bar outline whose rounded top widens through smooth shoulders into a value head. */
-export function valueBar({
-  stemX, bottom, top, radius, headX, headWidth, headHeight, trackHeight,
-}: {
-  stemX: number;
-  bottom: number;
-  top: number;
-  radius: number;
-  headX: number;
-  headWidth: number;
-  headHeight: number;
-  trackHeight: number;
-}) {
-  const length = top - bottom;
-  if (length <= 0.05 || radius <= 0) return "";
-  const stemRadius = Math.min(radius, length / 2);
-  const height = Math.min(length, Math.max(2 * stemRadius, headHeight));
-  const headHalfWidth = Math.max(2 * stemRadius, headWidth) / 2;
-  const topRadius = Math.min(height / 2, headHalfWidth);
-  // Above a title, the short upper piece widens all the way down as the head fills it.
-  const fill = Math.min(1, Math.max(0, (height - length + 2 * stemRadius) / (2 * stemRadius)));
-  const baseX = stemX + (headX - stemX) * fill;
-  const baseHalfWidth = stemRadius + (headHalfWidth - stemRadius) * fill;
-  const bottomRadius = stemRadius + (topRadius - stemRadius) * fill;
-  const leftBase = baseX - baseHalfWidth;
-  const rightBase = baseX + baseHalfWidth;
-  const leftHead = headX - headHalfWidth;
-  const rightHead = headX + headHalfWidth;
-  const topY = trackHeight - top;
-  const bottomY = trackHeight - bottom;
-  const joinY = Math.min(bottomY - bottomRadius, topY + height + 2 * stemRadius);
-  const flareRoom = Math.max(0, joinY - topY - topRadius);
-  const minFlare = Math.min(stemRadius * (1 - fill), flareRoom);
-  // Keep the head wide through the number's baseline before it flows into the stem.
-  const shoulderY = Math.min(joinY - minFlare, topY + height - Math.min(topRadius, stemRadius));
-  const pull = (joinY - shoulderY) * 0.55;
-  const topControl = topRadius * CIRCLE_CONTROL;
-  const bottomControl = bottomRadius * CIRCLE_CONTROL;
-  return (
-    `M${fmt(leftBase)} ${fmt(bottomY - bottomRadius)}V${fmt(joinY)}` +
-    `C${fmt(leftBase)} ${fmt(joinY - pull)} ${fmt(leftHead)} ${fmt(shoulderY + pull)} ${fmt(leftHead)} ${fmt(shoulderY)}` +
-    `V${fmt(topY + topRadius)}` +
-    `C${fmt(leftHead)} ${fmt(topY + topRadius - topControl)} ${fmt(leftHead + topRadius - topControl)} ${fmt(topY)} ${fmt(leftHead + topRadius)} ${fmt(topY)}` +
-    `H${fmt(rightHead - topRadius)}` +
-    `C${fmt(rightHead - topRadius + topControl)} ${fmt(topY)} ${fmt(rightHead)} ${fmt(topY + topRadius - topControl)} ${fmt(rightHead)} ${fmt(topY + topRadius)}` +
-    `V${fmt(shoulderY)}` +
-    `C${fmt(rightHead)} ${fmt(shoulderY + pull)} ${fmt(rightBase)} ${fmt(joinY - pull)} ${fmt(rightBase)} ${fmt(joinY)}` +
-    `V${fmt(bottomY - bottomRadius)}` +
-    `C${fmt(rightBase)} ${fmt(bottomY - bottomRadius + bottomControl)} ${fmt(rightBase - bottomRadius + bottomControl)} ${fmt(bottomY)} ${fmt(rightBase - bottomRadius)} ${fmt(bottomY)}` +
-    `H${fmt(leftBase + bottomRadius)}` +
-    `C${fmt(leftBase + bottomRadius - bottomControl)} ${fmt(bottomY)} ${fmt(leftBase)} ${fmt(bottomY - bottomRadius + bottomControl)} ${fmt(leftBase)} ${fmt(bottomY - bottomRadius)}Z`
-  );
-}
 
 /** A vertical stadium from `bottom` to `top`, shrinking to a dot and then nothing when short. */
 export function capsule(cx: number, bottom: number, top: number, radius: number, height: number) {
@@ -148,27 +73,9 @@ export function capsule(cx: number, bottom: number, top: number, radius: number,
   );
 }
 
-/** A horizontal stadium centered on (cx, center). */
-export function pill(cx: number, center: number, width: number, pillHeight: number, height: number) {
-  if (width <= 0 || pillHeight <= 0) return "";
-  const r = Math.min(width, pillHeight) / 2;
-  const left = cx - width / 2;
-  const right = cx + width / 2;
-  const top = height - center - pillHeight / 2;
-  const bottom = top + pillHeight;
-  return (
-    `M${fmt(left + r)} ${fmt(top)}H${fmt(right - r)}` +
-    `A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(right - r)} ${fmt(bottom)}H${fmt(left + r)}` +
-    `A${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(left + r)} ${fmt(top)}Z`
-  );
-}
-
 type NeckEnd = { x: number; y: number; radius: number };
 
-/**
- * A liquid bridge between two round ends: each side leaves and enters vertically
- * and pinches to `waist` halfway, so the join reads as one surface while it stretches.
- */
+// Vertical tangents at both ends keep the bridge smooth as its waist pinches.
 export function neck(from: NeckEnd, to: NeckEnd, waist: number, height: number) {
   if (waist <= 0.04) return "";
   const y0 = height - from.y;

@@ -6,82 +6,32 @@ import {
   neck,
   neckWaist,
   overlapsZone,
-  pill,
   spring,
   stepSpring,
   stillConnected,
-  valueBar,
-  valueHeadLayout,
   type Zone,
 } from "./dockSliderGeometry";
 
 const zone: Zone = { left: 0, right: 40, bottom: 7, top: 21 };
 
-describe("morphing value bar", () => {
-  test("reserves room for the number while keeping the original bar top fixed", () => {
-    for (const amount of [0, 0.2, 0.6, 1, 1.04]) {
-      const layout = valueHeadLayout(32, 1.5, amount, 16);
-      expect(layout.center + layout.height / 2).toBeCloseTo(32);
-      expect(layout.height).toBeLessThanOrEqual(16);
+describe("dock slider text clearance", () => {
+  test("keeps bars whole outside either text zone", () => {
+    expect(barTargets(32)).toEqual({ lower: 32, gapTop: 32, top: 32 });
+  });
+
+  test("clears the right value with the same rules as the left title", () => {
+    const valueZone: Zone = { left: 220, right: 260, bottom: 7, top: 21 };
+    const zones = [zone, valueZone];
+    for (const cx of [20, 240]) {
+      const overlapping = zones.find(zone => overlapsZone(cx, 1.5, zone));
+      expect(barTargets(32, overlapping)).toEqual({ lower: 7, gapTop: 21, top: 32 });
     }
-    expect(valueHeadLayout(32, 1.5, 0, 16).height).toBe(3);
-    expect(valueHeadLayout(32, 1.5, 1, 16).height).toBe(16);
+    expect(barTargets(32, zones.find(zone => overlapsZone(130, 1.5, zone))))
+      .toEqual({ lower: 32, gapTop: 32, top: 32 });
+    expect(overlapsZone(218.5, 1.5, valueZone)).toBe(false);
+    expect(overlapsZone(219, 1.5, valueZone)).toBe(true);
   });
 
-  test("fits the value into the available space above the title", () => {
-    const layout = valueHeadLayout(32, 1.5, 1.04, 9);
-    expect(layout.height).toBe(9);
-    expect(layout.center - layout.height / 2).toBe(23);
-  });
-
-  test("draws the bar and number head as one continuous outline throughout the morph", () => {
-    for (const amount of [0, 0.2, 0.6, 1, 1.04, 1, 0.6, 0.2, 0]) {
-      const layout = valueHeadLayout(32, 1.5, amount, 10);
-      const path = valueBar({
-        stemX: 50, bottom: 0, top: 32, radius: 1.5, headX: 50,
-        headWidth: 3 + 24 * amount, headHeight: layout.height, trackHeight: 32,
-      });
-      expect(path.match(/M/g)).toHaveLength(1);
-      expect(path.match(/Z/g)).toHaveLength(1);
-      expect(path).not.toMatch(/NaN|Infinity/);
-    }
-  });
-
-  test("widens a short upper piece without adding another cap or collapsing its outline", () => {
-    for (const amount of [0, 0.5, 1]) {
-      const path = valueBar({
-        stemX: 1.5, bottom: 23, top: 32, radius: 1.5,
-        headX: 1.5 + 9 * amount, headWidth: 3 + 18 * amount,
-        headHeight: valueHeadLayout(32, 1.5, amount, 9).height, trackHeight: 32,
-      });
-      expect(path.match(/M/g)).toHaveLength(1);
-      expect(path.endsWith("Z")).toBe(true);
-      expect(path).not.toMatch(/NaN|Infinity/);
-    }
-    expect(valueBar({
-      stemX: 1.5, bottom: 32, top: 32, radius: 1.5,
-      headX: 1.5, headWidth: 3, headHeight: 3, trackHeight: 32,
-    })).toBe("");
-  });
-
-  test("keeps the short piece's shoulders curved while its base widens", () => {
-    for (const amount of [0.5, 0.8, 0.95]) {
-      const path = valueBar({
-        stemX: 1.5, bottom: 23, top: 32, radius: 1.5,
-        headX: 1.5 + 9 * amount, headWidth: 3 + 18 * amount,
-        headHeight: valueHeadLayout(32, 1.5, amount, 9).height, trackHeight: 32,
-      });
-      const curves = Array.from(path.matchAll(/C([\d.\s-]+)/g), match =>
-        match[1]!.trim().split(/\s+/).map(Number),
-      );
-      const shoulder = curves[3]!;
-      expect(shoulder[1]!).toBeLessThan(shoulder[5]!);
-      expect(shoulder[2]!).toBe(shoulder[4]!);
-    }
-  });
-});
-
-describe("dock slider label clearance", () => {
   test("keeps short bars whole below the label", () => {
     expect(barTargets(4, zone)).toEqual({ lower: 4, gapTop: 4, top: 4 });
     expect(barTargets(7, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
@@ -142,7 +92,6 @@ describe("liquid joins", () => {
     expect(capsule(10, 7, 5, 1.5, 32)).toBe("");
     expect(capsule(10, 0, 5, 0, 32)).toBe("");
     expect(capsule(10, 0, 1, 1.5, 32)).toContain("A0.50 0.50");
-    expect(pill(10, 20, 0, 16, 32)).toBe("");
   });
 });
 
@@ -151,7 +100,7 @@ describe("dock slider springs", () => {
     const state = spring(0);
     let peak = 0;
     for (let i = 0; i < 100; i++) {
-      stepSpring(state, 1, 380, 0.76, 0.048);
+      stepSpring(state, 1, 420, 0.76, 0.048);
       peak = Math.max(peak, state.value);
     }
     expect(peak).toBeGreaterThan(1);

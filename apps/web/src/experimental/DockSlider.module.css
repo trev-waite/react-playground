@@ -14,10 +14,6 @@
   outline: none;
 }
 
-.block[data-active] {
-  z-index: 1;
-}
-
 .block[data-disabled="true"] {
   opacity: 0.45;
   pointer-events: none;
@@ -44,23 +40,24 @@
   fill: #111113;
 }
 
-.label {
+.label,
+.value {
   fill: #111113;
   stroke: #fff;
   stroke-width: 3px;
   stroke-linejoin: round;
   paint-order: stroke;
-  font-size: 0.75rem;
-  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
-.value {
-  fill: #fff;
-  font-size: 0.625rem;
+.label {
+  font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+}
+
+.value {
+  font-size: 0.8125rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  text-anchor: middle;
-  dominant-baseline: alphabetic;
+  text-anchor: end;
 }
