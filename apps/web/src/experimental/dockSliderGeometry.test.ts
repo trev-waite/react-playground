@@ -1,0 +1,115 @@
+import { describe, expect, test } from "bun:test";
+import {
+  barTargets,
+  capsule,
+  isSettled,
+  neck,
+  neckWaist,
+  overlapsZone,
+  spring,
+  stepSpring,
+  stillConnected,
+  type Zone,
+} from "./dockSliderGeometry";
+
+const zone: Zone = { left: 220, right: 260, bottom: 7, top: 21 };
+
+describe("dock slider text clearance", () => {
+  test("keeps bars whole outside the value zone", () => {
+    expect(barTargets(32)).toEqual({ lower: 32, gapTop: 32, top: 32 });
+  });
+
+  test("clears the right value without interrupting bars on the left", () => {
+    expect(overlapsZone(20, 1.5, zone)).toBe(false);
+    expect(overlapsZone(240, 1.5, zone)).toBe(true);
+    expect(overlapsZone(218.5, 1.5, zone)).toBe(false);
+    expect(overlapsZone(219, 1.5, zone)).toBe(true);
+  });
+
+  test("keeps short bars whole below the value", () => {
+    expect(barTargets(4, zone)).toEqual({ lower: 4, gapTop: 4, top: 4 });
+    expect(barTargets(7, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
+  });
+
+  test("drains bars that reach into the value down to a stub", () => {
+    expect(barTargets(15, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
+    expect(barTargets(24, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
+  });
+
+  test("splits tall bars into pieces below and above the value", () => {
+    expect(barTargets(32, zone)).toEqual({ lower: 7, gapTop: 21, top: 32 });
+  });
+
+  test("checks the full bar width when clearing the value", () => {
+    expect(overlapsZone(261, 1.5, zone)).toBe(true);
+    expect(overlapsZone(261.5, 1.5, zone)).toBe(false);
+  });
+});
+
+describe("liquid joins", () => {
+  test("holds a neck while stretching and reconnects only near contact", () => {
+    let connected = true;
+    connected = stillConnected(connected, 5.9);
+    expect(connected).toBe(true);
+    connected = stillConnected(connected, 6);
+    expect(connected).toBe(false);
+    connected = stillConnected(connected, 2);
+    expect(connected).toBe(false);
+    connected = stillConnected(connected, 1.2);
+    expect(connected).toBe(false);
+    connected = stillConnected(connected, 1);
+    expect(connected).toBe(true);
+    expect(stillConnected(connected, 2)).toBe(true);
+  });
+
+  test("thins stretched necks and adds a bounded bulge on merging", () => {
+    expect(neckWaist(0, 1.5)).toBe(1.5);
+    expect(neckWaist(3, 1.5)).toBeGreaterThan(0);
+    expect(neckWaist(3, 1.5)).toBeLessThan(1.5);
+    expect(neckWaist(6, 1.5)).toBe(0);
+    expect(neckWaist(-100, 1.5)).toBeCloseTo(1.5 * 1.45);
+    expect(neckWaist(0, 0)).toBe(0);
+  });
+
+  test("draws curved bridges and removes them completely on pinch-off", () => {
+    const from = { x: 20, y: 10, radius: 1.5 };
+    const to = { x: 25, y: 16, radius: 2 };
+    const path = neck(from, to, 1, 32);
+    expect(path.match(/C/g)).toHaveLength(4);
+    expect(path.endsWith("Z")).toBe(true);
+    expect(path).not.toMatch(/NaN|Infinity/);
+    expect(neck(from, to, 0, 32)).toBe("");
+  });
+
+  test("handles collapsed and reversed pieces without invalid paths", () => {
+    expect(capsule(10, 5, 5, 1.5, 32)).toBe("");
+    expect(capsule(10, 7, 5, 1.5, 32)).toBe("");
+    expect(capsule(10, 0, 5, 0, 32)).toBe("");
+    expect(capsule(10, 0, 1, 1.5, 32)).toContain("A0.50 0.50");
+  });
+});
+
+describe("dock slider springs", () => {
+  test("settles with only a small rebound even when frames are dropped", () => {
+    const state = spring(0);
+    let peak = 0;
+    for (let i = 0; i < 100; i++) {
+      stepSpring(state, 1, 420, 0.76, 0.048);
+      peak = Math.max(peak, state.value);
+    }
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThan(1.04);
+    expect(isSettled(state, 1)).toBe(true);
+  });
+
+  test("preserves continuity when motion reverses mid-split", () => {
+    const state = spring(7);
+    stepSpring(state, 21, 420, 0.76, 1 / 60);
+    const before = state.value;
+    stepSpring(state, 7, 520, 0.76, 1 / 60);
+    expect(state.value).toBeGreaterThan(7);
+    expect(Math.abs(state.value - before)).toBeLessThan(2);
+    for (let i = 0; i < 120; i++) stepSpring(state, 7, 520, 0.76, 1 / 60);
+    expect(isSettled(state, 7)).toBe(true);
+  });
+});
