@@ -12,43 +12,37 @@ import {
   type Zone,
 } from "./dockSliderGeometry";
 
-const zone: Zone = { left: 0, right: 40, bottom: 7, top: 21 };
+const zone: Zone = { left: 220, right: 260, bottom: 7, top: 21 };
 
 describe("dock slider text clearance", () => {
-  test("keeps bars whole outside either text zone", () => {
+  test("keeps bars whole outside the value zone", () => {
     expect(barTargets(32)).toEqual({ lower: 32, gapTop: 32, top: 32 });
   });
 
-  test("clears the right value with the same rules as the left title", () => {
-    const valueZone: Zone = { left: 220, right: 260, bottom: 7, top: 21 };
-    const zones = [zone, valueZone];
-    for (const cx of [20, 240]) {
-      const overlapping = zones.find(zone => overlapsZone(cx, 1.5, zone));
-      expect(barTargets(32, overlapping)).toEqual({ lower: 7, gapTop: 21, top: 32 });
-    }
-    expect(barTargets(32, zones.find(zone => overlapsZone(130, 1.5, zone))))
-      .toEqual({ lower: 32, gapTop: 32, top: 32 });
-    expect(overlapsZone(218.5, 1.5, valueZone)).toBe(false);
-    expect(overlapsZone(219, 1.5, valueZone)).toBe(true);
+  test("clears the right value without interrupting bars on the left", () => {
+    expect(overlapsZone(20, 1.5, zone)).toBe(false);
+    expect(overlapsZone(240, 1.5, zone)).toBe(true);
+    expect(overlapsZone(218.5, 1.5, zone)).toBe(false);
+    expect(overlapsZone(219, 1.5, zone)).toBe(true);
   });
 
-  test("keeps short bars whole below the label", () => {
+  test("keeps short bars whole below the value", () => {
     expect(barTargets(4, zone)).toEqual({ lower: 4, gapTop: 4, top: 4 });
     expect(barTargets(7, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
   });
 
-  test("drains bars that reach into the label down to a stub", () => {
+  test("drains bars that reach into the value down to a stub", () => {
     expect(barTargets(15, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
     expect(barTargets(24, zone)).toEqual({ lower: 7, gapTop: 7, top: 7 });
   });
 
-  test("splits tall bars into pieces below and above the label", () => {
+  test("splits tall bars into pieces below and above the value", () => {
     expect(barTargets(32, zone)).toEqual({ lower: 7, gapTop: 21, top: 32 });
   });
 
-  test("checks the full bar width when clearing the label", () => {
-    expect(overlapsZone(41, 1.5, zone)).toBe(true);
-    expect(overlapsZone(41.5, 1.5, zone)).toBe(false);
+  test("checks the full bar width when clearing the value", () => {
+    expect(overlapsZone(261, 1.5, zone)).toBe(true);
+    expect(overlapsZone(261.5, 1.5, zone)).toBe(false);
   });
 });
 

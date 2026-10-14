@@ -43,7 +43,6 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const barsRef = useRef<SVGPathElement>(null);
-  const labelRef = useRef<SVGTextElement>(null);
   const valueRef = useRef<SVGTextElement>(null);
   const pointerRef = useRef<number | null>(null);
   const pointerXRef = useRef(0);
@@ -80,16 +79,15 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
   useLayoutEffect(() => {
     const svg = svgRef.current;
     const barsPath = barsRef.current;
-    const label = labelRef.current;
     const valueText = valueRef.current;
-    if (!svg || !barsPath || !label || !valueText) return;
+    if (!svg || !barsPath || !valueText) return;
 
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const textContext = document.createElement("canvas").getContext("2d");
     const bars: LiquidBar[] = [];
     let width = 0;
     let radius = 1.5;
-    let zones: Zone[] = [];
+    let valueZone: Zone | undefined;
     let frame = 0;
     let lastTime = 0;
     let disposed = false;
@@ -154,7 +152,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       for (let i = 0; i < count; i++) {
         const cx = centerAt(i);
         const height = heightAt(i);
-        const zone = zones.find(zone => overlapsZone(cx, radius, zone));
+        const zone = valueZone && overlapsZone(cx, radius, valueZone) ? valueZone : undefined;
         const targets = barTargets(height, zone);
         const bar = bars[i]!;
         const splitting = targets.gapTop > targets.lower;
@@ -199,22 +197,11 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       if (!width) return;
       radius = Math.min(1.5, width / (count * 3));
       svg.setAttribute("viewBox", `0 0 ${width} ${TRACK_HEIGHT}`);
-      const valueZone = measureZone(valueText, width);
-      const labelWidth = Math.max(0, valueZone.left - 12);
-      label.textContent = control.label;
-      if (label.getComputedTextLength() > labelWidth) {
-        let shortened = control.label;
-        do {
-          shortened = shortened.slice(0, -1);
-          label.textContent = `${shortened}…`;
-        } while (shortened && label.getComputedTextLength() > labelWidth);
-        if (label.getComputedTextLength() > labelWidth) label.textContent = "";
-      }
-      zones = label.textContent ? [measureZone(label, 0), valueZone] : [valueZone];
+      valueZone = measureZone(valueText, width);
       if (!bars.length) {
         for (let i = 0; i < count; i++) {
           const height = heightAt(i);
-          const zone = zones.find(zone => overlapsZone(centerAt(i), radius, zone));
+          const zone = overlapsZone(centerAt(i), radius, valueZone) ? valueZone : undefined;
           const targets = barTargets(height, zone);
           bars.push({
             lower: spring(targets.lower),
@@ -243,7 +230,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       wakeRef.current = null;
       measureRef.current = null;
     };
-  }, [count, control.label]);
+  }, [count]);
 
   function setFromClientX(clientX: number) {
     const svg = svgRef.current;
@@ -312,32 +299,33 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
   }
 
   return (
-    <div
-      ref={sliderRef}
-      className={styles.block}
-      data-disabled={control.disabled ? "true" : undefined}
-      role="slider"
-      tabIndex={control.disabled ? -1 : 0}
-      aria-label={control.label}
-      aria-orientation="horizontal"
-      aria-valuemin={scale.min}
-      aria-valuemax={scale.max}
-      aria-valuenow={control.value}
-      aria-valuetext={display}
-      aria-disabled={control.disabled || undefined}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={endPointer}
-      onPointerCancel={endPointer}
-      onLostPointerCapture={endPointer}
-      onKeyDown={onKeyDown}
-      onBlur={event => event.currentTarget.removeAttribute("data-pointer-focus")}
-    >
-      <svg ref={svgRef} className={styles.track} aria-hidden="true">
-        <path ref={barsRef} className={styles.ink} />
-        <text ref={labelRef} className={styles.label} x="0" y={TRACK_HEIGHT / 2}>{control.label}</text>
-        <text ref={valueRef} className={styles.value} x="0" y={TRACK_HEIGHT / 2}>{display}</text>
-      </svg>
+    <div className={styles.control} data-disabled={control.disabled ? "true" : undefined}>
+      <span className={styles.label} aria-hidden="true">{control.label}</span>
+      <div
+        ref={sliderRef}
+        className={styles.block}
+        role="slider"
+        tabIndex={control.disabled ? -1 : 0}
+        aria-label={control.label}
+        aria-orientation="horizontal"
+        aria-valuemin={scale.min}
+        aria-valuemax={scale.max}
+        aria-valuenow={control.value}
+        aria-valuetext={display}
+        aria-disabled={control.disabled || undefined}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
+        onLostPointerCapture={endPointer}
+        onKeyDown={onKeyDown}
+        onBlur={event => event.currentTarget.removeAttribute("data-pointer-focus")}
+      >
+        <svg ref={svgRef} className={styles.track} aria-hidden="true">
+          <path ref={barsRef} className={styles.ink} />
+          <text ref={valueRef} className={styles.value} x="0" y={TRACK_HEIGHT / 2}>{display}</text>
+        </svg>
+      </div>
     </div>
   );
 }
