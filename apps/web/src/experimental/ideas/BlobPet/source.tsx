@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-const SLIDERS = {"bounce":71,"wobble":0,"tempo":58};
+const SLIDERS = {"bounce":95,"wobble":0,"tempo":36};
 
 type Point = { x: number; y: number };
 type Contour = Point[];
