@@ -10,10 +10,32 @@ import {
   spring,
   stepSpring,
   stillConnected,
+  valuePillLayout,
   type Zone,
 } from "./dockSliderGeometry";
 
 const zone: Zone = { left: 0, right: 40, bottom: 7, top: 21 };
+
+describe("contained value pill", () => {
+  test("replaces the top of the bar without increasing the combined height", () => {
+    for (const amount of [0, 0.2, 0.6, 1, 1.04]) {
+      const layout = valuePillLayout(32, 1.5, amount, 16);
+      expect(layout.center + layout.height / 2).toBeCloseTo(32);
+      expect(layout.barTop + layout.gap + layout.height).toBeCloseTo(32);
+      expect(layout.height).toBeLessThanOrEqual(16);
+      expect(layout.barTop).toBeGreaterThanOrEqual(0);
+    }
+    expect(valuePillLayout(32, 1.5, 0, 16).barTop).toBe(32);
+    expect(valuePillLayout(32, 1.5, 1, 16).barTop).toBe(12);
+  });
+
+  test("fits the value into the available space above the title", () => {
+    const layout = valuePillLayout(32, 1.5, 1.04, 9);
+    expect(layout.height).toBe(9);
+    expect(layout.center - layout.height / 2).toBe(23);
+    expect(layout.barTop).toBe(19);
+  });
+});
 
 describe("dock slider label clearance", () => {
   test("keeps short bars whole below the label", () => {

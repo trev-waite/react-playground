@@ -55,6 +55,19 @@ export function barTargets(height: number, zone: Zone): BarTargets {
 export const overlapsZone = (cx: number, radius: number, zone: Zone) =>
   cx + radius > zone.left && cx - radius < zone.right;
 
+/** The value replaces the bar's top while their combined height stays fixed. */
+export function valuePillLayout(peakTop: number, radius: number, amount: number, maxHeight: number) {
+  const form = Math.min(1.04, Math.max(0, amount));
+  const height = Math.min(maxHeight, 2 * radius + (maxHeight - 2 * radius) * form);
+  const gap = -2 * radius + (4 + 2 * radius) * Math.min(1, form);
+  return {
+    height,
+    center: peakTop - height / 2,
+    barTop: peakTop - height - gap,
+    gap,
+  };
+}
+
 /** Necks hold until stretched past the pinch distance, and only re-form on near contact. */
 export function stillConnected(connected: boolean, gap: number) {
   return connected ? gap < PINCH_DISTANCE : gap < SNAP_DISTANCE;

@@ -19,6 +19,7 @@ import {
   spring,
   stepSpring,
   stillConnected,
+  valuePillLayout,
   type Spring,
   type Zone,
 } from "./dockSliderGeometry";
@@ -110,6 +111,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     let measuredDisplay = "";
     let valueWidth = 20;
     let valueBaselineOffset = 0;
+    let valueGlyphHeight = 0;
     const lastBar = count - 1;
     const sigma = Math.max(1.45, lastBar * 0.085);
     const centerAt = (index: number) => radius + index * (width - 2 * radius) / lastBar;
@@ -159,6 +161,33 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       let moving = false;
       let path = "";
 
+      if (measuredDisplay !== latestRef.current.display) {
+        measuredDisplay = latestRef.current.display;
+        valueWidth = Math.min(width, valueText.getComputedTextLength() + 14);
+        const metrics = measureGlyphs(valueText);
+        valueBaselineOffset = (metrics.ascent - metrics.descent) / 2;
+        valueGlyphHeight = metrics.ascent + metrics.descent;
+      }
+      const active = activeRef.current && !latestRef.current.disabled;
+      moving = advance(form, active ? 1 : 0, 380, 0.76, dt) || moving;
+      const peakIndex = Math.round(latestRef.current.position * lastBar);
+      const peakX = centerAt(peakIndex);
+      const peakTop = heightAt(peakIndex);
+      const targetX = clamp(peakX, valueWidth / 2, width - valueWidth / 2);
+      if (form.value < 0.01 && !active) {
+        dropletX.value = targetX;
+        dropletX.velocity = 0;
+      } else {
+        moving = advance(dropletX, targetX, 1100, 0.85, dt) || moving;
+      }
+
+      const amount = clamp(form.value, 0, 1.04);
+      const pillWidth = Math.min(width, 2 * radius + (valueWidth - 2 * radius) * amount);
+      const valueX = clamp(dropletX.value, pillWidth / 2, width - pillWidth / 2);
+      const maxPillHeight = Math.max(2 * radius, Math.min(16, peakTop - zone.top));
+      const valueLayout = valuePillLayout(peakTop, radius, amount, maxPillHeight);
+      let visiblePeakTop = peakTop;
+
       for (let i = 0; i < count; i++) {
         const cx = centerAt(i);
         const height = heightAt(i);
@@ -177,10 +206,15 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
           bar.lower.velocity = bar.gapTop.velocity = bar.top.velocity = 0;
         }
 
-        const lower = Math.max(0, bar.lower.value);
+        const influence = i === peakIndex ? 1 : clamp(
+          (pillWidth / 2 + radius - Math.abs(cx - valueX)) / (2 * radius), 0, 1,
+        );
+        const topLimit = height - Math.max(0, height - valueLayout.barTop) * influence;
+        const lower = Math.min(topLimit, Math.max(0, bar.lower.value));
         const upperBottom = Math.max(0, bar.gapTop.value);
-        const top = Math.max(lower, bar.top.value);
+        const top = Math.min(topLimit, Math.max(lower, bar.top.value));
         const upperRadius = Math.min(radius, Math.max(0, top - upperBottom) / 2);
+        if (i === peakIndex) visiblePeakTop = upperRadius > 0.025 ? Math.max(lower, top) : lower;
         path += capsule(cx, 0, lower, radius, TRACK_HEIGHT);
         path += capsule(cx, upperBottom, top, radius, TRACK_HEIGHT);
         const gap = upperBottom - lower;
@@ -197,49 +231,30 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       }
       barsPath.setAttribute("d", path);
 
-      if (measuredDisplay !== latestRef.current.display) {
-        measuredDisplay = latestRef.current.display;
-        valueWidth = Math.min(width, valueText.getComputedTextLength() + 14);
-        const metrics = measureGlyphs(valueText);
-        valueBaselineOffset = (metrics.ascent - metrics.descent) / 2;
-      }
-      const active = activeRef.current && !latestRef.current.disabled;
-      moving = advance(form, active ? 1 : 0, 380, 0.76, dt) || moving;
-      const peakIndex = Math.round(latestRef.current.position * lastBar);
-      const peakX = centerAt(peakIndex);
-      const targetX = clamp(peakX, valueWidth / 2 - 10, width - valueWidth / 2 + 10);
-      if (form.value < 0.01 && !active) {
-        dropletX.value = targetX;
-        dropletX.velocity = 0;
-      } else {
-        moving = advance(dropletX, targetX, 1100, 0.85, dt) || moving;
-      }
-
-      const amount = clamp(form.value, 0, 1.04);
-      const peakTop = Math.max(bars[peakIndex]!.lower.value, bars[peakIndex]!.top.value);
       if (amount > 0.002) {
-        const pillHeight = 2 * radius + (16 - 2 * radius) * amount;
-        const pillWidth = 2 * radius + (valueWidth - 2 * radius) * amount;
-        const center = peakTop - radius + (12 + radius) * amount;
+        const pillHeight = valueLayout.height;
+        const center = valueLayout.center;
         const bottom = center - pillHeight / 2;
         // Include sideways travel so a quick swipe also pulls the droplet free.
-        const stretch = (bottom - peakTop) * 1.6 + Math.abs(dropletX.value - peakX) * 0.3;
+        const stretch = (bottom - visiblePeakTop) * 1.6 + Math.abs(valueX - peakX) * 0.3;
         connected = stillConnected(connected, stretch);
-        const pillPath = pill(dropletX.value, center, pillWidth, pillHeight, TRACK_HEIGHT);
+        const pillPath = pill(valueX, center, pillWidth, pillHeight, TRACK_HEIGHT);
         let droplet = pillPath;
         if (connected) {
           droplet += neck(
-            { x: peakX, y: peakTop - radius, radius },
-            { x: dropletX.value, y: bottom + radius, radius: radius + 1.5 * amount },
+            { x: peakX, y: visiblePeakTop - radius, radius },
+            { x: valueX, y: bottom + radius, radius: radius + 1.5 * amount },
             neckWaist(stretch, radius),
             TRACK_HEIGHT,
           );
         }
         dropletPath.setAttribute("d", droplet);
         valueClip.setAttribute("d", pillPath);
-        valueText.setAttribute("x", String(dropletX.value));
+        valueText.setAttribute("x", String(valueX));
         valueText.setAttribute("y", String(TRACK_HEIGHT - center + valueBaselineOffset));
-        valueText.setAttribute("opacity", String(clamp((amount - 0.5) / 0.4, 0, 1)));
+        valueText.setAttribute("opacity", String(clamp(
+          (pillHeight - valueGlyphHeight) / Math.max(1, maxPillHeight - valueGlyphHeight), 0, 1,
+        )));
       } else {
         connected = true;
         dropletPath.setAttribute("d", "");
@@ -342,6 +357,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
     if (control.disabled || event.button !== 0 || pointerRef.current !== null) return;
     pointerRef.current = event.pointerId;
     pointerXRef.current = event.clientX;
+    event.currentTarget.setAttribute("data-pointer-focus", "");
     event.currentTarget.setPointerCapture(event.pointerId);
     event.currentTarget.focus({ preventScroll: true });
     showValue(POINTER_IDLE_MS);
@@ -366,6 +382,7 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (control.disabled) return;
+    event.currentTarget.removeAttribute("data-pointer-focus");
     let direction: -1 | 1 = 1;
     let multiplier = 1;
     switch (event.key) {
@@ -418,7 +435,10 @@ export function DockSlider({ control, barCount = 29 }: DockSliderProps) {
       onPointerCancel={endPointer}
       onLostPointerCapture={endPointer}
       onKeyDown={onKeyDown}
-      onBlur={hideValue}
+      onBlur={event => {
+        event.currentTarget.removeAttribute("data-pointer-focus");
+        hideValue();
+      }}
     >
       <svg ref={svgRef} className={styles.track} aria-hidden="true">
         <path ref={barsRef} className={styles.ink} />
