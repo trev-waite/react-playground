@@ -22,8 +22,7 @@ export function RefreshCatalogButton({ className }: { className?: string }) {
       type="button"
       className={className}
       aria-label="Refresh Live catalog"
-      disabled={refreshing || import.meta.env.PROD}
-      title={import.meta.env.PROD ? "Rebuild to refresh the production catalog" : undefined}
+      disabled={refreshing}
       onClick={() => void refresh()}
     >
       {refreshing ? "Refreshing…" : "Refresh"}

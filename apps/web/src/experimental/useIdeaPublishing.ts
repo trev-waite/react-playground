@@ -21,13 +21,6 @@ export function useIdeaPublishing() {
 
     try {
       const { slug } = await playgroundApi.publishIdea(id, input);
-      // Preview serves a production snapshot; only the dev server can refresh it.
-      if (import.meta.env.PROD) {
-        setPublishError(
-          "Published the Live files. Run bun run start again so the production build includes the new entry.",
-        );
-        return false;
-      }
       await refreshLiveCatalog(slug);
       navigate(`/${slug}`);
       return true;

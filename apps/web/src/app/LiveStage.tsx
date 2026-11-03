@@ -31,7 +31,7 @@ export function LiveStage({ slug: slugProp }: LiveStageProps) {
       <Canvas>
         <div className={styles.missingBlock}>
           <p className={styles.missing}>No Live component at “{slug}”.</p>
-          <RefreshCatalogButton className={styles.refresh} />
+          {import.meta.env.DEV && <RefreshCatalogButton className={styles.refresh} />}
         </div>
       </Canvas>
     );

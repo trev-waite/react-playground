@@ -5,6 +5,10 @@ export function slugFromPreviewPath(filePath: string): string | null {
   return match?.[1] ?? null;
 }
 
+export function liveSlugFromPath(pathname: string): string | null {
+  return pathname.replace(/^\/+|\/+$/g, "") || null;
+}
+
 export function titleFromSlug(slug: string): string {
   const leaf = slug.split("/").pop() ?? slug;
   return leaf.replace(/([a-z])([A-Z])/g, "$1 $2");

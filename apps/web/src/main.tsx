@@ -1,6 +1,11 @@
-import { StrictMode } from "react";
+import { StrictMode, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
+import "./app/app.css";
+
+// The studio needs the dev server and local API, so builds ship the Live app alone.
+const App: ComponentType = import.meta.env.DEV
+  ? (await import("./studio/StudioApp")).StudioApp
+  : (await import("./app/LiveApp")).LiveApp;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
