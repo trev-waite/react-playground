@@ -4,8 +4,8 @@ import path from "node:path";
 
 const src = path.join(import.meta.dir, "..");
 const LIVE_APP_DIRS = ["app", "live", "gpu", "lib"];
-const STUDIO_DIRS = ["studio", "experimental"].map(dir => path.join(src, dir) + path.sep);
-const IMPORT_RE = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;
+const STUDIO_DIRS = ["studio", "experimental"].map(dir => path.join(src, dir));
+const IMPORT_RE = /(?:from|import|glob(?:<[^>]*>)?)\s*\(?\s*["']([^"']+)["']/g;
 
 function resolveImport(file: string, specifier: string): string | null {
   if (specifier.startsWith("@/")) return path.join(src, specifier.slice(2));
@@ -22,7 +22,7 @@ describe("Live app boundary", () => {
         const file = path.join(src, dir, relative);
         for (const [, specifier] of (await Bun.file(file).text()).matchAll(IMPORT_RE)) {
           const target = resolveImport(file, specifier!);
-          if (target && STUDIO_DIRS.some(studio => target.startsWith(studio))) {
+          if (target && STUDIO_DIRS.some(studio => target === studio || target.startsWith(studio + path.sep))) {
             violations.push(`${path.relative(src, file)} → ${specifier}`);
           }
         }
