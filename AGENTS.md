@@ -20,9 +20,15 @@ These are separate surfaces that share look and feel, not one component used twi
 
 - **ConfigurableShell** (`apps/web/src/live/shells/ConfigurableShell/`) is a portable Live catalog card. Keep it self-contained. Do not add save/switch/promote, idea exporters, or Experimental layout to it. Do not reuse it as the experiment host.
 - **Experimental view** (`apps/web/src/experimental/`) is the studio: page, shared dock, and `ideas/` projects. Echo ConfigurableShell's visual language in Experimental's own CSS and layout. Do not render `<ConfigurableShell>` in Experimental, and do not import `ConfigurableShell.module.css`.
-- **`apps/web/src/app/`** is playground chrome (layout, Live catalog UI). It is not ConfigurableShell.
+- **`apps/web/src/app/`** is the Live app (catalog layout, sidebar, stage). It is not ConfigurableShell.
+
+## Live app vs studio
 
 `apps/web` is a Vite SPA (`index.html`, `src/main.tsx`). `apps/api` is a Bun process. Do not serve the UI with Bun HTML imports or generate `*.gen.ts` catalog maps.
+
+- `vite build` ships only `LiveApp` (`src/app/`): a static catalog with no API.
+- The dev server loads `StudioApp` (`src/studio/`), which layers Experimental under `LivePage`. `apps/api` is local only and never deployed.
+- `src/app/`, `src/live/`, `src/gpu/`, and `src/lib/` never import `src/studio/` or `src/experimental/` (`src/app/LiveApp.test.ts`). The studio passes Live what it needs through props.
 
 Experimental may import `ProximityControl`, `linearScale`, and icons so the controls feel the same. It must not import the `ConfigurableShell` component. GPU ideas import `@/gpu` and use `vgpu`. See `docs/WEBGPU.md`.
 
