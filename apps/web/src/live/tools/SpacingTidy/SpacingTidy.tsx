@@ -84,6 +84,7 @@ export function SpacingTidy({
   const [lineHeights, setLineHeights] = useState<number[]>([]);
   const [planning, setPlanning] = useState(false);
   const [useAi, setUseAi] = useState(false);
+  const [showGuides, setShowGuides] = useState(true);
   const [status, setStatus] = useState(HINT);
   const seed = useRef(7);
   const textRef = useRef<HTMLElement>(null);
@@ -214,7 +215,7 @@ export function SpacingTidy({
           </figcaption>
         </figure>
 
-        <SheetGuides sheet={sheet} />
+        {showGuides ? <SheetGuides sheet={sheet} /> : null}
       </div>
 
       <div className="st-toolbar" style={{ width: board.width }}>
@@ -242,6 +243,23 @@ export function SpacingTidy({
         </button>
         <button type="button" className="st-secondary" onClick={undo} disabled={!canUndo || planning}>
           Undo
+        </button>
+        <button
+          type="button"
+          className="st-secondary st-toggle"
+          aria-pressed={showGuides}
+          onClick={() => setShowGuides(shown => !shown)}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M2.5 3v10M13.5 3v10M5 8h2M9 8h2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+          Guides
         </button>
         <p className="st-status" aria-live="polite">
           {status}
@@ -304,6 +322,7 @@ const CSS = `
 }
 .st-primary { background: #1c2430; color: #ffffff; }
 .st-secondary { background: #ffffff; color: #1c2430; box-shadow: inset 0 0 0 1px rgba(28, 36, 48, 0.14); }
+.st-toggle[aria-pressed="true"] { background: rgba(36, 72, 216, 0.1); color: #2448d8; box-shadow: inset 0 0 0 1px rgba(36, 72, 216, 0.28); }
 .st-primary:disabled, .st-secondary:disabled { opacity: 0.4; cursor: default; }
 .st-primary:active:not(:disabled), .st-secondary:active:not(:disabled) { transform: scale(0.97); }
 .st-primary:focus-visible, .st-secondary:focus-visible, .st-modeOption:focus-visible {

@@ -21,7 +21,7 @@ function Screen() {
 - **Drag** with a pointer, or focus an item and use the arrow keys (Shift for 8px). Alt, Ctrl, and Meta are left to the screen.
 - **`sheet.tidy(planner?)`** averages each kind of gap the user made (the inset from the edge, the gutter inside each `group`, the gap between groups), snaps it to the scale (8px steps, or 2 and 4 when tiny), and glides everything into place. Groups sit at least 8px further apart than any gutter. Pass your own `SheetPlanner`, such as an AI one, to plan differently.
 - **`sheet.undo()`** glides back. **`sheet.keepInPlace(change)`** lets the layout underneath change (a new line height) without moving anything on screen; wrap React updates in `flushSync`.
-- **`<SheetGuides>`** draws each gap: amber while it is off the scale, green once it is on.
+- **`<SheetGuides>`** draws each gap with its size in px: amber while it is off the scale, green once it is on.
 - **`sheet.offsets()`** and **`sheet.setOffsets()`** save and restore a session.
 
 Without React, `new Sheet()` from the root entry does the same: `sheet.attach(root)`, then `sheet.register(element, { id, group })`. The pure layout math (`tidy`, `measureGaps`, `snapSpacing`) needs no DOM at all.
