@@ -8,7 +8,12 @@
   --space-6: 48px;
   --space-7: 64px;
 
-  --shell-stage-inset: var(--space-5);
+
+  /* Cards: a full page rests inset on the canvas; tiles tighten their corners.
+     Keep in sync with deck/deckLayout.ts. */
+  --page-inset: var(--space-2);
+  --page-radius: var(--space-4);
+  --grid-radius: var(--space-3);
 
   /* Shared control rhythm */
   --shell-control-height: var(--space-5);
@@ -24,6 +29,7 @@
   --weight-medium: 550;
   --weight-semibold: 600;
 
+  /* CSS easing for small state changes. Travel uses the springs in motion.ts. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
@@ -41,9 +47,27 @@
   --shell-surface-solid: #f4f5f7;
   --shell-border: rgba(255, 255, 255, 0.55);
   --shell-border-subtle: rgba(28, 36, 48, 0.08);
-  --shell-sidebar-width: 256px;
   --shell-studio-rail-width: 320px;
-  --shell-hotzone: 56px;
+  --shell-canvas:
+    radial-gradient(120% 80% at 10% 0%, #f0f2f6 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, #dce1ea 0%, transparent 50%),
+    var(--shell-bg);
+  --card-surface: #ffffff;
+  --card-shadow:
+    0 1px 2px rgba(28, 36, 48, 0.06),
+    0 12px 32px rgba(28, 36, 48, 0.08);
+  /* Glass chrome that floats over any card background. */
+  --chrome-surface: rgba(255, 255, 255, 0.78);
+  --chrome-border: rgba(255, 255, 255, 0.6);
+  --chrome-ink: var(--shell-ink);
+  --chrome-ink-muted: var(--shell-ink-muted);
+  --chrome-hover: rgba(28, 36, 48, 0.06);
+  --chrome-active: #111113;
+  --chrome-active-ink: #ffffff;
+  --chrome-shadow:
+    0 1px 1px rgba(15, 15, 17, 0.04),
+    0 6px 18px rgba(15, 15, 17, 0.1);
+  --chrome-control: 44px;
   --shell-font: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
 
   color-scheme: light;
@@ -105,8 +129,25 @@ select:-webkit-autofill {
   transition: background-color 99999s ease-out;
 }
 
+/* A dark Live page darkens the floating chrome so it never reads as grey fog.
+   Live only sets data-chrome while it is the active view. */
+:root:has([data-chrome="dark"]) {
+  --chrome-surface: rgba(28, 30, 36, 0.62);
+  --chrome-border: rgba(255, 255, 255, 0.1);
+  --chrome-ink: #f5f7fa;
+  --chrome-ink-muted: rgba(245, 247, 250, 0.72);
+  --chrome-hover: rgba(255, 255, 255, 0.1);
+  --chrome-active: #ffffff;
+  --chrome-active-ink: #111113;
+}
+
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --shell-surface: var(--shell-surface-solid);
+    --chrome-surface: var(--shell-surface-solid);
+  }
+
+  :root:has([data-chrome="dark"]) {
+    --chrome-surface: #1c1e24;
   }
 }

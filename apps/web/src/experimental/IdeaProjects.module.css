@@ -78,6 +78,8 @@
   backdrop-filter: blur(16px) saturate(140%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   box-sizing: border-box;
+  /* perf-allow: a small button-to-menu morph; its box must grow so the list lays out at
+     its real size. */
   transition:
     width var(--morph-close-duration) var(--morph-close-ease),
     height var(--morph-close-duration) var(--morph-close-ease),
@@ -86,6 +88,7 @@
 }
 
 .surface[data-open] {
+  /* perf-allow: see .surface. */
   width: var(--menu-width);
   height: min(var(--menu-height), calc(100dvh - 5.5rem));
   border-radius: var(--space-2);
@@ -143,6 +146,7 @@
 
 .icon {
   grid-area: 1 / 1;
+  /* perf-allow: 16px icons that cross-fade with a blur; layers this small cost nothing. */
   will-change: opacity, filter, transform;
   transition:
     opacity 250ms ease-in-out,
@@ -188,6 +192,8 @@
   transform-origin: top left;
   filter: blur(2px);
   pointer-events: none;
+  /* perf-allow: the menu list blurs in inside its small panel; promoting it keeps the
+     filter off the rail's repaint. */
   will-change: opacity, filter, transform;
   transition:
     opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),

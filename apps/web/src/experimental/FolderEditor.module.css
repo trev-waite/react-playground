@@ -49,6 +49,8 @@
   transform-origin: top center;
   filter: blur(2px);
   pointer-events: none;
+  /* perf-allow: a one-line slot that opens to its content height (0fr → 1fr), with a tiny
+     layer for its blur-in. */
   will-change: opacity, filter, transform;
   transition:
     grid-template-rows var(--morph-open-duration) var(--morph-open-ease),

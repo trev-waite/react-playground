@@ -1,87 +1,44 @@
-import type { CSSProperties } from "react";
-import {
-  BAND_EASE,
-  DEFAULT_BAND_COUNT,
-  DEFAULT_DURATION_MS,
-  bandMaskGradient,
-  frostStrength,
-} from "./diagonalBand";
+import { motion, useTransform, type MotionValue } from "motion/react";
+import { frostStrength, liveLayerMask } from "./diagonalBand";
 import styles from "./DiagonalBandMask.module.css";
 
-export type DiagonalBandMaskProps = {
-  /** 0 = Live covering; 1 = Experimental revealed */
-  progress: number;
-  bandCount?: number;
-  durationMs?: number;
-  /** Skip discrete bands; parent handles opacity crossfade */
-  reducedMotion?: boolean;
-  /** Skip frost overlay (prefers-reduced-transparency) */
-  reducedTransparency?: boolean;
-};
-
 /**
- * Decorative mask helpers for the Live↔Experimental dissolve.
+ * Styles for the Live layer during the Live↔Experimental dissolve.
  * Technique: posterize a geometric 45° luminance ramp into hard stripes
  * so the Live layer peels away in continuous diagonal bands (no square mosaic).
+ *
+ * Driven by a motion value: the gradient string only changes when a band
+ * flips, so the DOM is written a dozen times per dissolve, not every frame.
+ * At rest there is no mask at all, and a fully covered layer stops painting.
  */
-export function liveLayerMaskStyle(
-  progress: number,
-  options: {
-    bandCount?: number;
-    durationMs?: number;
-    reducedMotion?: boolean;
-  } = {},
-): CSSProperties {
-  const {
-    bandCount = DEFAULT_BAND_COUNT,
-    durationMs = DEFAULT_DURATION_MS,
-    reducedMotion = false,
-  } = options;
-
-  if (reducedMotion) {
-    return {
-      opacity: progress >= 1 ? 0 : 1,
-      transition: `opacity ${Math.min(durationMs, 180)}ms ease`,
-      WebkitMaskImage: "none",
-      maskImage: "none",
-    };
-  }
-
-  const gradient = bandMaskGradient(progress, bandCount);
-  return {
-    WebkitMaskImage: gradient,
-    maskImage: gradient,
-    WebkitMaskSize: "100% 100%",
-    maskSize: "100% 100%",
-    WebkitMaskRepeat: "no-repeat",
-    maskRepeat: "no-repeat",
-  };
+export function useLiveLayerStyle(progress: MotionValue<number>, reducedMotion: boolean) {
+  const mask = useTransform(progress, p => liveLayerMask(p, reducedMotion));
+  const opacity = useTransform(progress, p => (reducedMotion ? 1 - p : 1));
+  const visibility = useTransform(progress, p => (p >= 1 ? "hidden" : "visible"));
+  return { maskImage: mask, WebkitMaskImage: mask, opacity, visibility };
 }
 
+/** Experimental sits fully under Live at rest; skip painting it there. */
+export function useExperimentalLayerStyle(progress: MotionValue<number>) {
+  const visibility = useTransform(progress, p => (p <= 0 ? "hidden" : "visible"));
+  return { visibility };
+}
+
+/**
+ * Frost on the Experimental layer that peaks mid-dissolve. The blur radius
+ * is fixed in CSS and only opacity moves, so the backdrop filter is not
+ * rebuilt with a new kernel every frame.
+ */
 export function FrostOverlay({
   progress,
-  reducedMotion = false,
-  reducedTransparency = false,
+  disabled = false,
 }: {
-  progress: number;
-  reducedMotion?: boolean;
-  reducedTransparency?: boolean;
+  progress: MotionValue<number>;
+  disabled?: boolean;
 }) {
-  if (reducedMotion || reducedTransparency) return null;
-
-  const strength = frostStrength(progress);
-  if (strength <= 0.001) return null;
-
-  return (
-    <div
-      className={styles.frost}
-      aria-hidden="true"
-      style={{
-        opacity: strength * 0.72,
-        backdropFilter: `blur(${strength * 8}px)`,
-        WebkitBackdropFilter: `blur(${strength * 8}px)`,
-        transition: `opacity 80ms ${BAND_EASE}`,
-      }}
-    />
-  );
+  const strength = useTransform(progress, frostStrength);
+  const opacity = useTransform(strength, s => s * 0.72);
+  const visibility = useTransform(strength, s => (s > 0.001 ? "visible" : "hidden"));
+  if (disabled) return null;
+  return <motion.div className={styles.frost} aria-hidden="true" style={{ opacity, visibility }} />;
 }

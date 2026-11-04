@@ -1,9 +1,9 @@
 {
   "id": "66afaee4-2a61-4e1c-88f3-8fe0d3050e9d",
-  "revision": 21,
+  "revision": 22,
   "name": "Light Dispersion",
   "componentName": "LightDispersion",
-  "updatedAt": "2026-09-04T00:30:07.519Z",
+  "updatedAt": "2026-11-03T03:07:48.337Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "fefff1aa0f55a8d3e8667c15c957199af9ac550a30129ff5b264824fee2a52c1",
+  "sourceDigest": "3a579894694be00ae9dae56b4d1b0c75e48f4a73c74e8f00f30c34eae06a18ca",
   "createdAt": "2026-08-30T23:58:39.059Z"
 }

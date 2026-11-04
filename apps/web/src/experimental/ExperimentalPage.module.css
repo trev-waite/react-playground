@@ -11,8 +11,9 @@
   font-family: var(--shell-font);
 }
 
+/* Leave a page-inset gap between the stage card and the open rail. */
 .page:has([data-side="right"][data-open]) {
-  --stage-end-inset: calc(var(--shell-studio-rail-width) + var(--space-4));
+  --stage-end-inset: calc(var(--shell-studio-rail-width) + var(--page-inset) * 2);
 }
 
 .rail {
@@ -181,8 +182,8 @@
   box-shadow:
     0 1px 1px rgba(15, 15, 17, 0.04),
     0 8px 22px rgba(15, 15, 17, 0.12);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  /* perf-allow: a small button-to-panel morph; its box must grow so the panel content
+     lays out at its real size. */
   transition:
     width var(--morph-close-duration) var(--morph-close-ease),
     height var(--morph-close-duration) var(--morph-close-ease),
@@ -191,6 +192,7 @@
 }
 
 .makeLiveSurface[data-open] {
+  /* perf-allow: see .makeLiveSurface. */
   width: 100%;
   height: var(--make-live-panel-height);
   border-radius: var(--space-2);

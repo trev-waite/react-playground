@@ -4,9 +4,30 @@ Persistence: [Experimental Projects](IDEA_PERSISTENCE.md). Conventions: [BEST_PR
 
 ## Experimental vs Live
 
-**Experimental** is WIP and runs only under `bun run dev`. Hover the left edge for the browser, then toggle **Live / Experimental**. **Save** (`⌘S`) writes `apps/web/src/experimental/ideas/<Name>/` (`project.json` + `source.tsx`); dropping a `source.tsx` there on disk works too. **Make Live** asks for a Live folder and writes a portable component with the current slider numbers baked in.
+**Experimental** is WIP and runs only under `bun run dev`. Toggle **Live / Experimental** at the top. **Save** (`⌘S`) writes `apps/web/src/experimental/ideas/<Name>/` (`project.json` + `source.tsx`); dropping a `source.tsx` there on disk works too. **Make Live** asks for a Live folder and writes a portable component with the current slider numbers baked in.
+
+**Live** shows one component per page. Scroll, swipe, use the arrow keys, or use the pager to move to the next one. The grid button shrinks the page into its tile and pulls the rest of the catalog in around it; click a tile, or press Esc, to zoom back in. It sits beside the Live / Experimental toggle locally and alone at the top center when deployed.
 
 **Live** entries live at `apps/web/src/live/<group>/<Name>/`. `preview.tsx` only mounts the component (see `buttons/PrimaryButton`). Do not put WIP in `live/shells/` or ship authoring controls in Live.
+
+### Cards
+
+Each card is unopinionated apart from its size. `preview.tsx` exports `meta` to style it:
+
+```tsx
+export const meta: CardMeta = {
+  title: "Primary Button",
+  size: "tall", // small 1×1 (default), wide 2×1, tall 1×2, large 2×2
+  background: "#ff9f1c", // any CSS background; white by default
+  theme: "dark", // which ink reads on that background
+  description: "Digits roll to the new count on every press.",
+  reset: "reset", // or "replay": a footer button that remounts the card
+};
+```
+
+With neither `description` nor `reset`, the card has no footer.
+
+**Families.** Add `apps/web/src/live/<group>/family.ts` exporting a `FamilyMeta` (`title` plus the same fields) to show every component in that folder together on one card, as in `apps/web/src/live/controls/`. Member slugs such as `/controls/Switch` open the family card.
 
 ## Export
 
@@ -41,6 +62,7 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 ## Deploy
 
 Host `apps/web/dist` as a static site with an SPA fallback to `index.html`. Make Live writes source files, so commit and rebuild to update it.
+
 
 ## Stack
 

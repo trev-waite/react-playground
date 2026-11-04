@@ -1,13 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
+import { REDUCED_MOTION, SPRING } from "../app/motion";
 import { useView } from "./ViewController";
 import styles from "./ViewToggle.module.css";
-
-const bounceSpring = {
-  type: "spring" as const,
-  stiffness: 480,
-  damping: 18,
-  mass: 0.45,
-};
 
 export function ViewToggle() {
   const { mode, setMode, animating } = useView();
@@ -28,7 +22,7 @@ export function ViewToggle() {
             <motion.span
               className={styles.pill}
               layoutId="view-mode-pill"
-              transition={reducedMotion ? { duration: 0.16 } : bounceSpring}
+              transition={reducedMotion ? REDUCED_MOTION : SPRING.pill}
               aria-hidden="true"
             />
           ) : null}
@@ -46,7 +40,7 @@ export function ViewToggle() {
             <motion.span
               className={styles.pill}
               layoutId="view-mode-pill"
-              transition={reducedMotion ? { duration: 0.16 } : bounceSpring}
+              transition={reducedMotion ? REDUCED_MOTION : SPRING.pill}
               aria-hidden="true"
             />
           ) : null}

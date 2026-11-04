@@ -1,0 +1,212 @@
+.bar {
+  position: fixed;
+  top: var(--space-3);
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  translate: -50% 0;
+  pointer-events: none;
+}
+
+.bar > * {
+  pointer-events: auto;
+}
+
+.viewButton,
+.pager {
+  border: 1px solid var(--chrome-border);
+  background: var(--chrome-surface);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: var(--chrome-shadow);
+  color: var(--chrome-ink);
+  transition:
+    background 240ms var(--ease-out),
+    border-color 240ms var(--ease-out),
+    color 240ms var(--ease-out),
+    transform 140ms var(--ease-out);
+}
+
+.iconButton {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--chrome-control);
+  height: var(--chrome-control);
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.pager .iconButton {
+  margin: -1px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  transition:
+    background 160ms var(--ease-out),
+    transform 140ms var(--ease-out),
+    opacity 160ms ease;
+}
+
+/* Clip incoming tiles to the round button so they arrive from its edge. */
+.viewButton {
+  overflow: hidden;
+}
+
+.icon {
+  overflow: visible;
+}
+
+.iconButton:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.iconButton:focus-visible {
+  outline: 2px solid var(--chrome-ink);
+  outline-offset: 2px;
+}
+
+.pager .iconButton:focus-visible {
+  outline-offset: -2px;
+}
+
+.iconButton:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.hintHost {
+  position: relative;
+  display: inline-flex;
+}
+
+.hint {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px 12px;
+  border-radius: var(--shell-radius-pill);
+  background: var(--chrome-active);
+  color: var(--chrome-active-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: var(--chrome-shadow);
+  opacity: 0;
+  translate: -50% -4px;
+  pointer-events: none;
+  transition:
+    opacity 160ms var(--ease-out),
+    translate 200ms var(--ease-out);
+}
+
+.key {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font: inherit;
+  font-weight: var(--weight-medium);
+}
+
+/* Hover waits a beat so a passing pointer does not flash the hint. */
+.hintHost:hover .hint {
+  opacity: 1;
+  translate: -50% 0;
+  transition-delay: 350ms;
+}
+
+.hintHost:has(:focus-visible) .hint {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+@media (hover: none) {
+  .hintHost:hover .hint {
+    opacity: 0;
+  }
+}
+
+.pager {
+  position: fixed;
+  top: 50%;
+  right: var(--space-3);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: var(--shell-radius-pill);
+  translate: 0 -50%;
+  transition:
+    opacity 200ms var(--ease-out),
+    translate 320ms var(--ease-out),
+    background 240ms var(--ease-out),
+    border-color 240ms var(--ease-out),
+    color 240ms var(--ease-out);
+}
+
+.pager[data-hidden] {
+  opacity: 0;
+  translate: var(--space-2) -50%;
+  pointer-events: none;
+}
+
+.count {
+  padding: var(--space-1) 0;
+  font-size: var(--text-ui);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--chrome-ink-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .viewButton:hover {
+    box-shadow: var(--chrome-shadow), inset 0 0 0 var(--chrome-control) var(--chrome-hover);
+  }
+
+  .pager .iconButton:hover:not(:disabled) {
+    background: var(--chrome-hover);
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 719px) {
+  .pager {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .viewButton,
+  .pager {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: var(--shell-border-subtle);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint,
+  .pager,
+  .viewButton,
+  .pager .iconButton {
+    transition: opacity 160ms ease;
+  }
+}

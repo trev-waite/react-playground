@@ -1,26 +1,23 @@
 .wrap {
-  position: fixed;
-  top: var(--space-2);
-  left: 50%;
-  z-index: 80;
-  transform: translateX(-50%);
-  pointer-events: none;
+  display: flex;
 }
 
 .track {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  height: var(--chrome-control);
   padding: 3px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px) saturate(140%);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow:
-    0 1px 1px rgba(15, 15, 17, 0.04),
-    0 6px 18px rgba(15, 15, 17, 0.08);
+  border-radius: var(--shell-radius-pill);
+  background: var(--chrome-surface);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--chrome-border);
+  box-shadow: var(--chrome-shadow);
   pointer-events: auto;
+  transition:
+    background 240ms var(--ease-out),
+    border-color 240ms var(--ease-out);
 }
 
 .segment {
@@ -29,11 +26,11 @@
   margin: 0;
   border: none;
   cursor: pointer;
-  height: 1.75rem;
-  padding: 0 0.85rem;
-  border-radius: 999px;
+  height: 100%;
+  padding: 0 var(--space-2);
+  border-radius: var(--shell-radius-pill);
   background: transparent;
-  color: #5c6678;
+  color: var(--chrome-ink-muted);
   font-size: var(--text-ui);
   font-weight: var(--weight-semibold);
   letter-spacing: 0.01em;
@@ -42,7 +39,14 @@
 }
 
 .segment[data-active] {
-  color: #fff;
+  color: var(--chrome-active-ink);
+}
+
+/* Reach the full 44px track height for touch. */
+.segment::before {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
 }
 
 .label {
@@ -53,21 +57,22 @@
 .pill {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
-  background: #111113;
+  border-radius: var(--shell-radius-pill);
+  background: var(--chrome-active);
+  transition: background 240ms var(--ease-out);
   box-shadow:
     0 1px 1px rgba(15, 15, 17, 0.12),
     0 4px 12px rgba(15, 15, 17, 0.18);
 }
 
 .segment:focus-visible {
-  outline: 2px solid #111113;
+  outline: 2px solid var(--chrome-ink);
   outline-offset: 2px;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .segment:not([data-active]):hover {
-    color: #1c2430;
+    color: var(--chrome-ink);
   }
 
   .segment:active .label {

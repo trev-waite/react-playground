@@ -1,0 +1,64 @@
+.deck {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--shell-canvas);
+}
+
+.dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--shell-dot) 1px, transparent 1px);
+  background-size: var(--shell-dot-size) var(--shell-dot-size);
+}
+
+.scroller {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.scroller:focus {
+  outline: none;
+}
+
+.scroller[data-layout="pages"] {
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+}
+
+.scroller[data-layout="pages"][data-gliding] {
+  scroll-snap-type: none;
+}
+
+.scroller[data-layout="pages"]::-webkit-scrollbar {
+  display: none;
+}
+
+.scroller[data-layout="flight"] {
+  overflow-y: hidden;
+}
+
+/* Cards zoomed past the viewport must not stretch the scroll range. The
+   content is never shorter than the viewport, so this clip is never seen. */
+.content {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+  overflow: clip;
+}
+
+.snap {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/* Only while the camera moves: promote the cards it scales so frames are
+   composited, not repainted. The open card reflows instead, so it stays put. */
+.scroller[data-flying] .content > :not([data-raised]) {
+  will-change: transform;
+}

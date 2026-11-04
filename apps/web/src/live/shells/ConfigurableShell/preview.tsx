@@ -12,9 +12,12 @@ import { ConfigurableShell, linearScale } from "./ConfigurableShell";
 import { ExamplePreview } from "./ExamplePreview";
 import { exportExampleCode } from "./exportExample";
 import { ResetIcon, SlidersIcon } from "./icons";
+import type { CardMeta } from "@/lib/types";
 
-export const meta = {
+export const meta: CardMeta = {
   title: "Configurable Shell",
+  size: "tall",
+  background: "#ff9f1c",
 };
 
 const DEFAULTS = {

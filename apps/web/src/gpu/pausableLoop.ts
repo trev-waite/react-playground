@@ -10,6 +10,10 @@ export type PausableLoop = {
  * `frameLoop` that only runs while `canvas` is on screen and the document is visible. rAF already
  * idles in hidden tabs; this also stops the loop when the idea is scrolled out of view, so a page
  * of GPU ideas costs only what is visible.
+ *
+ * The first frame always renders, even off screen. Drivers compile pipelines on first draw, which
+ * can block the GPU process (and every animation on the page) for most of a second; doing it at
+ * mount keeps that stall out of the moment the canvas scrolls or zooms into view.
  */
 export function pausableLoop(
   gpu: Gpu,
@@ -20,13 +24,21 @@ export function pausableLoop(
   let handle: FrameLoopHandle | null = null;
   let intersecting: boolean | null = null;
   let stopped = false;
+  let primed = false;
+
+  const run: FrameLoopCallback = frame => {
+    cb(frame);
+    if (primed) return;
+    primed = true;
+    sync();
+  };
 
   const sync = () => {
     if (stopped) return;
     const visible = typeof document === "undefined" || document.visibilityState !== "hidden";
-    const shouldRun = intersecting === true && visible;
+    const shouldRun = !primed || (intersecting === true && visible);
     if (shouldRun && !handle) {
-      handle = frameLoop(gpu, cb, options);
+      handle = frameLoop(gpu, run, options);
     } else if (!shouldRun && handle) {
       handle.stop();
       handle = null;
@@ -42,6 +54,7 @@ export function pausableLoop(
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", sync);
   }
+  sync();
 
   return {
     get running() {

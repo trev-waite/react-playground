@@ -1,0 +1,216 @@
+.card {
+  --card-ink: var(--shell-ink);
+  --card-on-ink: #ffffff;
+  --card-ink-muted: var(--shell-ink-muted);
+  --card-bar: rgba(255, 255, 255, 0.72);
+  --card-bar-border: rgba(28, 36, 48, 0.06);
+
+  position: absolute;
+  overflow: hidden;
+  contain: layout paint;
+  background: var(--card-background, var(--card-surface));
+  color: var(--card-ink);
+  box-shadow: var(--card-shadow);
+  transform-origin: 50% 50%;
+}
+
+.card[data-theme="dark"] {
+  --card-ink: #f5f7fa;
+  --card-on-ink: var(--shell-ink);
+  --card-ink-muted: rgba(245, 247, 250, 0.74);
+  --card-bar: rgba(255, 255, 255, 0.1);
+  --card-bar-border: rgba(255, 255, 255, 0.08);
+}
+
+.card[data-raised] {
+  z-index: 1;
+}
+
+.preview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+}
+
+.frame {
+  /* Fill the stage. GPU ideas size from clientWidth/clientHeight;
+     a centered auto-height frame collapses them to 0 and useGpu never starts.
+     `safe` keeps overflow to the end edge, where FitStage can measure it. */
+  display: grid;
+  place-items: safe center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.family {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: safe center;
+  align-items: center;
+  justify-content: safe center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100%;
+  padding: var(--space-3);
+}
+
+.member {
+  display: grid;
+  place-items: center;
+}
+
+.error {
+  max-width: 20rem;
+  margin: 0;
+  padding: var(--space-2);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  text-align: center;
+  color: var(--card-ink-muted);
+}
+
+.footer {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: min(560px, calc(100% - var(--space-6)));
+  min-height: 60px;
+  padding: var(--space-1);
+  border: 1px solid var(--card-bar-border);
+  border-radius: var(--shell-radius-pill);
+  /* No backdrop blur: the bar sits on the flat card color, and a blur there
+     costs a filter pass every frame the card moves for no visible change. */
+  background: var(--card-bar);
+  translate: -50% 0;
+}
+
+.description {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0 var(--space-1) 0 var(--space-2);
+  font-size: var(--text-body);
+  line-height: 1.4;
+  color: var(--card-ink);
+}
+
+.reset {
+  appearance: none;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  height: 44px;
+  margin: 0 0 0 auto;
+  padding: 0 var(--space-2) 0 14px;
+  border: 0;
+  border-radius: var(--shell-radius-pill);
+  background: var(--card-ink);
+  color: var(--card-on-ink);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: transform 140ms var(--ease-out), opacity 160ms ease;
+}
+
+.reset:focus-visible,
+.open:focus-visible {
+  outline: 2px solid var(--card-ink);
+  outline-offset: 2px;
+}
+
+.reset:active {
+  transform: scale(0.97);
+}
+
+.open {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  margin: 0;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  transition: box-shadow 160ms var(--ease-out);
+}
+
+.open:focus-visible {
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--card-background, var(--card-surface));
+}
+
+.openLabel {
+  padding: 6px 12px;
+  border-radius: var(--shell-radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--shell-ink);
+  font-size: var(--text-ui);
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+  box-shadow: 0 2px 8px rgba(15, 15, 17, 0.12);
+  opacity: 0;
+  translate: 0 4px;
+  transition: opacity 160ms var(--ease-out), translate 200ms var(--ease-out);
+}
+
+.open:focus-visible .openLabel {
+  opacity: 1;
+  translate: 0 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .open:hover {
+    box-shadow: inset 0 0 0 1px rgba(28, 36, 48, 0.1);
+  }
+
+  .open:hover .openLabel {
+    opacity: 1;
+    translate: 0 0;
+  }
+
+  .reset:hover {
+    opacity: 0.88;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .footer {
+    background: var(--card-surface);
+    --card-ink: var(--shell-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reset,
+  .open,
+  .openLabel {
+    transition: none;
+  }
+}

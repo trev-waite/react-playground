@@ -1,0 +1,26 @@
+{
+  "name": "@react-playground/layout-sheet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Turn any screen into a sheet you can drag things around on, then tidy the spacing onto a scale.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.tsx"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.0",
+    "@types/react": "^19.2.18",
+    "react": "^19.2.8"
+  }
+}

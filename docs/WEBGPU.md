@@ -111,9 +111,11 @@ vgpu's canvas alpha mode is already `premultiplied`. Its clear color is opaque b
 
 Pass `clearColor: [0, 0, 0, 1]` only when the shader is supposed to own the whole frame.
 
-Do not put `transform: translateZ(0)`, `perspective`, or other CSS 3D on ancestors of a WebGPU canvas. Live’s mask stacking uses `isolation: isolate` on the Live layer for that reason. Size the stage with `inset` / `top` / `bottom`, not `transform`. `mix-blend-mode` on a WebGPU canvas is unreliable.
+Do not put `transform: translateZ(0)`, `perspective`, or other CSS 3D on ancestors of a WebGPU canvas. Live’s mask stacking uses `isolation: isolate` on the Live layer for that reason. 2D `translate` and `scale` (and `will-change: transform`) are fine: the Live deck scales grid tiles and their previews that way.
 
-Live catalogs GPU ideas in `LiveStage`. The preview frame stretches to the canvas (`width`/`height` 100%, `align-self: stretch`) so `useGpu` sees a real `clientWidth`/`clientHeight`. Do not rebuild a module-level map of lazy previews at import time: load the slug’s `preview.tsx` when the slug changes, or a newly published idea can appear in the sidebar and still fail to render. A component that should be a plaque, not a full-bleed surface, must size type from the stage (`container-type: size` on the outer 100% wrapper, `cqh`/`cqw` for font size) and size the black box from in-flow content. Raise `createTextMask` `scale` so the raster fills that plaque; the default 0.3 of canvas height is for a full-stage canvas.
+`pausableLoop` draws one frame on start even off screen, because drivers compile pipelines on first draw and that can block the GPU process for most of a second. Do the same for any other first-use GPU work. Rebuild size-dependent resources (text masks, blur chains) after a resize settles, not on every resize; Light Dispersion waits 120ms. `mix-blend-mode` on a WebGPU canvas is unreliable.
+
+Live renders GPU ideas inside a deck card (`apps/web/src/app/deck/DeckCard.tsx`). The preview frame stretches to the card (`width`/`height` 100%) so `useGpu` sees a real `clientWidth`/`clientHeight`. The catalog resolves preview modules per catalog snapshot (`useLiveCards`), never in a module-level map built at import time, so a newly published idea renders as soon as it appears. A component that should be a plaque, not a full-bleed surface, must size type from the stage (`container-type: size` on the outer 100% wrapper, `cqh`/`cqw` for font size) and size the black box from in-flow content. Raise `createTextMask` `scale` so the raster fills that plaque; the default 0.3 of canvas height is for a full-stage canvas.
 
 ## Where to run it
 

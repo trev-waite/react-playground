@@ -69,9 +69,11 @@ function publishedLiveEntry(componentName: string | null, liveEntries: Playgroun
 
 type ExperimentalPageProps = {
   active: boolean;
+  /** Called once a project (or the empty studio) has mounted on the stage. */
+  onReady?: () => void;
 };
 
-export function ExperimentalPage({ active }: ExperimentalPageProps) {
+export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
   const liveEntries = useLiveEntries();
   const folders = useMemo(() => liveFolders(liveEntries), [liveEntries]);
   const {
@@ -622,6 +624,7 @@ export function ExperimentalPage({ active }: ExperimentalPageProps) {
               draftRef.current = next;
               setHasDraft(true);
             }}
+            onReady={onReady}
           >
             {({ stage, dock }) => (
               <>
@@ -631,8 +634,6 @@ export function ExperimentalPage({ active }: ExperimentalPageProps) {
                   label="Studio controls"
                   width={STUDIO_RAIL_WIDTH}
                   defaultOpen
-                  reveal="toggle"
-                  enabled={active}
                 >
                   <div className={styles.rail}>
                     <header className={styles.railHeader}>{toolbar}</header>
