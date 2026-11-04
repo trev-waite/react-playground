@@ -20,7 +20,7 @@ For saved ideas, `project.json` owns metadata and `source.tsx` owns code. Publis
 
 ## Motion
 
-Use the springs in `apps/web/src/app/motion.ts` (`morph` for the Live deck and page scroll, `panel` for edge rails, `pill` for toggles) instead of one-off curves. Motion should stay interruptible: retarget a spring rather than waiting for it to finish. Honor `prefers-reduced-motion` and `prefers-reduced-transparency`. See [UI Design](standards/ui-design.md).
+Use the springs in `apps/web/src/app/motion/transitions.ts` (`morph` for the Live deck and page scroll, `panel` for edge rails, `pill` for toggles) instead of one-off curves. Animate through the small in-house engine in `apps/web/src/app/motion/` (motion values, `animate`, and hooks that write styles on one shared frame loop); its springs are a faithful port of Motion's, checked against recorded Motion traces. Motion should stay interruptible: retarget a spring rather than waiting for it to finish. Honor `prefers-reduced-motion` and `prefers-reduced-transparency`. See [UI Design](standards/ui-design.md).
 
 Hold 60 fps on integrated GPUs. Measure transitions in real Chrome (frame gaps, long animation frames, a trace) before and after a change.
 

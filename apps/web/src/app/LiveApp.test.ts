@@ -45,15 +45,4 @@ describe("Live bundle", () => {
     }
     expect(violations).toEqual([]);
   });
-
-  test("the deck renders `m` components, so Motion's gesture and layout code stays out of the bundle", async () => {
-    const violations: string[] = [];
-    for await (const relative of new Glob("**/*.tsx").scan({ cwd: path.join(src, "app") })) {
-      if (!/^(LiveApp|LivePage)\.tsx$|^deck\//.test(relative)) continue;
-      if (/<motion\.|\bmotion\.create\(/.test(await Bun.file(path.join(src, "app", relative)).text())) {
-        violations.push(`app/${relative}: use \`m.<tag>\` inside LivePage's LazyMotion instead of \`motion.<tag>\``);
-      }
-    }
-    expect(violations).toEqual([]);
-  });
 });

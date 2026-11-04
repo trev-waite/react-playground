@@ -23,11 +23,11 @@ export default defineConfig(({ mode }) => {
       rolldownOptions: {
         output: {
           codeSplitting: {
-            // Libraries change less often than the app, so they keep their cache across deploys.
+            // React changes less often than the app, so it keeps its cache across deploys.
             groups: [
               {
                 name: "vendor",
-                test: /node_modules\/(react|react-dom|scheduler|motion|framer-motion|motion-dom|motion-utils)\//,
+                test: /node_modules\/(react|react-dom|scheduler)\//,
               },
             ],
           },

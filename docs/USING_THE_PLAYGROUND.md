@@ -68,4 +68,4 @@ Builds use `SITE_URL` for absolute `og:image` and `og:video` URLs; CI sets it to
 
 ## Stack
 
-Turborepo · Vite · Cloudflare Workers · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU) · Bun API
+Turborepo · Vite · Cloudflare Workers · React 19.2 · CSS Modules · React Router · vgpu (WebGPU) · Bun API

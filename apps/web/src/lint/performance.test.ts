@@ -104,12 +104,12 @@ describe("performance lint: CSS", () => {
 });
 
 describe("performance lint: code", () => {
-  test("app and studio chrome animate through Motion, not their own frame loops", async () => {
+  test("app and studio chrome animate through the shared frame loop, not their own", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["app", "studio"], "**/*.{ts,tsx}")) {
       for (const match of text.matchAll(/requestAnimationFrame\(/g)) {
         if (allowedNear(text, match.index!)) continue;
-        violations.push(`${file}:${lineOf(text, match.index!)} runs requestAnimationFrame; drive a motion value instead.`);
+        violations.push(`${file}:${lineOf(text, match.index!)} runs requestAnimationFrame; drive a motion value (app/motion) instead.`);
       }
     }
     report(violations);

@@ -16,7 +16,6 @@
     "@react-playground/api": "workspace:*",
     "@react-playground/layout-sheet": "workspace:*",
     "@webgpu/types": "^0.1.72",
-    "motion": "^13.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
