@@ -1,6 +1,6 @@
-import { createContext, useId, type ReactNode } from "react";
-import { m, useReducedMotion } from "motion/react";
-import { REDUCED_MOTION, SPRING } from "../motion";
+import { createContext, useId, useRef, useState, type ReactNode } from "react";
+import { useAnimatedValues, useMotionRender, useReducedMotion } from "../motion/hooks";
+import { REDUCED_MOTION, SPRING, type Transition } from "../motion/transitions";
 import type { DeckView } from "./CardDeck";
 import styles from "./DeckChrome.module.css";
 
@@ -74,18 +74,30 @@ function ViewIcon({ grid }: { grid: boolean }) {
       {TILES.map((tile, index) => {
         const tileState = { x: tile.x, y: tile.y, width: TILE, height: TILE, rx: 2 };
         const pageState = index === 0 ? PAGE : { ...tile.from, width: TILE, height: TILE, rx: 2 };
-        return (
-          <m.rect
-            key={index}
-            initial={false}
-            animate={grid ? tileState : pageState}
-            transition={transition}
-            fill="currentColor"
-          />
-        );
+        return <IconRect key={index} shape={grid ? tileState : pageState} transition={transition} />;
       })}
     </svg>
   );
+}
+
+type RectShape = { x: number; y: number; width: number; height: number; rx: number };
+
+function IconRect({ shape, transition }: { shape: RectShape; transition: Transition }) {
+  const ref = useRef<SVGRectElement>(null);
+  const values = useAnimatedValues(shape, transition);
+  const { x, y, width, height, rx } = values;
+  const [initial] = useState(() => shape);
+
+  useMotionRender([x, y, width, height, rx], () => {
+    const rect = ref.current;
+    if (!rect) return;
+    for (const [name, value] of Object.entries(values)) {
+      const text = `${value.get()}`;
+      if (rect.getAttribute(name) !== text) rect.setAttribute(name, text);
+    }
+  });
+
+  return <rect ref={ref} {...initial} fill="currentColor" />;
 }
 
 type DeckPagerProps = {

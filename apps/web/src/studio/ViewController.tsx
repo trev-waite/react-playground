@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { animate, useMotionValue, type AnimationPlaybackControls, type MotionValue } from "motion/react";
+import { useMotionValue } from "../app/motion/hooks";
+import { animate, type Animation, type MotionValue } from "../app/motion/motionValue";
 import { useLocation, useNavigate } from "react-router";
 import { liveSlugFromPath } from "../lib/catalog";
 import { DEFAULT_DURATION_MS, REDUCED_MOTION_MS } from "./diagonalBand";
@@ -21,7 +22,7 @@ type ViewContextValue = {
    * 0 = Live covering; 1 = Experimental revealed. A motion value so the
    * dissolve updates styles without re-rendering the studio every frame.
    */
-  progress: MotionValue<number>;
+  progress: MotionValue;
   animating: boolean;
   liveSlug: string | null;
   reducedMotion: boolean;
@@ -96,7 +97,7 @@ export function ViewProvider({ children }: ViewProviderProps) {
     prefersReducedTransparency,
   );
 
-  const dissolve = useRef<AnimationPlaybackControls | null>(null);
+  const dissolve = useRef<Animation | null>(null);
   const modeRef = useRef(mode);
 
   modeRef.current = mode;

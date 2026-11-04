@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { animate, useReducedMotion, type AnimationPlaybackControls } from "motion/react";
 import type { LiveCard } from "../../lib/catalog";
-import { SPRING } from "../motion";
+import { useReducedMotion } from "../motion/hooks";
+import { animate, type Animation } from "../motion/motionValue";
+import { SPRING } from "../motion/transitions";
 import { createCardMotion, jumpCard, moveCard, type CardMotion } from "./cardMotion";
 import { DeckCard } from "./DeckCard";
 import { usePaging } from "./usePaging";
@@ -88,7 +89,7 @@ export function CardDeck({ cards, view, activeIndex, listening, onActiveChange, 
   const flight = useRef(0);
   const scrollTop = useRef(0);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const glide = useRef<AnimationPlaybackControls | null>(null);
+  const glide = useRef<Animation | null>(null);
 
   const grid = useMemo(() => gridLayout(cards.map(card => card.size), viewport), [cards, viewport]);
   const frame = pageFrame(viewport);

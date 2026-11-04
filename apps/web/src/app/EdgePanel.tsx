@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
-import { REDUCED_MOTION, SPRING } from "./motion";
+import { useRef, useState, type ReactNode } from "react";
+import { transform, useAnimatedValues, useMotionStyle, useReducedMotion } from "./motion/hooks";
+import { REDUCED_MOTION, SPRING } from "./motion/transitions";
 import { closedOffset, PANEL_PEEK, type EdgeSide } from "./panelGeometry";
 import styles from "./EdgePanel.module.css";
 
@@ -18,17 +18,21 @@ type EdgePanelProps = {
 export function EdgePanel({ side, label, width, defaultOpen = false, children }: EdgePanelProps) {
   const reducedMotion = useReducedMotion();
   const [open, setOpen] = useState(defaultOpen);
+  const ref = useRef<HTMLElement>(null);
+  const { x } = useAnimatedValues(
+    { x: open ? 0 : closedOffset(side, width, PANEL_PEEK) },
+    reducedMotion ? REDUCED_MOTION : SPRING.panel,
+  );
+  const panelStyle = useMotionStyle(ref, [x], style => style("transform", transform({ x: x.get() })));
 
   return (
-    <motion.aside
+    <aside
+      ref={ref}
       className={styles.panel}
       data-side={side}
       data-open={open || undefined}
-      initial={false}
-      animate={{ x: open ? 0 : closedOffset(side, width, PANEL_PEEK) }}
-      transition={reducedMotion ? REDUCED_MOTION : SPRING.panel}
       aria-label={label}
-      style={{ width }}
+      style={{ ...panelStyle, width }}
     >
       <button
         type="button"
@@ -42,6 +46,6 @@ export function EdgePanel({ side, label, width, defaultOpen = false, children }:
       <div className={styles.body} inert={open ? undefined : true}>
         {children}
       </div>
-    </motion.aside>
+    </aside>
   );
 }

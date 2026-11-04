@@ -1,11 +1,15 @@
-import { motion, useReducedMotion } from "motion/react";
-import { REDUCED_MOTION, SPRING } from "../app/motion";
+import { useRef, type RefObject } from "react";
+import { useReducedMotion } from "../app/motion/hooks";
+import { useSharedLayout } from "../app/motion/sharedLayout";
+import { REDUCED_MOTION, SPRING, type Transition } from "../app/motion/transitions";
 import { useView } from "./ViewController";
 import styles from "./ViewToggle.module.css";
 
 export function ViewToggle() {
   const { mode, setMode, animating } = useView();
   const reducedMotion = useReducedMotion();
+  const transition = reducedMotion ? REDUCED_MOTION : SPRING.pill;
+  const pillSlot = useRef<DOMRect | null>(null);
 
   return (
     <div className={styles.wrap} role="group" aria-label="View mode">
@@ -19,12 +23,7 @@ export function ViewToggle() {
           onClick={() => setMode("live")}
         >
           {mode === "live" ? (
-            <motion.span
-              className={styles.pill}
-              layoutId="view-mode-pill"
-              transition={reducedMotion ? REDUCED_MOTION : SPRING.pill}
-              aria-hidden="true"
-            />
+            <Pill slot={pillSlot} transition={transition} />
           ) : null}
           <span className={styles.label}>Live</span>
         </button>
@@ -37,16 +36,18 @@ export function ViewToggle() {
           onClick={() => setMode("experimental")}
         >
           {mode === "experimental" ? (
-            <motion.span
-              className={styles.pill}
-              layoutId="view-mode-pill"
-              transition={reducedMotion ? REDUCED_MOTION : SPRING.pill}
-              aria-hidden="true"
-            />
+            <Pill slot={pillSlot} transition={transition} />
           ) : null}
           <span className={styles.label}>Experimental</span>
         </button>
       </div>
     </div>
   );
+}
+
+/** The active segment's highlight, which slides to whichever segment is chosen. */
+function Pill({ slot, transition }: { slot: RefObject<DOMRect | null>; transition: Transition }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useSharedLayout(ref, slot, transition);
+  return <span ref={ref} className={styles.pill} aria-hidden="true" />;
 }

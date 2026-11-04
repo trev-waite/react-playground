@@ -1,6 +1,5 @@
 import { startTransition, Suspense, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { domMin, LazyMotion } from "motion/react";
 import { cardIndexForSlug } from "../lib/catalog";
 import { useLiveCards } from "../lib/liveCatalog";
 import { CardDeck, type DeckView } from "./deck/CardDeck";
@@ -19,12 +18,9 @@ type LivePageProps = {
 export function LivePage({ slug, active = true, onNavigate }: LivePageProps) {
   return (
     <div className={styles.page}>
-      {/* The deck only binds motion values and animates; it skips Motion's gesture and layout code. */}
-      <LazyMotion features={domMin}>
-        <Suspense fallback={null}>
-          <LiveDeck slug={slug} active={active} onNavigate={onNavigate} />
-        </Suspense>
-      </LazyMotion>
+      <Suspense fallback={null}>
+        <LiveDeck slug={slug} active={active} onNavigate={onNavigate} />
+      </Suspense>
     </div>
   );
 }

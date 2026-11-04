@@ -1,4 +1,6 @@
-import { motion, useTransform, type MotionValue } from "motion/react";
+import { useRef, type RefObject } from "react";
+import { opacity, useMotionStyle } from "../app/motion/hooks";
+import type { MotionValue } from "../app/motion/motionValue";
 import { frostStrength, liveLayerMask } from "./diagonalBand";
 import styles from "./DiagonalBandMask.module.css";
 
@@ -11,17 +13,24 @@ import styles from "./DiagonalBandMask.module.css";
  * flips, so the DOM is written a dozen times per dissolve, not every frame.
  * At rest there is no mask at all, and a fully covered layer stops painting.
  */
-export function useLiveLayerStyle(progress: MotionValue<number>, reducedMotion: boolean) {
-  const mask = useTransform(progress, p => liveLayerMask(p, reducedMotion));
-  const opacity = useTransform(progress, p => (reducedMotion ? 1 - p : 1));
-  const visibility = useTransform(progress, p => (p >= 1 ? "hidden" : "visible"));
-  return { maskImage: mask, WebkitMaskImage: mask, opacity, visibility };
+export function useLiveLayerStyle(
+  ref: RefObject<HTMLElement | null>,
+  progress: MotionValue,
+  reducedMotion: boolean,
+) {
+  return useMotionStyle(ref, [progress], style => {
+    const p = progress.get();
+    const mask = liveLayerMask(p, reducedMotion);
+    style("maskImage", mask);
+    style("WebkitMaskImage", mask);
+    style("opacity", opacity(reducedMotion ? 1 - p : 1));
+    style("visibility", p >= 1 ? "hidden" : "visible");
+  });
 }
 
 /** Experimental sits fully under Live at rest; skip painting it there. */
-export function useExperimentalLayerStyle(progress: MotionValue<number>) {
-  const visibility = useTransform(progress, p => (p <= 0 ? "hidden" : "visible"));
-  return { visibility };
+export function useExperimentalLayerStyle(ref: RefObject<HTMLElement | null>, progress: MotionValue) {
+  return useMotionStyle(ref, [progress], style => style("visibility", progress.get() <= 0 ? "hidden" : "visible"));
 }
 
 /**
@@ -33,12 +42,19 @@ export function FrostOverlay({
   progress,
   disabled = false,
 }: {
-  progress: MotionValue<number>;
+  progress: MotionValue;
   disabled?: boolean;
 }) {
-  const strength = useTransform(progress, frostStrength);
-  const opacity = useTransform(strength, s => s * 0.72);
-  const visibility = useTransform(strength, s => (s > 0.001 ? "visible" : "hidden"));
   if (disabled) return null;
-  return <motion.div className={styles.frost} aria-hidden="true" style={{ opacity, visibility }} />;
+  return <Frost progress={progress} />;
+}
+
+function Frost({ progress }: { progress: MotionValue }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const style = useMotionStyle(ref, [progress], style => {
+    const strength = frostStrength(progress.get());
+    style("opacity", opacity(strength * 0.72));
+    style("visibility", strength > 0.001 ? "visible" : "hidden");
+  });
+  return <div ref={ref} className={styles.frost} aria-hidden="true" style={style} />;
 }

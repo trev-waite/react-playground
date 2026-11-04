@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { motion } from "motion/react";
+import { useCallback, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router";
 import { ChromeBar, DeckChromeSlot } from "../app/deck/DeckChrome";
 import { LivePage } from "../app/LivePage";
-import { REDUCED_MOTION, SPRING } from "../app/motion";
+import { opacity, px, transform, useAnimatedValues, useMotionStyle } from "../app/motion/hooks";
+import { REDUCED_MOTION, SPRING } from "../app/motion/transitions";
 import { ExperimentalPage } from "../experimental/ExperimentalPage";
 import { FrostOverlay, useExperimentalLayerStyle, useLiveLayerStyle } from "./DiagonalBandMask";
 import { ViewProvider, useView } from "./ViewController";
@@ -41,15 +41,18 @@ function ViewStack() {
   const [deckSlot, setDeckSlot] = useState<HTMLElement | null>(null);
   const navigate = useNavigate();
   const live = mode === "live";
+  const liveRef = useRef<HTMLDivElement>(null);
+  const experimentalRef = useRef<HTMLDivElement>(null);
 
-  const liveStyle = useLiveLayerStyle(progress, reducedMotion);
-  const experimentalStyle = useExperimentalLayerStyle(progress);
+  const liveStyle = useLiveLayerStyle(liveRef, progress, reducedMotion);
+  const experimentalStyle = useExperimentalLayerStyle(experimentalRef, progress);
 
   return (
     <DeckChromeSlot.Provider value={deckSlot}>
       <div className={styles.shell}>
         <div className={styles.stack}>
-          <motion.div
+          <div
+            ref={experimentalRef}
             className={styles.layer}
             data-layer="experimental"
             aria-hidden={mode !== "experimental"}
@@ -62,9 +65,10 @@ function ViewStack() {
           >
             <ExperimentalPage active={mode === "experimental"} onReady={markExperimentalReady} />
             <FrostOverlay progress={progress} disabled={reducedMotion || reducedTransparency} />
-          </motion.div>
+          </div>
 
-          <motion.div
+          <div
+            ref={liveRef}
             className={styles.layer}
             data-layer="live"
             aria-hidden={mode !== "live"}
@@ -80,19 +84,11 @@ function ViewStack() {
               active={mode === "live"}
               onNavigate={path => navigate(path, { replace: true })}
             />
-          </motion.div>
+          </div>
         </div>
 
         <ChromeBar>
-          {/* Live docks its grid button here; it folds away while Experimental shows. */}
-          <motion.div
-            ref={setDeckSlot}
-            className={styles.deckSlot}
-            initial={false}
-            animate={{ width: live ? DECK_SLOT_WIDTH : 0, opacity: live ? 1 : 0, scale: live ? 1 : 0.6 }}
-            transition={reducedMotion ? REDUCED_MOTION : SPRING.panel}
-            inert={live ? undefined : true}
-          />
+          <DeckSlot ref={setDeckSlot} live={live} reducedMotion={reducedMotion} />
           <ViewToggle />
         </ChromeBar>
 
@@ -101,5 +97,41 @@ function ViewStack() {
         </span>
       </div>
     </DeckChromeSlot.Provider>
+  );
+}
+
+/** Live docks its grid button here; it folds away while Experimental shows. */
+function DeckSlot({
+  ref,
+  live,
+  reducedMotion,
+}: {
+  ref: (element: HTMLDivElement | null) => void;
+  live: boolean;
+  reducedMotion: boolean;
+}) {
+  const element = useRef<HTMLDivElement | null>(null);
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      element.current = node;
+      ref(node);
+    },
+    [ref],
+  );
+  const { width, fade, scale } = useAnimatedValues(
+    { width: live ? DECK_SLOT_WIDTH : 0, fade: live ? 1 : 0, scale: live ? 1 : 0.6 },
+    reducedMotion ? REDUCED_MOTION : SPRING.panel,
+  );
+  const style = useMotionStyle(element, [width, fade, scale], style => {
+    style("width", px(width.get()));
+    style("opacity", opacity(fade.get()));
+    style("transform", transform({ scale: scale.get() }));
+  });
+
+  return (
+    <div ref={attach} className={styles.deckSlot}
+      style={style}
+      inert={live ? undefined : true}
+    />
   );
 }

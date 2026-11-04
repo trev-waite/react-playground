@@ -1,17 +1,18 @@
-import { animate, motionValue, type MotionValue, type Transition } from "motion/react";
+import { animate, MotionValue } from "../motion/motionValue";
+import type { Transition } from "../motion/transitions";
 import type { CardPose } from "./deckLayout";
 
 /** Live values a card renders from. The deck drives them; React never re-renders for motion. */
 export type CardMotion = {
-  left: MotionValue<number>;
-  top: MotionValue<number>;
-  width: MotionValue<number>;
-  height: MotionValue<number>;
-  x: MotionValue<number>;
-  y: MotionValue<number>;
-  scale: MotionValue<number>;
-  radius: MotionValue<number>;
-  chrome: MotionValue<number>;
+  left: MotionValue;
+  top: MotionValue;
+  width: MotionValue;
+  height: MotionValue;
+  x: MotionValue;
+  y: MotionValue;
+  scale: MotionValue;
+  radius: MotionValue;
+  chrome: MotionValue;
 };
 
 function entries(pose: CardPose): [keyof CardMotion, number][] {
@@ -30,15 +31,15 @@ function entries(pose: CardPose): [keyof CardMotion, number][] {
 
 export function createCardMotion(pose: CardPose): CardMotion {
   return {
-    left: motionValue(pose.rect.x),
-    top: motionValue(pose.rect.y),
-    width: motionValue(pose.rect.width),
-    height: motionValue(pose.rect.height),
-    x: motionValue(pose.x),
-    y: motionValue(pose.y),
-    scale: motionValue(pose.scale),
-    radius: motionValue(pose.radius),
-    chrome: motionValue(pose.chrome),
+    left: new MotionValue(pose.rect.x),
+    top: new MotionValue(pose.rect.y),
+    width: new MotionValue(pose.rect.width),
+    height: new MotionValue(pose.rect.height),
+    x: new MotionValue(pose.x),
+    y: new MotionValue(pose.y),
+    scale: new MotionValue(pose.scale),
+    radius: new MotionValue(pose.radius),
+    chrome: new MotionValue(pose.chrome),
   };
 }
 
