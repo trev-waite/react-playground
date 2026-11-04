@@ -42,7 +42,16 @@ function runFrame() {
     const queue = step.next;
     step.next = step.current;
     step.current = queue;
-    for (const callback of queue) callback(timestamp);
+    for (const callback of queue) {
+      try {
+        callback(timestamp);
+      } catch (error) {
+        // One failing callback must not stall every other animation.
+        queueMicrotask(() => {
+          throw error;
+        });
+      }
+    }
     queue.clear();
   }
   processing = false;

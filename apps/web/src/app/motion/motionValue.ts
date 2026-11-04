@@ -71,7 +71,10 @@ export class MotionValue {
 /**
  * One value's flight. It samples its curve on each frame's update step from
  * the time it was started, so a value retargeted mid-flight continues from
- * where it is. `finished` resolves when it lands, never when it is stopped.
+ * where it is. When it lands, `onComplete` runs at once and then `finished`
+ * resolves; a stopped flight does neither. A `stop()` that catches up past
+ * the end lands it, so its `onComplete` runs before `stop()` returns and
+ * never after a replacement has been started.
  */
 export class Animation {
   readonly finished: Promise<void>;
@@ -84,6 +87,7 @@ export class Animation {
     private readonly generator: Generator,
     private readonly target: number,
     private readonly onUpdate?: (value: number) => void,
+    private readonly onComplete?: () => void,
   ) {
     this.finished = new Promise(resolve => (this.resolve = resolve));
     value.animation = this;
@@ -98,7 +102,11 @@ export class Animation {
     const latest = done ? this.target : this.generator.value(elapsed);
     this.value.set(latest);
     this.onUpdate?.(latest);
-    if (done) this.end().resolve();
+    if (done) {
+      this.end();
+      this.onComplete?.();
+      this.resolve();
+    }
     else if (this.running) frame.update(this.tick);
   };
 
@@ -106,7 +114,6 @@ export class Animation {
     this.running = false;
     frame.cancel(this.tick);
     if (this.value.animation === this) this.value.animation = undefined;
-    return this;
   }
 
   /** Lands on the target now rather than on the next frame. */
@@ -153,8 +160,7 @@ export function animate(subject: MotionValue | number, target: number, options: 
       : tweenGenerator(from, target, transition);
   }
 
-  const animation = new Animation(value, generator, target, onUpdate);
+  const animation = new Animation(value, generator, target, onUpdate, onComplete);
   if (instant) animation.land();
-  if (onComplete) void animation.finished.then(onComplete);
   return animation;
 }

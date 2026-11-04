@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { frame } from "./frameLoop";
 import { animate, MotionValue, type Animation } from "./motionValue";
 import reference from "./motionReference.json";
@@ -48,8 +48,19 @@ const TRANSITIONS: Record<string, Transition> = {
 
 let clock = 0;
 let frames: FrameRequestCallback[] = [];
-Object.defineProperty(performance, "now", { value: () => clock, configurable: true });
-globalThis.requestAnimationFrame = callback => frames.push(callback);
+const realNow = Object.getOwnPropertyDescriptor(performance, "now");
+const realFrame = globalThis.requestAnimationFrame;
+
+beforeAll(() => {
+  Object.defineProperty(performance, "now", { value: () => clock, configurable: true });
+  globalThis.requestAnimationFrame = callback => frames.push(callback);
+});
+
+afterAll(() => {
+  if (realNow) Object.defineProperty(performance, "now", realNow);
+  else delete (performance as { now?: unknown }).now;
+  globalThis.requestAnimationFrame = realFrame;
+});
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
@@ -130,4 +141,33 @@ describe("motion values replay Motion 13's traces", () => {
       expect(actual.completed).toEqual(c.expected.completed);
     });
   }
+});
+
+describe("completion", () => {
+  test("a stop that lands a flight completes it before a replacement starts", async () => {
+    frames = [];
+    clock = 50_000;
+    await flush();
+    let glide: Animation | null = null;
+    const stopGlide = () => {
+      glide?.stop();
+      glide = null;
+    };
+    let position = 0;
+    glide = animate(0, 800, { ...SPRING.morph, onUpdate: v => (position = v), onComplete: stopGlide });
+    await flush();
+    clock += 5_000;
+    await flush();
+
+    stopGlide();
+    const replacement = animate(position, 1600, { ...SPRING.morph, onUpdate: v => (position = v), onComplete: stopGlide });
+    glide = replacement;
+    await flush();
+    clock += 1000 / 60;
+    for (const callback of frames.splice(0)) callback(clock);
+    await flush();
+
+    expect(glide).toBe(replacement);
+    expect(position).toBeGreaterThan(800);
+  });
 });

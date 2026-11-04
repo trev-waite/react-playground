@@ -129,9 +129,6 @@ function DeckSlot({
   });
 
   return (
-    <div ref={attach} className={styles.deckSlot}
-      style={style}
-      inert={live ? undefined : true}
-    />
+    <div ref={attach} className={styles.deckSlot} style={style} inert={live ? undefined : true} />
   );
 }

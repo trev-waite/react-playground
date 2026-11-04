@@ -43,6 +43,10 @@ export function createCardMotion(pose: CardPose): CardMotion {
   };
 }
 
+export function stopCard(motion: CardMotion) {
+  for (const value of Object.values(motion)) value.stop();
+}
+
 /** Places a card without animating, cancelling any flight in progress. */
 export function jumpCard(motion: CardMotion, pose: CardPose) {
   for (const [key, value] of entries(pose)) motion[key].jump(value);

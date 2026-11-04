@@ -11,8 +11,6 @@ export type Generator = {
   value: (elapsed: number) => number;
 };
 
-type Sample = { value: number; done: boolean };
-
 const REST = {
   granular: { speed: 0.01, delta: 0.005 },
   standard: { speed: 2, delta: 0.5 },
@@ -33,13 +31,9 @@ export function mixNumber(from: number, to: number, progress: number): number {
 }
 
 /** Springs only report rest; the landing time is the first 50 ms step at rest. */
-function settleTime(sample: (elapsed: number) => Sample): number {
+function settleTime(atRest: (elapsed: number) => boolean): number {
   let duration = 0;
-  let state = sample(duration);
-  while (!state.done && duration < MAX_DURATION) {
-    duration += DURATION_STEP;
-    state = sample(duration);
-  }
+  while (!atRest(duration) && duration < MAX_DURATION) duration += DURATION_STEP;
   return duration >= MAX_DURATION ? Infinity : duration;
 }
 
@@ -113,12 +107,15 @@ export function springGenerator(
     };
   }
 
-  const sample = (t: number): Sample => {
-    const current = position(t);
-    const done = Math.abs(speed(t) * 1000) <= rest.speed && Math.abs(to - current) <= rest.delta;
-    return { value: done ? to : current, done };
+  const atRest = (t: number, current: number) =>
+    Math.abs(speed(t) * 1000) <= rest.speed && Math.abs(to - current) <= rest.delta;
+  return {
+    duration: settleTime(t => atRest(t, position(t))),
+    value: t => {
+      const current = position(t);
+      return atRest(t, current) ? to : current;
+    },
   };
-  return { duration: settleTime(sample), value: t => sample(t).value };
 }
 
 function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {

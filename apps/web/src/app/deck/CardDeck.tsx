@@ -3,7 +3,7 @@ import type { LiveCard } from "../../lib/catalog";
 import { useReducedMotion } from "../motion/hooks";
 import { animate, type Animation } from "../motion/motionValue";
 import { SPRING } from "../motion/transitions";
-import { createCardMotion, jumpCard, moveCard, type CardMotion } from "./cardMotion";
+import { createCardMotion, jumpCard, moveCard, stopCard, type CardMotion } from "./cardMotion";
 import { DeckCard } from "./DeckCard";
 import { usePaging } from "./usePaging";
 import {
@@ -224,10 +224,20 @@ export function CardDeck({ cards, view, activeIndex, listening, onActiveChange, 
     });
   }, [activeIndex, layout, viewport.height, reducedMotion]);
 
+  useEffect(() => {
+    const slugs = new Set(cards.map(card => card.slug));
+    for (const [slug, motion] of motions.current) {
+      if (slugs.has(slug)) continue;
+      stopCard(motion);
+      motions.current.delete(slug);
+    }
+  }, [cards]);
+
   useEffect(
     () => () => {
       clearTimeout(settleTimer.current);
       glide.current?.stop();
+      for (const motion of motions.current.values()) stopCard(motion);
     },
     [],
   );
