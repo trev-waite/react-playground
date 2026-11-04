@@ -427,29 +427,34 @@ export class Sheet {
     const scale = this.#reader.scale(this.#root) || 1;
     const origin = this.position(item.id);
     const pointer = { x: event.clientX, y: event.clientY };
+    const { pointerId } = event;
+    const document = element.ownerDocument;
     let dragging = false;
-    element.setPointerCapture(event.pointerId);
 
     const move = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
       const delta = { x: next.clientX - pointer.x, y: next.clientY - pointer.y };
-      // A press that barely moves is a click, so buttons inside items still work.
+      // A press that barely moves is a click. Capture waits until then, because it
+      // would retarget the click away from a button inside the item.
       if (!dragging && Math.hypot(delta.x, delta.y) < DRAG_THRESHOLD_PX) return;
       if (!dragging) {
         dragging = true;
+        element.setPointerCapture(pointerId);
         element.style.cursor = "grabbing";
       }
       this.moveTo(item.id, { x: origin.x + delta.x / scale, y: origin.y + delta.y / scale });
     };
-    const end = () => {
-      element.removeEventListener("pointermove", move);
-      element.removeEventListener("pointerup", end);
-      element.removeEventListener("pointercancel", end);
+    const end = (last: PointerEvent) => {
+      if (last.pointerId !== pointerId) return;
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", end);
+      document.removeEventListener("pointercancel", end);
       element.removeEventListener("lostpointercapture", end);
       element.style.cursor = ITEM_STYLES.cursor;
     };
-    element.addEventListener("pointermove", move);
-    element.addEventListener("pointerup", end);
-    element.addEventListener("pointercancel", end);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
     element.addEventListener("lostpointercapture", end);
   };
 

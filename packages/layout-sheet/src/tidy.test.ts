@@ -95,3 +95,15 @@ test("plans finite positions when a row's gaps are far apart", () => {
     expect(Number.isFinite(at.x) && Number.isFinite(at.y)).toBe(true);
   }
 });
+
+test("places an overlapping item from where the item it follows lands", () => {
+  // `wide` starts first but is centered after `badge`, so it follows it.
+  const boxes: SheetBox[] = [
+    { id: "badge", group: "g", rect: { x: 50, y: 24, width: 32, height: 40 } },
+    { id: "wide", group: "g", rect: { x: 20, y: 28, width: 120, height: 40 } },
+    { id: "tail", group: "g", rect: { x: 164, y: 28, width: 40, height: 40 } },
+  ];
+  const plan = tidy(boxes);
+  const badge = plan.positions.badge!;
+  expect(plan.positions.wide!.x - (badge.x + 32)).toBe(plan.spacing.gutters.g!);
+});

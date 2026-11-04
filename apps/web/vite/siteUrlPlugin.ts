@@ -27,7 +27,8 @@ export function siteUrlPlugin(env: Record<string, string | undefined>): Plugin {
     },
     transformIndexHtml: {
       order: "pre",
-      handler: html => html.replaceAll(PLACEHOLDER, siteUrl ?? ""),
+      // A function replacement inserts the URL literally, even with `$` in it.
+      handler: html => html.replaceAll(PLACEHOLDER, () => siteUrl ?? ""),
     },
   };
 }

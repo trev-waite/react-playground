@@ -74,11 +74,20 @@ export function tidy(boxes: SheetBox[], options: TidyOptions = {}): TidyPlan {
   function solve(axis: Axis): Map<string, number> {
     const solved = new Map<string, number>();
     const ahead = new Map(gaps.filter(gap => gap.axis === axis && gap.from).map(gap => [gap.to, gap]));
-    for (const edge of alignedEdges(boxes, axis, options.alignTolerance)) {
+    const edges = alignedEdges(boxes, axis, options.alignTolerance);
+    const edgeOf = new Map(edges.flatMap(edge => edge.map(box => [box.id, edge] as const)));
+    const visiting = new Set<SheetBox[]>();
+
+    // An overlapping item can start before the one it follows, so place what an edge
+    // follows first. A cycle (only possible through overlaps) measures from where it is.
+    function place(edge: SheetBox[]) {
+      if (solved.has(edge[0]!.id) || visiting.has(edge)) return;
+      visiting.add(edge);
       const candidates = edge.flatMap(box => {
         const gap = ahead.get(box.id);
         const before = gap?.from ? byId.get(gap.from) : undefined;
         if (!gap || !before) return [];
+        place(edgeOf.get(before.id)!);
         const from = solved.get(before.id) ?? start(before.rect, axis);
         return [from + length(before.rect, axis) + target(gap)];
       });
@@ -88,6 +97,8 @@ export function tidy(boxes: SheetBox[], options: TidyOptions = {}): TidyPlan {
           : settled(start(edge[0]!.rect, axis), measured.inset, spacing.inset);
       for (const box of edge) solved.set(box.id, value);
     }
+
+    for (const edge of edges) place(edge);
     return solved;
   }
 
