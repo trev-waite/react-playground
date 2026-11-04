@@ -5,7 +5,6 @@ import type { CardMeta } from "@/lib/types";
 export const meta: CardMeta = {
   title: "Primary Button",
   description: "Digits roll to the new count on every press.",
-  size: "tall",
   reset: "reset",
 };
 
