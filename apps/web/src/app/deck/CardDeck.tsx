@@ -134,6 +134,9 @@ export function CardDeck({ cards, view, activeIndex, listening, onActiveChange, 
     };
 
     if (prior && prior.view !== view && focus) {
+      // The camera owns the scroll from here; a page glide or settle would fight it.
+      stopGlide();
+      clearTimeout(settleTimer.current);
       const id = ++flight.current;
       if (view === "grid") {
         if (prior.paged) {
@@ -202,8 +205,8 @@ export function CardDeck({ cards, view, activeIndex, listening, onActiveChange, 
     if (!scroller || layout !== "pages") return;
     setNearIndex(activeIndex);
     const target = activeIndex * viewport.height;
-    if (Math.abs(scroller.scrollTop - target) < 1) return;
     stopGlide();
+    if (Math.abs(scroller.scrollTop - target) < 1) return;
     if (reducedMotion || Math.abs(scroller.scrollTop - target) > viewport.height * 1.5) {
       scroller.scrollTop = target;
       return;

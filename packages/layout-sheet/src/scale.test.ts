@@ -36,4 +36,8 @@ describe("typicalGap", () => {
   test("ignores an item dragged far aside or into an overlap", () => {
     expect(typicalGap([21, 22, 23, 54, 0])).toBe(22);
   });
+
+  test("falls back to the median when no gap is near it", () => {
+    expect(typicalGap([8, 80])).toBe(44);
+  });
 });

@@ -88,3 +88,10 @@ describe("tidy", () => {
     expect(tidy(after).positions).toEqual(plan.positions);
   });
 });
+
+test("plans finite positions when a row's gaps are far apart", () => {
+  const row = [24, 72, 192].map((x, index): SheetBox => ({ id: `${index}`, rect: { x, y: 24, width: 40, height: 40 } }));
+  for (const at of Object.values(tidy(row).positions)) {
+    expect(Number.isFinite(at.x) && Number.isFinite(at.y)).toBe(true);
+  }
+});

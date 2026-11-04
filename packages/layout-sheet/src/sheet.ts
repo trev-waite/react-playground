@@ -288,13 +288,15 @@ export class Sheet {
     this.measure();
     const before = this.#positions();
     const plan = await planner({ boxes: this.boxes(), bounds: this.#bounds });
-    const moved = Object.entries(plan.positions).some(
-      ([id, to]) => this.#items.has(id) && !samePoint(to, this.position(id)),
+    // A custom planner may return anything; a non-finite position would become invalid CSS.
+    const positions = Object.entries(plan.positions).filter(
+      ([, to]) => Number.isFinite(to.x) && Number.isFinite(to.y),
     );
+    const moved = positions.some(([id, to]) => this.#items.has(id) && !samePoint(to, this.position(id)));
     if (moved) {
       this.#history.push(before);
       this.#settle();
-      for (const [id, to] of Object.entries(plan.positions)) {
+      for (const [id, to] of positions) {
         const item = this.#items.get(id);
         if (item) this.#setOffset(item, subtract(to, item.natural));
       }

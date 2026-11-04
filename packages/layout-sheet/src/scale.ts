@@ -30,5 +30,7 @@ export function typicalGap(values: number[]): number {
   if (values.length === 0) return 0;
   const middle = median(values);
   const meant = values.filter(value => Math.abs(value - middle) <= gapTolerance(middle));
+  // Gaps split evenly between two far-apart sizes leave nothing near the median.
+  if (meant.length === 0) return middle;
   return meant.reduce((sum, value) => sum + value, 0) / meant.length;
 }
