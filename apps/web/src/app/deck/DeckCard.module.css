@@ -191,8 +191,8 @@
   scale: 1;
   transition:
     opacity 160ms var(--ease-out),
-    translate var(--ease-pill-duration) var(--ease-pill),
-    scale var(--ease-pill-duration) var(--ease-pill);
+    translate var(--spring-pill-duration) var(--spring-pill-easing),
+    scale var(--spring-pill-duration) var(--spring-pill-easing);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -202,8 +202,8 @@
     scale: 1;
     transition:
       opacity 160ms var(--ease-out),
-      translate var(--ease-pill-duration) var(--ease-pill),
-      scale var(--ease-pill-duration) var(--ease-pill);
+      translate var(--spring-pill-duration) var(--spring-pill-easing),
+      scale var(--spring-pill-duration) var(--spring-pill-easing);
   }
 
   .reset:hover {
@@ -229,6 +229,6 @@
   .open:focus-visible .openLabel {
     translate: none;
     scale: none;
-    transition: opacity 160ms var(--ease-out);
+    transition: opacity var(--reduced-motion-duration) var(--reduced-motion-easing);
   }
 }
