@@ -63,6 +63,7 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 
 Host `apps/web/dist` as a static site with an SPA fallback to `index.html`. Make Live writes source files, so commit and rebuild to update it.
 
+Set `SITE_URL` (for example `https://playground.example.com`) when building so link previews get absolute `og:image` and `og:video` URLs. Vercel production builds fall back to their project domain. The preview assets are `apps/web/public/og.png` (1200×630) and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
 
 ## Stack
 
