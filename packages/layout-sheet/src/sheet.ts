@@ -107,6 +107,8 @@ export class Sheet {
   #settling = false;
   #settleTimer: ReturnType<typeof setTimeout> | undefined;
   #measureQueued = false;
+  /** Ends the drag in progress, if any. */
+  #gesture: { item: Item; end: () => void } | null = null;
   readonly #listeners = new Set<() => void>();
   #snapshot: SheetSnapshot | null = null;
 
@@ -145,6 +147,7 @@ export class Sheet {
   detach() {
     const root = this.#root;
     if (!root) return;
+    this.#gesture?.end();
     root.removeEventListener("pointerdown", this.#onPointerDown);
     root.removeEventListener("keydown", this.#onKeyDown);
     this.#observer?.disconnect();
@@ -210,6 +213,7 @@ export class Sheet {
   unregister(id: string) {
     const item = this.#items.get(id);
     if (!item) return;
+    if (this.#gesture?.item === item) this.#gesture.end();
     const { element, restore } = item;
     for (const [property, value] of Object.entries(restore.styles)) element.style.setProperty(property, value);
     if (restore.tabIndex === null) element.removeAttribute("tabindex");
@@ -444,14 +448,21 @@ export class Sheet {
       }
       this.moveTo(item.id, { x: origin.x + delta.x / scale, y: origin.y + delta.y / scale });
     };
-    const end = (last: PointerEvent) => {
-      if (last.pointerId !== pointerId) return;
+    const finish = () => {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", end);
       document.removeEventListener("pointercancel", end);
       element.removeEventListener("lostpointercapture", end);
+      if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
       element.style.cursor = ITEM_STYLES.cursor;
+      if (this.#gesture?.end === finish) this.#gesture = null;
     };
+    const end = (last: PointerEvent) => {
+      if (last.pointerId === pointerId) finish();
+    };
+    // A press that is still down when another starts, or when the sheet goes away, ends first.
+    this.#gesture?.end();
+    this.#gesture = { item, end: finish };
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", end);
     document.addEventListener("pointercancel", end);
