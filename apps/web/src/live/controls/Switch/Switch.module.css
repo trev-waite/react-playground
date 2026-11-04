@@ -1,10 +1,16 @@
 .switch {
   --spring: linear(0, 0.12 3%, 0.46 10%, 0.82 19%, 1.02 28%, 1.07 34%, 1.06 40%, 1.01 52%, 0.995 64%, 1);
+  --width: 80px;
+  --height: 48px;
+  --inset: 4px;
+  --thumb: 40px;
+  --press: 6px;
+  --travel: calc(var(--width) - var(--thumb) - 2 * var(--inset));
 
   appearance: none;
   position: relative;
-  width: 80px;
-  height: 48px;
+  width: var(--width);
+  height: var(--height);
   margin: 0;
   padding: 0;
   border: 0;
@@ -15,16 +21,24 @@
   transition: background 220ms ease;
 }
 
+.switch[data-size="compact"] {
+  --width: 52px;
+  --height: 32px;
+  --inset: 3px;
+  --thumb: 26px;
+  --press: 4px;
+}
+
 .switch[aria-checked="true"] {
   background: #34c759;
 }
 
 .thumb {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 40px;
-  height: 40px;
+  top: var(--inset);
+  left: var(--inset);
+  width: var(--thumb);
+  height: var(--thumb);
   border-radius: 999px;
   background: #ffffff;
   box-shadow:
@@ -36,15 +50,15 @@
 }
 
 .switch[aria-checked="true"] .thumb {
-  transform: translateX(32px);
+  transform: translateX(var(--travel));
 }
 
 .switch:active .thumb {
-  width: 46px;
+  width: calc(var(--thumb) + var(--press));
 }
 
 .switch[aria-checked="true"]:active .thumb {
-  transform: translateX(26px);
+  transform: translateX(calc(var(--travel) - var(--press)));
 }
 
 .switch:focus-visible {

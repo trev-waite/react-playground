@@ -4,10 +4,12 @@ import styles from "./Switch.module.css";
 type SwitchProps = {
   label: string;
   defaultChecked?: boolean;
+  /** Compact fits beside 44px buttons in a toolbar. */
+  size?: "regular" | "compact";
   onChange?: (checked: boolean) => void;
 };
 
-export function Switch({ label, defaultChecked = false, onChange }: SwitchProps) {
+export function Switch({ label, defaultChecked = false, size = "regular", onChange }: SwitchProps) {
   const [checked, setChecked] = useState(defaultChecked);
 
   return (
@@ -16,6 +18,7 @@ export function Switch({ label, defaultChecked = false, onChange }: SwitchProps)
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      data-size={size}
       className={styles.switch}
       onClick={() => {
         setChecked(!checked);
