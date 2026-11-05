@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -109,7 +108,6 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
   const saveIdeaRef = useRef<() => Promise<IdeaProject | null>>(async () => null);
   const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
   const activeIdRef = useRef<string | null>(null);
-  const makeLivePanelRef = useRef<HTMLDivElement>(null);
   const makeLiveHostRef = useRef<HTMLDivElement>(null);
   const makeLivePanelId = useId();
   const [makeLivePanelHeight, setMakeLivePanelHeight] = useState(0);
@@ -401,9 +399,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
     };
   }, [pickingLiveFolder]);
 
-  useLayoutEffect(() => {
-    const panel = makeLivePanelRef.current;
-    if (!panel) return;
+  const makeLivePanelRef = useCallback((panel: HTMLDivElement) => {
     const measure = () => setMakeLivePanelHeight(panel.offsetHeight);
     measure();
     const observer = new ResizeObserver(measure);
