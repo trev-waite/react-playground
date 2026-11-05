@@ -70,7 +70,7 @@ export function useMotionRender(values: readonly MotionValue[], render: () => vo
 }
 
 type StyleKey = Extract<keyof CSSProperties, string>;
-export type StyleWriter = (property: StyleKey, value: string) => void;
+type StyleWriter = (property: StyleKey, value: string) => void;
 
 /**
  * Keeps an element's styles in step with motion values without React

@@ -6,7 +6,7 @@
  * Work scheduled while a frame runs lands in a later step of the same frame,
  * or in the next frame if its step has already run, as in Motion's loop.
  */
-export type FrameCallback = (timestamp: number) => void;
+type FrameCallback = (timestamp: number) => void;
 
 type Step = { current: Set<FrameCallback>; next: Set<FrameCallback> };
 
