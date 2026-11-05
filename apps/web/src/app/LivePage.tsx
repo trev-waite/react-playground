@@ -28,7 +28,7 @@ function LiveDeck({ slug, active }: { slug: string | null; active: boolean }) {
   const cards = useLiveCards();
   const navigate = useNavigate();
   const slot = useContext(DeckChromeSlot);
-  const [view, setView] = useState<DeckView>("page");
+  const [view, setView] = useState<DeckView>("grid");
   const found = cardIndexForSlug(cards, slug);
   const activeIndex = Math.max(0, found);
   const card = cards[activeIndex];
