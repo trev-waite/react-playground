@@ -58,7 +58,7 @@ export type CardPlan = {
   entries: PlaygroundEntry[];
 };
 
-export function planCards({ entries, families }: LiveCatalog): CardPlan[] {
+export function planCards({ entries, families, order }: LiveCatalog): CardPlan[] {
   const plans: CardPlan[] = [];
   const byFamily = new Map<string, CardPlan>();
 
@@ -78,7 +78,11 @@ export function planCards({ entries, families }: LiveCatalog): CardPlan[] {
     plan.entries.push(entry);
   }
 
-  return plans.sort((a, b) => a.slug.localeCompare(b.slug));
+  const rank = (slug: string) => {
+    const index = order.indexOf(slug);
+    return index === -1 ? order.length : index;
+  };
+  return plans.sort((a, b) => rank(a.slug) - rank(b.slug) || a.slug.localeCompare(b.slug));
 }
 
 export type LiveCardMember = {

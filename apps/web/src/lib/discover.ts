@@ -1,3 +1,4 @@
+import { cardOrder } from "../live/order";
 import { catalogEntriesFromLoaders, familiesFromModules } from "./catalog";
 import type { FamilyMeta, LiveCatalog, PreviewModule } from "./types";
 
@@ -10,4 +11,5 @@ const familyModules = import.meta.glob<FamilyMeta>("../live/*/family.ts", {
 export const liveCatalog: LiveCatalog = {
   entries: catalogEntriesFromLoaders(previewLoaders),
   families: familiesFromModules(familyModules),
+  order: cardOrder,
 };

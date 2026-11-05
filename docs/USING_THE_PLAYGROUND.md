@@ -29,6 +29,8 @@ With neither `description` nor `reset`, the card has no footer.
 
 **Families.** Add `apps/web/src/live/<group>/family.ts` exporting a `FamilyMeta` (`title` plus the same fields) to show every component in that folder together on one card, as in `apps/web/src/live/controls/`. Member slugs such as `/controls/Switch` open the family card.
 
+**Order.** Cards appear in the order listed in `apps/web/src/live/order.ts`, then any unlisted cards alphabetically. The grid packs each card into the first cell it fits, so list wide cards before narrow ones and start a tall card at the beginning of a row to avoid holes.
+
 ## Export
 
 Copy the Live folder into another app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. GPU components also need `vgpu` and `apps/web/src/gpu/`.

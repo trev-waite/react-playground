@@ -40,4 +40,6 @@ export type LiveCatalog = {
   entries: PlaygroundEntry[];
   /** Keyed by Live folder name. */
   families: Record<string, FamilyMeta>;
+  /** Card slugs in display order; unlisted cards follow alphabetically. */
+  order: readonly string[];
 };

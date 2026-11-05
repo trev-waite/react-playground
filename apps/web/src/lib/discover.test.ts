@@ -75,12 +75,33 @@ describe("planCards", () => {
         entry("shaders/LightDispersion"),
       ],
       families: { controls: { title: "Controls", size: "wide" } },
+      order: [],
     });
 
     expect(plans.map(plan => [plan.slug, plan.entries.map(item => item.slug)])).toEqual([
       ["buttons/PrimaryButton", ["buttons/PrimaryButton"]],
       ["controls", ["controls/Stepper", "controls/Switch"]],
       ["shaders/LightDispersion", ["shaders/LightDispersion"]],
+    ]);
+  });
+
+  test("puts cards in the catalog order, then the rest alphabetically", () => {
+    const plans = planCards({
+      entries: [
+        entry("buttons/PrimaryButton"),
+        entry("controls/Switch"),
+        entry("shaders/LightDispersion"),
+        entry("tools/SpacingTidy"),
+      ],
+      families: { controls: { title: "Controls" } },
+      order: ["shaders/LightDispersion", "controls", "shells/Missing"],
+    });
+
+    expect(plans.map(plan => plan.slug)).toEqual([
+      "shaders/LightDispersion",
+      "controls",
+      "buttons/PrimaryButton",
+      "tools/SpacingTidy",
     ]);
   });
 });

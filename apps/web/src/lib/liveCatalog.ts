@@ -12,6 +12,7 @@ function mergeCatalog(next: LiveCatalog, freshSlug?: string): LiveCatalog {
   const current = new Map(catalog.getSnapshot().entries.map(entry => [entry.slug, entry]));
   return {
     families: next.families,
+    order: next.order,
     entries: next.entries.map(entry =>
       entry.slug === freshSlug ? entry : current.get(entry.slug) ?? entry,
     ),
