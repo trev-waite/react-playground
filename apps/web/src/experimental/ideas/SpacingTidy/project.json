@@ -1,0 +1,57 @@
+{
+  "id": "a5e203aa-8bc0-4f32-af26-4b45f39f6951",
+  "revision": 5,
+  "name": "Spacing Tidy",
+  "componentName": "SpacingTidy",
+  "updatedAt": "2026-11-05T01:46:48.941Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "perfect",
+        "label": "Perfect",
+        "mock": "form"
+      },
+      {
+        "id": "scatter",
+        "label": "Scatter",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Replay",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "squareSize",
+        "label": "Square size",
+        "min": 40,
+        "max": 88,
+        "step": 4,
+        "value": 64
+      },
+      {
+        "id": "fontSize",
+        "label": "Quote size",
+        "min": 16,
+        "max": 32,
+        "step": 1,
+        "value": 22
+      },
+      {
+        "id": "columns",
+        "label": "Columns",
+        "min": 2,
+        "max": 4,
+        "step": 1,
+        "value": 3
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "52fd5b543ef2d0f3dde8eb2aaf8244dc6e3923b1d29d48961b1b53135444e7c7",
+  "createdAt": "2026-11-03T14:16:47.000Z"
+}

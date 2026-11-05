@@ -7,8 +7,6 @@
 export const DEFAULT_BAND_COUNT = 12;
 export const DEFAULT_DURATION_MS = 720;
 export const REDUCED_MOTION_MS = 180;
-/** Matches ConfigurableShell --cs-ease */
-export const BAND_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 
 export function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n));
@@ -61,4 +59,12 @@ export function frostStrength(progress: number): number {
   const p = clamp01(progress);
   if (p <= 0 || p >= 1) return 0;
   return Math.sin(p * Math.PI);
+}
+
+/**
+ * The Live layer's mask at `progress`: none at rest (so Live never composites
+ * through a mask) and a band gradient only mid-dissolve.
+ */
+export function liveLayerMask(progress: number, reducedMotion: boolean): string {
+  return reducedMotion || progress <= 0 ? "none" : bandMaskGradient(progress);
 }

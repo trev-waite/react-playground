@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <title>React Playground</title>
-  <rect x="242" y="306" width="236" height="236" rx="44" fill="#33bfff" />
-  <rect x="242" y="576" width="236" height="236" rx="44" fill="#f5f6fa" />
-  <rect x="510" y="576" width="236" height="236" rx="44" fill="#4befc0" />
-  <g fill="#8a5cf6">
+  <rect x="242" y="306" width="236" height="236" rx="44" fill="#1c2430" />
+  <rect x="242" y="576" width="236" height="236" rx="44" fill="#8b93a3" />
+  <rect x="510" y="576" width="236" height="236" rx="44" fill="#c3c9d4" />
+  <g fill="#2a5cff">
     <rect x="527" y="297" width="236" height="236" rx="44" transform="rotate(20 645 415)" />
-    <path d="M742 190 730 258M838 250 788 300M884 344 824 356" stroke="#8a5cf6" stroke-width="40" stroke-linecap="round" fill="none" />
+    <path d="M742 190 730 258M838 250 788 300M884 344 824 356" stroke="#2a5cff" stroke-width="40" stroke-linecap="round" fill="none" />
   </g>
 </svg>

@@ -3,13 +3,14 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import { liveCatalogPlugin } from "./vite/liveCatalogPlugin.ts";
+import { siteUrlPlugin } from "./vite/siteUrlPlugin.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, root, "");
   return {
-    plugins: [react(), liveCatalogPlugin()],
+    plugins: [react(), liveCatalogPlugin(), siteUrlPlugin(env)],
     resolve: {
       alias: {
         "@": path.join(root, "src"),

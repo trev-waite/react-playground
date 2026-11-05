@@ -32,6 +32,6 @@
     "noPropertyAccessFromIndexSignature": false
   },
 
-  "include": ["src", "vite"],
+  "include": ["src", "vite", "scripts"],
   "exclude": ["dist", "node_modules"]
 }

@@ -1,14 +1,70 @@
 .page {
   position: relative;
-  display: flex;
   height: 100%;
   width: 100%;
   overflow: hidden;
+  background: var(--shell-canvas);
 }
 
-.main {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
+.deck {
+  position: absolute;
+  inset: 0;
+}
+
+.status {
+  display: grid;
+  place-items: center;
   height: 100%;
+  padding: var(--space-3);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 24rem;
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--shell-ink-muted);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.action {
+  appearance: none;
+  height: var(--chrome-control);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--shell-border-subtle);
+  border-radius: var(--shell-radius-pill);
+  background: var(--card-surface);
+  color: var(--shell-ink);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--shell-ink);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }

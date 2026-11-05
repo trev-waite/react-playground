@@ -5,40 +5,35 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background:
-    radial-gradient(120% 80% at 10% 0%, #f0f2f6 0%, transparent 55%),
-    radial-gradient(90% 70% at 100% 100%, #dce1ea 0%, transparent 50%),
-    var(--shell-bg);
+  background: var(--shell-canvas);
 }
 
-.grid {
+.dots {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background-image: radial-gradient(var(--shell-dot) 1px, transparent 1px);
   background-size: var(--shell-dot-size) var(--shell-dot-size);
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, #000 35%, transparent 85%);
 }
 
+/* Matches a Live page: inset card, padding clear of the floating chrome. */
 .stage {
-  position: relative;
+  position: absolute;
+  top: var(--page-inset);
+  bottom: var(--page-inset);
+  left: var(--page-inset);
+  right: var(--stage-end-inset, var(--page-inset));
   z-index: 1;
   display: grid;
   place-items: center;
-  height: 100%;
-  padding: var(--shell-stage-inset);
-  padding-right: var(--stage-end-inset, var(--shell-stage-inset));
-  transition: padding-right 280ms var(--ease-drawer);
-}
-
-.hint {
-  margin: 0;
-  max-width: 22rem;
-  text-align: center;
-  font-size: var(--text-body);
-  line-height: 1.45;
-  letter-spacing: 0.01em;
-  color: var(--shell-ink-muted);
+  padding: calc(var(--space-7) + var(--space-2)) var(--space-3);
+  overflow: hidden;
+  border-radius: var(--page-radius);
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
+  /* perf-allow: the stage must reflow beside the rail so GPU ideas resize their canvas;
+     one element, measured at 60fps on an integrated GPU. */
+  transition: right 350ms var(--ease-drawer);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -48,8 +43,8 @@
 }
 
 @media (max-width: 880px) {
-  /* Overlay the rail instead of shrinking the playboard to a sliver. */
+  /* Overlay the rail instead of shrinking the page to a sliver. */
   .stage {
-    padding-right: var(--shell-stage-inset);
+    right: var(--page-inset);
   }
 }

@@ -1,56 +1,22 @@
-## Coding Standards
+# AGENTS.md
 
-- Prefer simple, direct solutions. Use KISS and DRY as guidance - not rigid rules.
-- Follow framework best practices and patterns already established in this repository.
-- Match the existing architecture, naming, formatting, and file organization. Improvements are welcomed if they make sense.
-- Prioritize maintainability, readability, correctness, and reasonable extensibility.
-- Keep changes focused. Do not refactor unrelated code unless necessary.
-- Reuse existing utilities, components, types, and patterns before creating new ones.
-- Avoid unnecessary abstractions, dependencies, redundant computation, and duplicated logic.
-- Do not add third-party libraries for trivial functionality.
-- Write self-explanatory code. Add comments only for non-obvious intent, constraints, or tradeoffs.
-- Preserve or improve type safety. Avoid broad casts and suppression directives unless justified.
-- Handle errors intentionally. Do not silently swallow failures.
-- Update or add tests when behavior changes.
-- Never hardcode, expose, log, or commit secrets or sensitive values.
+React Playground is a personal studio for learning React by building isolated components. Ideas start in Experimental (`apps/web/src/experimental/`), a local-only studio with a shared dock of sliders, and Make Live writes the tuned, portable component into Live (`apps/web/src/live/`). Live is the deployable static catalog (`apps/web/src/app/`); it never imports the studio or Experimental, and `vite build` ships only Live. Shared libraries live in `packages/` (such as `@react-playground/layout-sheet`), and both Live and Experimental may import them.
 
-## Experimental view vs ConfigurableShell
+Favor sound engineering judgment over rigid rules, and see below for the software engineering principles.
 
-These are separate surfaces that share look and feel, not one component used twice.
+Start with the [README](README.md) for setup, commands, and workflows. Read the standard that fits the change:
 
-- **ConfigurableShell** (`apps/web/src/live/shells/ConfigurableShell/`) is a portable Live catalog card. Keep it self-contained. Do not add save/switch/promote, idea exporters, or Experimental layout to it. Do not reuse it as the experiment host.
-- **Experimental view** (`apps/web/src/experimental/`) is the studio: page, shared dock, and `ideas/` projects. Echo ConfigurableShell's visual language in Experimental's own CSS and layout. Do not render `<ConfigurableShell>` in Experimental, and do not import `ConfigurableShell.module.css`.
-- **`apps/web/src/app/`** is the Live app (catalog layout, sidebar, stage). It is not ConfigurableShell.
+- [Architecture](docs/standards/architecture.md): domain modeling, module boundaries, dependency direction, and when an abstraction is earned.
+- [Engineering Principles](docs/standards/engineering-principles.md): designing from first principles, simplicity, cohesion, and removing what an old design left behind.
+- [Working Approach](docs/standards/working-approach.md): understanding before changing, solving root causes, and keeping changes focused.
+- [Quality & Verification](docs/standards/quality-and-verification.md): testing behavior, validating at the right scope, and reporting what was not verified.
+- [UI Design](docs/standards/ui-design.md): spacing, type, contrast, interaction, and motion rules every screen should pass.
 
-## Live app vs studio
+Consult deeper documentation only when the task warrants it, rather than loading everything for every change.
 
-`apps/web` is a Vite SPA (`index.html`, `src/main.tsx`). `apps/api` is a Bun process. Do not serve the UI with Bun HTML imports or generate `*.gen.ts` catalog maps.
+## Boundaries
 
-- `vite build` ships only `LiveApp` (`src/app/`): a static catalog with no API.
-- The dev server loads `StudioApp` (`src/studio/`), which layers Experimental under `LivePage`. `apps/api` is local only and never deployed.
-- `src/app/`, `src/live/`, `src/gpu/`, and `src/lib/` never import `src/studio/` or `src/experimental/` (`src/app/LiveApp.test.ts`). The studio passes Live what it needs through props.
-
-Experimental may import `ProximityControl`, `linearScale`, and icons so the controls feel the same. It must not import the `ConfigurableShell` component. GPU ideas import `@/gpu` and use `vgpu`. See `docs/WEBGPU.md`.
-
-**Workflow:** create and play in Experimental (dock sliders/buttons are studio-only). Add `apps/web/src/experimental/ideas/<Name>/source.tsx` on disk or via Save. Make Live asks for a Live folder, then writes only the portable component — current slider numbers baked in, no dock or mocks — into `apps/web/src/live/<folder>/<Name>/`. Live `preview.tsx` renders `<Name />` and nothing else.
-
-## Naming
-
-Follow the language and framework conventions used by the repository.
-
-For TypeScript and JavaScript:
-
-- `camelCase` for variables and functions.
-- `PascalCase` for components, classes, and types.
-- `UPPER_SNAKE_CASE` for true constants.
-- Prefer descriptive names over vague abbreviations.
-
-```typescript
-// Avoid
-const max_count = 5;
-let UserName = "trev";
-
-// Prefer
-const MAX_RETRY_COUNT = 5;
-let userName = "trev";
-```
+- Never expose secrets, credentials, or sensitive data.
+- Do not add code comments unless the context is absolutely necessary and the code cannot fully explain the reason for it.
+- Clean up unused code and unneeded additional docs after all code changes
+- Organize for findability: group related files in folders named by feature or layer, give each distinct set of content or concern its own clearly named file where appropriate.

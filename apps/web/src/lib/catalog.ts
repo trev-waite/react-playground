@@ -1,4 +1,13 @@
-import type { PlaygroundEntry, TreeFolder, TreeLeaf, TreeNode } from "./types";
+import type { ComponentType } from "react";
+import type {
+  CardMeta,
+  CardSize,
+  CardTheme,
+  FamilyMeta,
+  LiveCatalog,
+  PlaygroundEntry,
+  PreviewModule,
+} from "./types";
 
 export function slugFromPreviewPath(filePath: string): string | null {
   const match = filePath.replace(/\\/g, "/").match(/\/live\/(.+)\/preview\.tsx$/);
@@ -7,6 +16,11 @@ export function slugFromPreviewPath(filePath: string): string | null {
 
 export function liveSlugFromPath(pathname: string): string | null {
   return pathname.replace(/^\/+|\/+$/g, "") || null;
+}
+
+export function folderFromFamilyPath(filePath: string): string | null {
+  const match = filePath.replace(/\\/g, "/").match(/\/live\/([^/]+)\/family\.ts$/);
+  return match?.[1] ?? null;
 }
 
 export function titleFromSlug(slug: string): string {
@@ -26,68 +40,99 @@ export function catalogEntriesFromLoaders(
     .sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
-export function livePreviewLoader(
-  slug: string | null,
-  entries: PlaygroundEntry[],
-): PlaygroundEntry["load"] | undefined {
-  if (!slug) return undefined;
-  return entries.find(entry => entry.slug === slug)?.load;
+export function familiesFromModules(
+  modules: Record<string, FamilyMeta>,
+): Record<string, FamilyMeta> {
+  const families: Record<string, FamilyMeta> = {};
+  for (const [filePath, meta] of Object.entries(modules)) {
+    const folder = folderFromFamilyPath(filePath);
+    if (folder) families[folder] = meta;
+  }
+  return families;
 }
 
-type MutableFolder = {
-  name: string;
-  folders: Map<string, MutableFolder>;
-  leaves: TreeLeaf[];
+/** Which entries share a card, before any preview module has loaded. */
+export type CardPlan = {
+  slug: string;
+  family?: FamilyMeta;
+  entries: PlaygroundEntry[];
 };
 
-function ensureFolder(parent: MutableFolder, name: string): MutableFolder {
-  let folder = parent.folders.get(name);
-  if (!folder) {
-    folder = { name, folders: new Map(), leaves: [] };
-    parent.folders.set(name, folder);
-  }
-  return folder;
-}
-
-export function buildTree(entries: PlaygroundEntry[]): TreeNode[] {
-  const root: MutableFolder = { name: "", folders: new Map(), leaves: [] };
+export function planCards({ entries, families }: LiveCatalog): CardPlan[] {
+  const plans: CardPlan[] = [];
+  const byFamily = new Map<string, CardPlan>();
 
   for (const entry of entries) {
-    const parts = entry.slug.split("/");
-    let current = root;
-
-    for (let i = 0; i < parts.length - 1; i++) {
-      current = ensureFolder(current, parts[i]!);
+    const folder = entry.slug.split("/")[0] ?? "";
+    const family = families[folder];
+    if (!family) {
+      plans.push({ slug: entry.slug, entries: [entry] });
+      continue;
     }
+    let plan = byFamily.get(folder);
+    if (!plan) {
+      plan = { slug: folder, family, entries: [] };
+      byFamily.set(folder, plan);
+      plans.push(plan);
+    }
+    plan.entries.push(entry);
+  }
 
-    const leafName = parts[parts.length - 1]!;
-    current.leaves.push({
-      type: "leaf",
-      name: leafName,
-      title: entry.title,
+  return plans.sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+export type LiveCardMember = {
+  slug: string;
+  title: string;
+  Preview?: ComponentType;
+  error?: string;
+};
+
+export type LiveCard = {
+  slug: string;
+  title: string;
+  description?: string;
+  size: CardSize;
+  background?: string;
+  theme: CardTheme;
+  reset?: CardMeta["reset"];
+  members: LiveCardMember[];
+};
+
+export type LoadedPreview = PreviewModule | { error: string };
+
+export function cardFromPlan(plan: CardPlan, modules: LoadedPreview[]): LiveCard {
+  const members = plan.entries.map((entry, index): LiveCardMember => {
+    const loaded = modules[index];
+    if (!loaded || "error" in loaded) {
+      return { slug: entry.slug, title: entry.title, error: loaded?.error ?? "Not loaded" };
+    }
+    return {
       slug: entry.slug,
-    });
-  }
+      title: loaded.meta?.title ?? entry.title,
+      Preview: loaded.default,
+    };
+  });
+  const firstModule = modules[0];
+  const meta: CardMeta =
+    plan.family ?? (firstModule && !("error" in firstModule) ? firstModule.meta ?? {} : {});
 
-  function finalize(folder: MutableFolder): TreeNode[] {
-    const nodes: TreeNode[] = [];
+  return {
+    slug: plan.slug,
+    title: meta.title ?? members[0]?.title ?? titleFromSlug(plan.slug),
+    description: meta.description,
+    size: meta.size ?? "small",
+    background: meta.background,
+    theme: meta.theme ?? "light",
+    reset: meta.reset,
+    members,
+  };
+}
 
-    const folderNames = [...folder.folders.keys()].sort((a, b) => a.localeCompare(b));
-    for (const name of folderNames) {
-      const child = folder.folders.get(name)!;
-      const folderNode: TreeFolder = {
-        type: "folder",
-        name: child.name,
-        children: finalize(child),
-      };
-      nodes.push(folderNode);
-    }
-
-    const leaves = [...folder.leaves].sort((a, b) => a.name.localeCompare(b.name));
-    nodes.push(...leaves);
-
-    return nodes;
-  }
-
-  return finalize(root);
+/** The card that shows `slug`, whether it is the card itself or a family member. */
+export function cardIndexForSlug(cards: LiveCard[], slug: string | null): number {
+  if (!slug) return -1;
+  return cards.findIndex(
+    card => card.slug === slug || card.members.some(member => member.slug === slug),
+  );
 }

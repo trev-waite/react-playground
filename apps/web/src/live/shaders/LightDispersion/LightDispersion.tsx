@@ -12,6 +12,8 @@ import {
 } from "@/gpu";
 
 const SLIDERS = {"slider1":80,"slider2":68,"slider3":35};
+/** Quiet time after the last canvas resize before rebuilding the text mask. */
+const RESIZE_SETTLE_MS = 120;
 const TEXT = "Hello There";
 const FONT_FAMILY = 'system-ui, "SF Pro Display", "Segoe UI", Arial, Helvetica, sans-serif';
 
@@ -207,13 +209,21 @@ export function LightDispersion() {
         canvasSurface.size[0] > 1 && canvasSurface.size[1] > 1
           ? [canvasSurface.size[0], canvasSurface.size[1]]
           : null;
+      let resizedAt = 0;
+      let masked = false;
       const unsubscribeResize = canvasSurface.onResize(({ width, height }) => {
         pendingSize = [Math.max(1, width), Math.max(1, height)];
+        resizedAt = performance.now();
       });
       const flushResize = (frame: Frame) => {
         if (!pendingSize) return;
+        // A rebuild re-rasterises the text and reallocates the glow chain (~30ms). While the
+        // canvas is still being resized (a layout animation), keep stretching the last mask
+        // and rebuild once the size settles.
+        if (masked && performance.now() - resizedAt < RESIZE_SETTLE_MS) return;
         const [width, height] = pendingSize;
         pendingSize = null;
+        masked = true;
         const mask = textMask.update(width, height);
         glow.resize([width, height]);
         glow.render(frame, mask);

@@ -69,14 +69,25 @@ type IdeaWorkbenchProps = {
   draft?: IdeaDraft;
   onMutate?: () => void;
   onDraftChange?: (draft: IdeaDraft) => void;
+  /** Called once the stage has committed with the idea mounted. */
+  onReady?: () => void;
   children: (parts: IdeaStudioParts) => ReactNode;
 };
+
+/** Commits with the content beside it, so its effect means "that content is mounted". */
+function ReadySignal({ onReady }: { onReady?: () => void }) {
+  useEffect(() => {
+    onReady?.();
+  }, [onReady]);
+  return null;
+}
 
 export default function IdeaWorkbench({
   componentName,
   draft = defaultIdeaDraft(),
   onMutate,
   onDraftChange,
+  onReady,
   children,
 }: IdeaWorkbenchProps) {
   const [sliders, setSliders] = useState(draft.sliders);
@@ -108,6 +119,8 @@ export default function IdeaWorkbench({
     let last = performance.now();
     let current = progressRef.current;
 
+    // perf-allow: ideas receive replay progress as a prop (IdeaExample), so the stage
+    // re-renders each frame of a replay. Moving it to a motion value changes the idea contract.
     const tick = (now: number) => {
       const dt = Math.min(0.048, (now - last) / 1000);
       last = now;
@@ -209,10 +222,14 @@ export default function IdeaWorkbench({
         <div className={styles.stageViewport}>
           <Suspense fallback={<p className={styles.blankHint}>Loading…</p>}>
             <Stage sliders={liveSliders} progress={progress} />
+            <ReadySignal onReady={onReady} />
           </Suspense>
         </div>
       ) : (
-        <EmptyStage />
+        <>
+          <EmptyStage />
+          <ReadySignal onReady={onReady} />
+        </>
       )}
     </div>
   );

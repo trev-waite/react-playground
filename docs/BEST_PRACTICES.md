@@ -20,4 +20,14 @@ For saved ideas, `project.json` owns metadata and `source.tsx` owns code. Publis
 
 ## Motion
 
-Sidebar motion should stay interruptible. Honor `prefers-reduced-motion` and `prefers-reduced-transparency`.
+Use the springs in `apps/web/src/app/motion.ts` (`morph` for the Live deck and page scroll, `panel` for edge rails, `pill` for toggles) instead of one-off curves. Motion should stay interruptible: retarget a spring rather than waiting for it to finish. Honor `prefers-reduced-motion` and `prefers-reduced-transparency`. See [UI Design](standards/ui-design.md).
+
+Hold 60 fps on integrated GPUs. Measure transitions in real Chrome (frame gaps, long animation frames, a trace) before and after a change.
+
+- Drive per-frame values with motion values, never React state. Re-rendering a page 60 times a second costs more than the animation.
+- Animate `transform` and `opacity`. Add `will-change: transform` only while something flies, and cap how far off-screen layers scale; a huge first raster stalls the whole frame.
+- Do not blur (`backdrop-filter`) a surface that moves over a flat color, and keep blur radii fixed while animating.
+- Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), and memoize subtrees a transition re-renders.
+- Pause offscreen loops (`IntersectionObserver`) and defer expensive resize work until the size settles.
+
+`apps/web/src/performance.test.ts` enforces these rules in `bun run test`. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code.

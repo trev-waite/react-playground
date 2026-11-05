@@ -1,0 +1,11 @@
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.pet {
+  width: 400px;
+  aspect-ratio: 460 / 290;
+}

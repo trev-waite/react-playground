@@ -8,10 +8,12 @@
     "build": "vite build",
     "start": "vite preview --port 3000 --strictPort",
     "test": "bun test",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "og": "bun scripts/og/capture.ts"
   },
   "dependencies": {
     "@react-playground/api": "workspace:*",
+    "@react-playground/layout-sheet": "workspace:*",
     "@webgpu/types": "^0.1.72",
     "motion": "^13.1.1",
     "react": "^19.2.8",
@@ -24,6 +26,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "1.62.1",
     "vite": "^8.2.2"
   }
 }

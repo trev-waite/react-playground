@@ -47,8 +47,18 @@ export function ExamplePreview({
       return;
     }
 
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    // Only animate while the blob is on screen; rewriting paths nobody sees still costs frames.
+    const target = fillRef.current?.ownerSVGElement;
+    const observer = new IntersectionObserver(([entry]) => {
+      cancelAnimationFrame(frame);
+      if (entry?.isIntersecting) frame = requestAnimationFrame(tick);
+    });
+    if (target) observer.observe(target);
+    else frame = requestAnimationFrame(tick);
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
   }, []);
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {

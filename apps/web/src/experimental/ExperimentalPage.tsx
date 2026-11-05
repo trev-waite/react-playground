@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -69,9 +68,11 @@ function publishedLiveEntry(componentName: string | null, liveEntries: Playgroun
 
 type ExperimentalPageProps = {
   active: boolean;
+  /** Called once a project (or the empty studio) has mounted on the stage. */
+  onReady?: () => void;
 };
 
-export function ExperimentalPage({ active }: ExperimentalPageProps) {
+export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
   const liveEntries = useLiveEntries();
   const folders = useMemo(() => liveFolders(liveEntries), [liveEntries]);
   const {
@@ -107,7 +108,6 @@ export function ExperimentalPage({ active }: ExperimentalPageProps) {
   const saveIdeaRef = useRef<() => Promise<IdeaProject | null>>(async () => null);
   const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
   const activeIdRef = useRef<string | null>(null);
-  const makeLivePanelRef = useRef<HTMLDivElement>(null);
   const makeLiveHostRef = useRef<HTMLDivElement>(null);
   const makeLivePanelId = useId();
   const [makeLivePanelHeight, setMakeLivePanelHeight] = useState(0);
@@ -399,9 +399,7 @@ export function ExperimentalPage({ active }: ExperimentalPageProps) {
     };
   }, [pickingLiveFolder]);
 
-  useLayoutEffect(() => {
-    const panel = makeLivePanelRef.current;
-    if (!panel) return;
+  const makeLivePanelRef = useCallback((panel: HTMLDivElement) => {
     const measure = () => setMakeLivePanelHeight(panel.offsetHeight);
     measure();
     const observer = new ResizeObserver(measure);
@@ -622,6 +620,7 @@ export function ExperimentalPage({ active }: ExperimentalPageProps) {
               draftRef.current = next;
               setHasDraft(true);
             }}
+            onReady={onReady}
           >
             {({ stage, dock }) => (
               <>
@@ -631,8 +630,6 @@ export function ExperimentalPage({ active }: ExperimentalPageProps) {
                   label="Studio controls"
                   width={STUDIO_RAIL_WIDTH}
                   defaultOpen
-                  reveal="toggle"
-                  enabled={active}
                 >
                   <div className={styles.rail}>
                     <header className={styles.railHeader}>{toolbar}</header>

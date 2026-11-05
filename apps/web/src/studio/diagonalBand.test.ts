@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DEFAULT_BAND_COUNT,
   bandMaskGradient,
   frostStrength,
   isBandRevealed,
+  liveLayerMask,
 } from "./diagonalBand";
 
 describe("isBandRevealed", () => {
@@ -54,5 +56,29 @@ describe("frostStrength", () => {
     expect(frostStrength(1)).toBe(0);
     expect(frostStrength(0.5)).toBeCloseTo(1, 5);
     expect(frostStrength(0.25)).toBeGreaterThan(0.5);
+  });
+});
+
+describe("liveLayerMask", () => {
+  test("leaves Live unmasked at rest so its own animations never composite through a mask", () => {
+    expect(liveLayerMask(0, false)).toBe("none");
+    expect(liveLayerMask(0, true)).toBe("none");
+  });
+
+  test("changes only when a band flips, so a dissolve writes the DOM a dozen times, not every frame", () => {
+    const frames = 240;
+    let writes = 0;
+    let previous = liveLayerMask(0, false);
+    for (let frame = 1; frame <= frames; frame++) {
+      const next = liveLayerMask(frame / frames, false);
+      if (next !== previous) writes++;
+      previous = next;
+    }
+    // One write to put the mask on, then one per band.
+    expect(writes).toBeLessThanOrEqual(DEFAULT_BAND_COUNT + 1);
+  });
+
+  test("uses no mask with reduced motion, which crossfades instead", () => {
+    expect(liveLayerMask(0.5, true)).toBe("none");
   });
 });

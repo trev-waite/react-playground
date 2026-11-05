@@ -163,7 +163,7 @@ Binding notes:
 - `frame()` or `gpu` work inside `surface.onResize`.
 - CSS 3D transforms, `perspective`, or `mix-blend-mode` on the canvas or its ancestors. Live’s layer uses `isolation: isolate`, not `translateZ(0)`.
 - Eager imports of every Live `preview.tsx`. Keep the Vite glob in `discover.ts` (lazy loaders keyed by slug). Under `bun run dev`, new Make Live folders show up without editing a registry file.
-- A GPU root of `height: 100%` inside a centered auto-height Live cell. `useGpu` never starts if `clientHeight` stays under 2px. LiveStage `.frame` already stretches. For a plaque, size type from the stage (`cqh`/`cqw` on the outer 100% wrapper) and size the black box from in-flow content; raise `createTextMask` `scale` so the raster fills the plaque, not 30% of it.
+- A GPU root of `height: 100%` inside a centered auto-height Live cell. `useGpu` never starts if `clientHeight` stays under 2px. The Live deck card's `.frame` already stretches. For a plaque, size type from the stage (`cqh`/`cqw` on the outer 100% wrapper) and size the black box from in-flow content; raise `createTextMask` `scale` so the raster fills the plaque, not 30% of it.
 - Imports from `apps/web/src/app/` or `apps/web/src/lib/`. `@/gpu` is the only host import.
 - ConfigurableShell in an idea.
 
@@ -180,7 +180,7 @@ When asked to review an existing GPU idea, walk the checklist and the shader rul
 5. Inspect edges at pixel level with CDP `Page.captureScreenshot` using `clip` and `scale: 2`, decode the base64 to a PNG and read it. Full-page screenshots hide fringe and grain detail.
 6. Exercise pointer effects without a mouse: `canvas.dispatchEvent(new PointerEvent("pointermove", { clientX, clientY, pointerId: 1, pointerType: "mouse", bubbles: true }))` in a 16ms loop, then screenshot the region around the final position.
 7. Resize the window, scroll the idea off screen (loop should stop), toggle reduced motion.
-8. After Make Live, open the Live slug. Confirm the GPU canvas `clientHeight` is at least 2 and the idea is visible (not an empty stage with a sidebar entry).
+8. After Make Live, open the Live slug. Confirm the GPU canvas `clientHeight` is at least 2 and the idea is visible (not an empty card in the Live deck).
 
 ## Worked example
 
