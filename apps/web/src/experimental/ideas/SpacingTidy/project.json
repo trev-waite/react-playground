@@ -1,9 +1,9 @@
 {
   "id": "a5e203aa-8bc0-4f32-af26-4b45f39f6951",
-  "revision": 4,
+  "revision": 5,
   "name": "Spacing Tidy",
   "componentName": "SpacingTidy",
-  "updatedAt": "2026-11-04T01:43:22.663Z",
+  "updatedAt": "2026-11-05T01:46:48.941Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "759c6e8546cf04f3b11b88401fcf77c73254d0b7b8f2d3af759a49c489637bbc",
+  "sourceDigest": "52fd5b543ef2d0f3dde8eb2aaf8244dc6e3923b1d29d48961b1b53135444e7c7",
   "createdAt": "2026-11-03T14:16:47.000Z"
 }
