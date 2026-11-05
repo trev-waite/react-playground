@@ -1,19 +1,24 @@
 import { useMemo } from "react";
 import { buildTree } from "../lib/catalog";
+import { useLiveEntries } from "../lib/liveCatalog";
 import { LiveStage } from "./LiveStage";
 import { Sidebar } from "./Sidebar/Sidebar";
-import { useView } from "./view/ViewController";
 import styles from "./LivePage.module.css";
 
-export function LivePage() {
-  const { liveSlug, liveEntries } = useView();
+type LivePageProps = {
+  slug: string | null;
+  active?: boolean;
+};
+
+export function LivePage({ slug, active = true }: LivePageProps) {
+  const liveEntries = useLiveEntries();
   const tree = useMemo(() => buildTree(liveEntries), [liveEntries]);
 
   return (
     <div className={styles.page}>
-      <Sidebar tree={tree} />
+      <Sidebar tree={tree} active={active} />
       <div className={styles.main}>
-        <LiveStage slug={liveSlug} />
+        <LiveStage slug={slug} />
       </div>
     </div>
   );

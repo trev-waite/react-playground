@@ -7,9 +7,9 @@ Building a new GPU idea? Follow the `gpu-idea` skill in `.cursor/skills/gpu-idea
 ## Layout
 
 ```
-apps/web/src/gpu/           playground host (React session + layer gating)
+apps/web/src/gpu/              playground host (React session + layer gating)
 apps/web/src/experimental/ideas/<Name>/source.tsx
-apps/web/src/app/AppShell   Live layer may use CSS 3D; Experimental must not
+apps/web/src/studio/StudioApp  stacks the Live and Experimental layers
 ```
 
 GPU ideas import `@/gpu`. That is the exception to "don't import from lib". `app/` and `lib/` stay off limits. After Make Live the published component keeps the `@/gpu` import so it still runs in this repo. Copying that Live folder into another app also needs the `vgpu` package and `apps/web/src/gpu/`.

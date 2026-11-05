@@ -9,8 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { useLiveEntries } from "../../lib/liveCatalog";
-import type { PlaygroundEntry } from "../../lib/types";
+import { liveSlugFromPath } from "../lib/catalog";
 import {
   DEFAULT_DURATION_MS,
   REDUCED_MOTION_MS,
@@ -25,7 +24,6 @@ type ViewContextValue = {
   progress: number;
   animating: boolean;
   liveSlug: string | null;
-  liveEntries: PlaygroundEntry[];
   reducedMotion: boolean;
   reducedTransparency: boolean;
   setMode: (mode: ViewMode) => void;
@@ -40,12 +38,6 @@ function isExperimentalPath(pathname: string): boolean {
     pathname === EXPERIMENTAL_PATH ||
     pathname.startsWith(`${EXPERIMENTAL_PATH}/`)
   );
-}
-
-function pathToSlug(pathname: string): string | null {
-  const slug = pathname.replace(/^\//, "").replace(/\/$/, "");
-  if (!slug || isExperimentalPath(`/${slug}`)) return null;
-  return slug;
 }
 
 function prefersReducedMotion(): boolean {
@@ -71,15 +63,12 @@ type ViewProviderProps = {
 };
 
 export function ViewProvider({ children }: ViewProviderProps) {
-  const liveEntries = useLiveEntries();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [liveSlug, setLiveSlug] = useState<string | null>(() => {
-    const fromUrl = pathToSlug(location.pathname);
-    if (fromUrl) return fromUrl;
-    return null;
-  });
+  const [liveSlug, setLiveSlug] = useState<string | null>(() =>
+    isExperimentalPath(location.pathname) ? null : liveSlugFromPath(location.pathname),
+  );
   const [experimentalHref, setExperimentalHref] = useState(() =>
     isExperimentalPath(location.pathname)
       ? location.pathname
@@ -129,11 +118,11 @@ export function ViewProvider({ children }: ViewProviderProps) {
 
   useEffect(() => {
     if (urlMode !== "live") return;
-    const slug = pathToSlug(location.pathname);
+    const slug = liveSlugFromPath(location.pathname);
     if (slug) {
       setLiveSlug(slug);
     }
-  }, [location.pathname, urlMode, liveEntries]);
+  }, [location.pathname, urlMode]);
 
   const animateTo = useCallback(
     (target: number, nextMode: ViewMode) => {
@@ -214,7 +203,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
       progress,
       animating,
       liveSlug,
-      liveEntries,
       reducedMotion,
       reducedTransparency,
       setMode,
@@ -224,7 +212,6 @@ export function ViewProvider({ children }: ViewProviderProps) {
       progress,
       animating,
       liveSlug,
-      liveEntries,
       reducedMotion,
       reducedTransparency,
       setMode,

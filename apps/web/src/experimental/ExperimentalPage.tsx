@@ -24,9 +24,9 @@ import {
 } from "@react-playground/api";
 import { Canvas } from "../app/Canvas";
 import { EdgePanel, STUDIO_RAIL_WIDTH } from "../app/EdgePanel";
-import { useView } from "../app/view/ViewController";
 import type { PlaygroundEntry } from "../lib/types";
 import { emptyIdeaDraft } from "../lib/ideaSession";
+import { useLiveEntries } from "../lib/liveCatalog";
 import { playgroundApi } from "../lib/playgroundApi";
 import { EditSequence } from "./editSequence";
 import { FolderEditor } from "./FolderEditor";
@@ -67,8 +67,12 @@ function publishedLiveEntry(componentName: string | null, liveEntries: Playgroun
   );
 }
 
-export function ExperimentalPage() {
-  const { mode, liveEntries } = useView();
+type ExperimentalPageProps = {
+  active: boolean;
+};
+
+export function ExperimentalPage({ active }: ExperimentalPageProps) {
+  const liveEntries = useLiveEntries();
   const folders = useMemo(() => liveFolders(liveEntries), [liveEntries]);
   const {
     publish,
@@ -94,7 +98,7 @@ export function ExperimentalPage() {
   );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [activated, setActivated] = useState(() => mode === "experimental");
+  const [activated, setActivated] = useState(active);
   const initialPathRef = useRef(location.pathname);
   const draftRef = useRef<IdeaDraft | null>(null);
   const editSequenceRef = useRef(new EditSequence());
@@ -180,13 +184,13 @@ export function ExperimentalPage() {
     editVersion: editSequenceRef.current.capture(),
     onList: setIdeas,
     onReload: idea => showIdea(idea, false),
-    onDeleted: () => clearStudio(mode === "experimental"),
+    onDeleted: () => clearStudio(active),
     onError: setSaveError,
   });
 
   useEffect(() => {
-    if (mode === "experimental") setActivated(true);
-  }, [mode]);
+    if (active) setActivated(true);
+  }, [active]);
 
   useEffect(() => {
     if (!activated) return;
@@ -406,7 +410,7 @@ export function ExperimentalPage() {
   }, []);
 
   useEffect(() => {
-    if (mode !== "experimental") return;
+    if (!active) return;
 
     function onKeyDown(event: KeyboardEvent) {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") {
@@ -419,7 +423,7 @@ export function ExperimentalPage() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mode, canSave]);
+  }, [active, canSave]);
 
   useEffect(() => {
     if (!dirty || !hasDraft) return;
@@ -628,7 +632,7 @@ export function ExperimentalPage() {
                   width={STUDIO_RAIL_WIDTH}
                   defaultOpen
                   reveal="toggle"
-                  enabled={mode === "experimental"}
+                  enabled={active}
                 >
                   <div className={styles.rail}>
                     <header className={styles.railHeader}>{toolbar}</header>

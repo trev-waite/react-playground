@@ -1,18 +1,35 @@
+import { BrowserRouter, Route, Routes } from "react-router";
+import { LivePage } from "../app/LivePage";
 import { ExperimentalPage } from "../experimental/ExperimentalPage";
-import { LivePage } from "./LivePage";
-import { FrostOverlay, liveLayerMaskStyle } from "./view/DiagonalBandMask";
-import { ViewProvider, useView } from "./view/ViewController";
-import { ViewToggle } from "./view/ViewToggle";
-import "./app.css";
-import styles from "./AppShell.module.css";
+import { FrostOverlay, liveLayerMaskStyle } from "./DiagonalBandMask";
+import { ViewProvider, useView } from "./ViewController";
+import { ViewToggle } from "./ViewToggle";
+import styles from "./StudioApp.module.css";
+
+/**
+ * Local studio: the Live app with Experimental underneath. Both views stay
+ * mounted as full-page layers so the toggle can dissolve between them; routes
+ * only drive URL ↔ mode and the Live slug.
+ */
+export function StudioApp() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <ViewProvider>
+              <ViewStack />
+            </ViewProvider>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
+}
 
 function ViewStack() {
-  const {
-    progress,
-    mode,
-    reducedMotion,
-    reducedTransparency,
-  } = useView();
+  const { progress, mode, liveSlug, reducedMotion, reducedTransparency } = useView();
 
   const liveStyle = liveLayerMaskStyle(progress, {
     reducedMotion,
@@ -31,7 +48,7 @@ function ViewStack() {
             zIndex: 1,
           }}
         >
-          <ExperimentalPage />
+          <ExperimentalPage active={mode === "experimental"} />
           <FrostOverlay
             progress={progress}
             reducedMotion={reducedMotion}
@@ -50,7 +67,7 @@ function ViewStack() {
             zIndex: 2,
           }}
         >
-          <LivePage />
+          <LivePage slug={liveSlug} active={mode === "live"} />
         </div>
       </div>
 
@@ -60,13 +77,5 @@ function ViewStack() {
         {mode === "live" ? "Live view" : "Experimental view"}
       </span>
     </div>
-  );
-}
-
-export function AppShell() {
-  return (
-    <ViewProvider>
-      <ViewStack />
-    </ViewProvider>
   );
 }

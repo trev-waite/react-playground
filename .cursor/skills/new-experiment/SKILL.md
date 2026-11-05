@@ -10,7 +10,8 @@ Build ideas in Experimental. Keep Experimental, Live components, and Configurabl
 
 ```text
 apps/web/src/
-  app/                 # playground chrome (layout, Live catalog UI) — not ConfigurableShell
+  app/                 # deployable Live app — not ConfigurableShell
+  studio/              # dev-only shell: Live + Experimental
   experimental/        # studio page, shared dock, and saved ideas
     ideas/<Name>/      # switchable projects (source.tsx + project.json)
   live/                # published catalog
