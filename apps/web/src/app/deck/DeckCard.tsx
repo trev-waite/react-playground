@@ -1,6 +1,9 @@
 import {
   Component,
   memo,
+  Suspense,
+  use,
+  useCallback,
   useLayoutEffect,
   useRef,
   useState,
@@ -10,8 +13,9 @@ import {
 import type { LiveCard, LiveCardMember } from "../../lib/catalog";
 import { opacity, px, transform, useMotionStyle } from "../motion/hooks";
 import type { MotionValue } from "../motion/motionValue";
+import type { PreviewModule } from "../../lib/types";
 import type { CardMotion } from "./cardMotion";
-import { observeFit } from "./fitPreview";
+import { observeFit, refitArea } from "./fitPreview";
 import styles from "./DeckCard.module.css";
 
 /** Padding as a tile (chrome 0) and as a page (chrome 1). The page top clears the floating chrome. */
@@ -126,13 +130,27 @@ function FitStage({ contentKey, children }: { contentKey: string; children: Reac
     return observeFit(area, content);
   }, [contentKey]);
 
+  // The loaded preview can overflow where the placeholder did not, and the area never resized.
+  const refit = useCallback(() => {
+    if (areaRef.current) refitArea(areaRef.current);
+  }, []);
+
   return (
     <div ref={areaRef} className={styles.area}>
       <div ref={contentRef} className={styles.fit}>
-        {children}
+        <Suspense fallback={<div className={styles.loading} aria-hidden="true" />}>
+          {children}
+          <Revealed onReveal={refit} />
+        </Suspense>
       </div>
     </div>
   );
+}
+
+/** Mounts after the previews beside it, so its layout effect runs once they are on the page. */
+function Revealed({ onReveal }: { onReveal: () => void }) {
+  useLayoutEffect(onReveal, [onReveal]);
+  return null;
 }
 
 /**
@@ -160,15 +178,17 @@ const Members = memo(function Members({ members }: { members: LiveCardMember[] }
 });
 
 function Member({ member }: { member: LiveCardMember }) {
-  const { Preview } = member;
-  if (!Preview) {
-    return <PreviewError title={member.title} message={member.error} />;
-  }
   return (
     <PreviewBoundary title={member.title}>
-      <Preview />
+      <LoadedPreview module={member.module} />
     </PreviewBoundary>
   );
+}
+
+/** Suspends its card until the module arrives; a failed load lands in the boundary above. */
+function LoadedPreview({ module }: { module: Promise<PreviewModule> }) {
+  const { default: Preview } = use(module);
+  return <Preview />;
 }
 
 function PreviewError({ title, message }: { title: string; message?: string }) {

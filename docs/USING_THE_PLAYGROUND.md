@@ -27,6 +27,8 @@ export const meta: CardMeta = {
 
 With neither `description` nor `reset`, the card has no footer.
 
+Keep `meta` a plain literal, with no variables, spreads, or calls. The build reads it without running the preview, so every card lays out at once and shows a loading shimmer until its own component arrives; a slow one, such as a shader, never holds up the rest.
+
 **Families.** Add `apps/web/src/live/<group>/family.ts` exporting a `FamilyMeta` (`title` plus the same fields) to show every component in that folder together on one card, as in `apps/web/src/live/controls/`. Member slugs such as `/controls/Switch` open the family card.
 
 **Order.** Cards appear in the order listed in `apps/web/src/live/order.ts`, then any unlisted cards alphabetically. The grid packs each card into the first cell it fits, so list wide cards before narrow ones and start a tall card at the beginning of a row to avoid holes.

@@ -21,13 +21,15 @@ export function previewPreloads(bundle: Rolldown.OutputBundle): string[] {
   for (const chunk of chunks) {
     if (chunk.facadeModuleId && PREVIEW.test(chunk.facadeModuleId)) visit(chunk.fileName);
   }
-  return preloads;
+  // Same-priority scripts arrive in request order, so light cards fill in before heavy ones.
+  const size = (fileName: string) => (bundle[fileName] as Rolldown.OutputChunk).code.length;
+  return preloads.sort((a, b) => size(a) - size(b));
 }
 
 /**
- * The deck shows once every preview has loaded, and the entry only asks for
- * them after it runs. Preloading them from the HTML fetches everything in
- * parallel instead of in two round trips.
+ * Each card loads its own preview, and the entry only asks for them after it
+ * runs. Preloading them from the HTML starts every download at once, at low
+ * priority so the app shell and styles still arrive first.
  */
 export function previewPreloadPlugin(): Plugin {
   let base = "/";
@@ -43,7 +45,7 @@ export function previewPreloadPlugin(): Plugin {
         if (!bundle) return;
         return previewPreloads(bundle).map(fileName => ({
           tag: "link",
-          attrs: { rel: "modulepreload", crossorigin: true, href: `${base}${fileName}` },
+          attrs: { rel: "modulepreload", crossorigin: true, fetchpriority: "low", href: `${base}${fileName}` },
           injectTo: "head",
         }));
       },

@@ -1,4 +1,3 @@
-import type { ComponentType } from "react";
 import type {
   CardMeta,
   CardSize,
@@ -30,12 +29,14 @@ export function titleFromSlug(slug: string): string {
 
 export function catalogEntriesFromLoaders(
   loaders: Record<string, PlaygroundEntry["load"]>,
+  metas: Record<string, CardMeta | undefined> = {},
 ): PlaygroundEntry[] {
   return Object.entries(loaders)
     .flatMap(([filePath, load]) => {
       const slug = slugFromPreviewPath(filePath);
       if (!slug) return [];
-      return [{ slug, title: titleFromSlug(slug), load }];
+      const meta = metas[filePath];
+      return [{ slug, title: meta?.title ?? titleFromSlug(slug), meta, load }];
     })
     .sort((a, b) => a.slug.localeCompare(b.slug));
 }
@@ -88,8 +89,8 @@ export function planCards({ entries, families, order }: LiveCatalog): CardPlan[]
 export type LiveCardMember = {
   slug: string;
   title: string;
-  Preview?: ComponentType;
-  error?: string;
+  /** Settles on its own, so each card shows as soon as its component arrives. */
+  module: Promise<PreviewModule>;
 };
 
 export type LiveCard = {
@@ -103,23 +104,14 @@ export type LiveCard = {
   members: LiveCardMember[];
 };
 
-export type LoadedPreview = PreviewModule | { error: string };
-
-export function cardFromPlan(plan: CardPlan, modules: LoadedPreview[]): LiveCard {
-  const members = plan.entries.map((entry, index): LiveCardMember => {
-    const loaded = modules[index];
-    if (!loaded || "error" in loaded) {
-      return { slug: entry.slug, title: entry.title, error: loaded?.error ?? "Not loaded" };
-    }
-    return {
-      slug: entry.slug,
-      title: loaded.meta?.title ?? entry.title,
-      Preview: loaded.default,
-    };
-  });
-  const firstModule = modules[0];
-  const meta: CardMeta =
-    plan.family ?? (firstModule && !("error" in firstModule) ? firstModule.meta ?? {} : {});
+export function cardFromPlan(
+  plan: CardPlan,
+  moduleFor: (entry: PlaygroundEntry) => Promise<PreviewModule>,
+): LiveCard {
+  const members = plan.entries.map(
+    (entry): LiveCardMember => ({ slug: entry.slug, title: entry.title, module: moduleFor(entry) }),
+  );
+  const meta: CardMeta = plan.family ?? plan.entries[0]?.meta ?? {};
 
   return {
     slug: plan.slug,

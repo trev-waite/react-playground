@@ -30,6 +30,8 @@ export type PreviewModule = {
 export type PlaygroundEntry = {
   slug: string;
   title: string;
+  /** Read at build time, so cards show before their component loads. */
+  meta?: CardMeta;
   load: () => Promise<PreviewModule>;
 };
 

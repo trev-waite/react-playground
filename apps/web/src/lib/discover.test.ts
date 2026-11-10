@@ -11,13 +11,15 @@ import {
   slugFromPreviewPath,
   titleFromSlug,
 } from "./catalog";
-import type { PlaygroundEntry } from "./types";
+import type { CardMeta, PlaygroundEntry, PreviewModule } from "./types";
 
 const liveRoot = path.join(import.meta.dir, "../live");
 const Preview = () => null;
+const loaded: Promise<PreviewModule> = Promise.resolve({ default: Preview });
+const moduleFor = () => loaded;
 
-function entry(slug: string): PlaygroundEntry {
-  return { slug, title: titleFromSlug(slug), load: async () => ({ default: Preview }) };
+function entry(slug: string, meta?: CardMeta): PlaygroundEntry {
+  return { slug, title: meta?.title ?? titleFromSlug(slug), meta, load: () => loaded };
 }
 
 describe("live catalog", () => {
@@ -42,6 +44,14 @@ describe("live catalog", () => {
       "buttons/PrimaryButton",
     );
     expect(titleFromSlug("buttons/PrimaryButton")).toBe("Primary Button");
+  });
+
+  test("takes titles from the static preview meta, before any component loads", () => {
+    const entries = catalogEntriesFromLoaders(
+      { "../live/shaders/LightDispersion/preview.tsx": () => loaded },
+      { "../live/shaders/LightDispersion/preview.tsx": { title: "Light", size: "wide" } },
+    );
+    expect(entries[0]).toMatchObject({ title: "Light", meta: { title: "Light", size: "wide" } });
   });
 
   test("keys family metadata by Live folder", () => {
@@ -107,10 +117,12 @@ describe("planCards", () => {
 });
 
 describe("cardFromPlan", () => {
-  test("reads a single component's presentation from its preview meta", () => {
-    const card = cardFromPlan({ slug: "shaders/LightDispersion", entries: [entry("shaders/LightDispersion")] }, [
-      { default: Preview, meta: { title: "Light", size: "wide", theme: "dark", reset: "replay" } },
-    ]);
+  test("reads a single component's presentation from its static meta and hands over its module", () => {
+    const meta: CardMeta = { title: "Light", size: "wide", theme: "dark", reset: "replay" };
+    const card = cardFromPlan(
+      { slug: "shaders/LightDispersion", entries: [entry("shaders/LightDispersion", meta)] },
+      moduleFor,
+    );
     expect(card).toMatchObject({
       slug: "shaders/LightDispersion",
       title: "Light",
@@ -118,7 +130,7 @@ describe("cardFromPlan", () => {
       theme: "dark",
       reset: "replay",
     });
-    expect(card.members[0]?.Preview).toBe(Preview);
+    expect(card.members[0]?.module).toBe(loaded);
   });
 
   test("lets the family meta present a grouped card", () => {
@@ -126,30 +138,24 @@ describe("cardFromPlan", () => {
       {
         slug: "controls",
         family: { title: "Controls", size: "large", background: "#2448d8" },
-        entries: [entry("controls/Stepper"), entry("controls/Switch")],
+        entries: [entry("controls/Stepper", { size: "tall" }), entry("controls/Switch")],
       },
-      [{ default: Preview, meta: { size: "tall" } }, { default: Preview }],
+      moduleFor,
     );
     expect(card).toMatchObject({ title: "Controls", size: "large", background: "#2448d8", theme: "light" });
     expect(card.members.map(member => member.title)).toEqual(["Stepper", "Switch"]);
   });
 
-  test("defaults to a plain 1×1 card and keeps load failures on the member", () => {
-    const card = cardFromPlan({ slug: "buttons/Broken", entries: [entry("buttons/Broken")] }, [
-      { error: "Syntax error" },
-    ]);
-    expect(card).toMatchObject({ title: "Broken", size: "small", theme: "light" });
-    expect(card.members[0]).toEqual({ slug: "buttons/Broken", title: "Broken", error: "Syntax error" });
+  test("defaults to a plain 1×1 card", () => {
+    const card = cardFromPlan({ slug: "buttons/Plain", entries: [entry("buttons/Plain")] }, moduleFor);
+    expect(card).toMatchObject({ title: "Plain", size: "small", theme: "light" });
   });
 });
 
 describe("cardIndexForSlug", () => {
   const cards = [
-    cardFromPlan({ slug: "buttons/PrimaryButton", entries: [entry("buttons/PrimaryButton")] }, [{ default: Preview }]),
-    cardFromPlan(
-      { slug: "controls", family: { title: "Controls" }, entries: [entry("controls/Switch")] },
-      [{ default: Preview }],
-    ),
+    cardFromPlan({ slug: "buttons/PrimaryButton", entries: [entry("buttons/PrimaryButton")] }, moduleFor),
+    cardFromPlan({ slug: "controls", family: { title: "Controls" }, entries: [entry("controls/Switch")] }, moduleFor),
   ];
 
   test("finds a card by its own slug or a family member's", () => {

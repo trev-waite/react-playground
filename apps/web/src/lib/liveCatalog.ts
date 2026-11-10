@@ -1,9 +1,9 @@
-import { use, useDeferredValue, useSyncExternalStore } from "react";
-import { cardFromPlan, planCards, type LiveCard, type LoadedPreview } from "./catalog";
+import { useMemo, useSyncExternalStore } from "react";
+import { cardFromPlan, planCards, type LiveCard } from "./catalog";
 import { liveCatalog } from "./discover";
 import { requestCatalogRefresh } from "./devRefresh";
 import { moduleStore } from "./moduleStore";
-import type { LiveCatalog } from "./types";
+import type { LiveCatalog, PlaygroundEntry, PreviewModule } from "./types";
 
 const catalog = moduleStore(liveCatalog);
 
@@ -13,9 +13,10 @@ function mergeCatalog(next: LiveCatalog, freshSlug?: string): LiveCatalog {
   return {
     families: next.families,
     order: next.order,
-    entries: next.entries.map(entry =>
-      entry.slug === freshSlug ? entry : current.get(entry.slug) ?? entry,
-    ),
+    entries: next.entries.map(entry => {
+      const kept = entry.slug === freshSlug ? undefined : current.get(entry.slug);
+      return kept ? { ...entry, load: kept.load } : entry;
+    }),
   };
 }
 
@@ -35,36 +36,40 @@ export function useLiveEntries() {
   return useLiveCatalog().entries;
 }
 
-const loadedCards = new WeakMap<LiveCatalog, Promise<LiveCard[]>>();
+type TrackedPromise<T> = Promise<T> & { status?: "pending" | "fulfilled" | "rejected"; value?: T; reason?: unknown };
 
-async function loadPreview(load: () => Promise<LoadedPreview>): Promise<LoadedPreview> {
-  try {
-    return await load();
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not load preview" };
-  }
-}
-
-function loadCards(snapshot: LiveCatalog): Promise<LiveCard[]> {
-  let cards = loadedCards.get(snapshot);
-  if (!cards) {
-    // Every card is on stage at once in the grid, so resolve all previews up front.
-    cards = Promise.all(
-      planCards(snapshot).map(async plan =>
-        cardFromPlan(plan, await Promise.all(plan.entries.map(entry => loadPreview(entry.load)))),
-      ),
-    );
-    loadedCards.set(snapshot, cards);
-  }
-  return cards;
-}
+const modules = new WeakMap<PlaygroundEntry["load"], Promise<PreviewModule>>();
 
 /**
- * Suspends until every Live preview module has loaded. Later catalog changes
- * keep showing the current cards until the new ones are ready.
+ * One promise per loader, started once. It records how it settled in the
+ * fields React's `use` reads, so a module that is already here renders
+ * without a loading frame.
  */
+function moduleFor(entry: PlaygroundEntry): Promise<PreviewModule> {
+  let module = modules.get(entry.load);
+  if (!module) {
+    const tracked: TrackedPromise<PreviewModule> = entry.load();
+    tracked.status = "pending";
+    tracked.then(
+      value => {
+        tracked.status = "fulfilled";
+        tracked.value = value;
+      },
+      reason => {
+        tracked.status = "rejected";
+        tracked.reason = reason;
+      },
+    );
+    module = tracked;
+    modules.set(entry.load, module);
+  }
+  return module;
+}
+
+/** Every card, straight away. Each preview loads on its own inside its card. */
 export function useLiveCards(): LiveCard[] {
-  return use(loadCards(useDeferredValue(useLiveCatalog())));
+  const snapshot = useLiveCatalog();
+  return useMemo(() => planCards(snapshot).map(plan => cardFromPlan(plan, moduleFor)), [snapshot]);
 }
 
 export async function refreshLiveCatalog(slug?: string): Promise<void> {

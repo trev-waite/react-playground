@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import { liveCatalogPlugin } from "./vite/liveCatalogPlugin.ts";
+import { previewMetaPlugin } from "./vite/previewMetaPlugin.ts";
 import { previewPreloadPlugin } from "./vite/previewPreloadPlugin.ts";
 import { siteUrlPlugin } from "./vite/siteUrlPlugin.ts";
 
@@ -11,14 +12,14 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, root, "");
   return {
-    plugins: [react(), liveCatalogPlugin(), previewPreloadPlugin(), siteUrlPlugin(env)],
+    plugins: [react(), liveCatalogPlugin(), previewMetaPlugin(), previewPreloadPlugin(), siteUrlPlugin(env)],
     resolve: {
       alias: {
         "@": path.join(root, "src"),
       },
     },
     build: {
-      // Every preview's styles are needed for the first paint of the deck.
+      // Cards draw their placeholders and previews from the first paint, so every style ships up front.
       cssCodeSplit: false,
       rolldownOptions: {
         output: {

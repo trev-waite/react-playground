@@ -1,4 +1,4 @@
-import { startTransition, Suspense, useContext, useEffect, useState, type ReactNode } from "react";
+import { startTransition, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cardIndexForSlug } from "../lib/catalog";
 import { useLiveCards } from "../lib/liveCatalog";
@@ -18,9 +18,7 @@ type LivePageProps = {
 export function LivePage({ slug, active = true, onNavigate }: LivePageProps) {
   return (
     <div className={styles.page}>
-      <Suspense fallback={null}>
-        <LiveDeck slug={slug} active={active} onNavigate={onNavigate} />
-      </Suspense>
+      <LiveDeck slug={slug} active={active} onNavigate={onNavigate} />
     </div>
   );
 }
