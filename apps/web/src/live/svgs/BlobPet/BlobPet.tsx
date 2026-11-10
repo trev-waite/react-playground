@@ -497,14 +497,17 @@ function formAt(index: number): Form {
   return (forms[index] ??= buildForm(PLAYLIST[index] ?? REST));
 }
 
+/** Idle time a trace needs to start; less, and it waits for a longer idle period. */
+const PREBUILD_IDLE_MS = 10;
+
 function prebuildForms(): () => void {
   let cancel = () => {};
   const next = () => {
     const index = forms.findIndex(form => !form);
     if (index < 0) return;
     if ("requestIdleCallback" in window) {
-      const id = window.requestIdleCallback(() => {
-        formAt(index);
+      const id = window.requestIdleCallback(deadline => {
+        if (deadline.timeRemaining() >= PREBUILD_IDLE_MS) formAt(index);
         next();
       });
       cancel = () => window.cancelIdleCallback(id);

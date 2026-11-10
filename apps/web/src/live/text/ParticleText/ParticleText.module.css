@@ -8,7 +8,7 @@
   position: relative;
   display: inline-block;
   white-space: nowrap;
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
   cursor: default;

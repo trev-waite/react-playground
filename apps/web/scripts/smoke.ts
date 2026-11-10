@@ -1,5 +1,6 @@
 const ATTEMPTS = 6;
 const RETRY_MS = 5000;
+const REQUEST_TIMEOUT_MS = 5_000;
 
 type Check = { name: string; run: (origin: string) => Promise<void> };
 
@@ -24,6 +25,10 @@ const checks: Check[] = [
       expect(script !== undefined, "no /assets script in index.html");
       const response = await get(`${origin}${script}`);
       expect(response.status === 200, `${script} status ${response.status}`);
+      expect(
+        response.headers.get("content-type")?.includes("javascript") === true,
+        `${script} content-type ${response.headers.get("content-type")}`,
+      );
       expect(response.headers.get("cache-control")?.includes("immutable") === true, `${script} is not immutable`);
     },
   },
@@ -55,7 +60,11 @@ const checks: Check[] = [
 ];
 
 function get(url: string): Promise<Response> {
-  return fetch(url, { redirect: "manual", headers: { "cache-control": "no-cache" } });
+  return fetch(url, {
+    redirect: "manual",
+    headers: { "cache-control": "no-cache" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
 }
 
 function isHtml(response: Response): boolean {
