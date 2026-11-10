@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import { GESTURE_GAP_MS, wheelGesture } from "./wheelGesture";
 
 const PAGE_KEYS: Record<string, -1 | 1> = {
@@ -47,13 +47,15 @@ export type PagingInput = {
 export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: boolean, input: PagingInput) {
   // Re-subscribing mid-gesture would drop the lock and let momentum skip pages.
   const inputRef = useRef(input);
-  inputRef.current = input;
+  useLayoutEffect(() => {
+    inputRef.current = input;
+  });
 
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !enabled) return;
     const gesture = wheelGesture();
-    let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+    const release: { timer?: ReturnType<typeof setTimeout> } = {};
 
     function onWheel(event: WheelEvent) {
       // A component that handles the wheel itself (a scrubbable value) owns it.
@@ -65,13 +67,13 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
       const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaY * 16 : event.deltaY;
       const intent = gesture.read(delta, event.timeStamp, inputRef.current.commitAt);
       if (!intent) return;
-      clearTimeout(releaseTimer);
+      clearTimeout(release.timer);
       if (intent.type === "step") {
         inputRef.current.step(intent.direction);
         return;
       }
       inputRef.current.pull(intent.travel);
-      releaseTimer = setTimeout(() => {
+      release.timer = setTimeout(() => {
         gesture.end();
         inputRef.current.release();
       }, GESTURE_GAP_MS);
@@ -88,7 +90,7 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
     scroller.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      clearTimeout(releaseTimer);
+      clearTimeout(release.timer);
       scroller.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKeyDown);
     };

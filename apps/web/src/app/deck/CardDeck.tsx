@@ -311,7 +311,6 @@ export function CardDeck({
       host.scrollTop = target;
       return;
     }
-    // Carries on from a pull or an earlier glide at the speed the page already has.
     scrollPages(target, "glide");
   }, [activeIndex, layout, viewport.height, reducedMotion, scrollsDocument]);
 

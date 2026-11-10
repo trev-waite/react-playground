@@ -46,7 +46,6 @@
     {
       "files": [
         "apps/web/src/app/deck/CardDeck.tsx",
-        "apps/web/src/app/deck/usePaging.ts",
         "apps/web/src/experimental/DockSlider.tsx",
         "apps/web/src/experimental/ExperimentalPage.tsx",
         "apps/web/src/experimental/IdeaProjects.tsx",
