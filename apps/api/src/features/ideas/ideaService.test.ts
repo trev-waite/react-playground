@@ -62,10 +62,7 @@ describe("idea service", () => {
     expect(await readFile(path.join(directory, "source.tsx"), "utf8")).toBe(
       draft.portableSourceTemplate,
     );
-    expect((await import("node:fs/promises")).readdir(directory)).resolves.toEqual([
-      "project.json",
-      "source.tsx",
-    ]);
+    expect((await readdir(directory)).sort()).toEqual(["project.json", "source.tsx"]);
   });
 
   test("adopts direct source.tsx edits as a new revision", async () => {
