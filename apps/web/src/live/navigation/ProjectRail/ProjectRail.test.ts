@@ -41,6 +41,14 @@ describe("ProjectRail switching", () => {
     expect(declarations(ruleFor(css, ".rail").body, "--toggle-size")).toEqual(["44px"]);
   });
 
+  test("title letters animate without a compositing layer each, which cost Safari frames on every switch", async () => {
+    const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
+    const keyframes = css.slice(css.indexOf("@keyframes character-in"));
+    for (const property of ["transform", "opacity", "translate", "scale"]) {
+      expect(cssRules(keyframes).some(rule => declarations(rule.body, property).length > 0)).toBe(false);
+    }
+  });
+
   test("a long title finishes revealing in a fixed time", async () => {
     const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
     expect(declarations(ruleFor(css, ".title[data-reveal] .character").body, "animation-delay")[0]).toMatch(/min\(/);
