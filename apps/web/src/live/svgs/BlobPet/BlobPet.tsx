@@ -486,6 +486,40 @@ function buildForm(target: Target): Form {
 
 const REST_FORM = bodyForm(REST);
 
+/**
+ * Words are traced from canvas pixels, which is too slow for the first frame
+ * and noticeable mid-morph, so each form is built once, in idle time, before
+ * the playlist reaches it. Forms are never mutated, so every pet shares them.
+ */
+const forms: (Form | undefined)[] = PLAYLIST.map(target => (target === REST ? REST_FORM : undefined));
+
+function formAt(index: number): Form {
+  return (forms[index] ??= buildForm(PLAYLIST[index] ?? REST));
+}
+
+function prebuildForms(): () => void {
+  let cancel = () => {};
+  const next = () => {
+    const index = forms.findIndex(form => !form);
+    if (index < 0) return;
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(() => {
+        formAt(index);
+        next();
+      });
+      cancel = () => window.cancelIdleCallback(id);
+    } else {
+      const id = setTimeout(() => {
+        formAt(index);
+        next();
+      }, 50);
+      cancel = () => clearTimeout(id);
+    }
+  };
+  next();
+  return () => cancel();
+}
+
 function jiggle(p: Point, center: Point, time: number, amount: number): Point {
   const dx = p.x - center.x;
   const dy = p.y - center.y;
@@ -749,7 +783,7 @@ export function BlobPet({
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const forms = PLAYLIST.map(target => (target === REST ? REST_FORM : buildForm(target)));
+    const stopPrebuild = prebuildForms();
     const body = REST_FORM.body.map(particle);
     const features = REST_FORM.features.map(contour => contour.map(particle));
     const look = { x: { value: 0, velocity: 0 }, y: { value: 0, velocity: 0 } };
@@ -770,7 +804,7 @@ export function BlobPet({
 
     const morphTo = (next: number) => {
       index = next;
-      form = forms[next] ?? REST_FORM;
+      form = formAt(next);
       formedAt = now;
       const { bounce, tempo } = settings.current;
       const offset = retarget(body, form.body, now, reduce ? 0 : 0.34 - 0.2 * tempo);
@@ -790,7 +824,7 @@ export function BlobPet({
 
       if (pokeRef.current !== poke) {
         poke = pokeRef.current;
-        if (playing) morphTo((index + 1) % forms.length);
+        if (playing) morphTo((index + 1) % PLAYLIST.length);
         else if (!reduce) {
           squash.velocity += 1.5 + 2 * bounce;
           blinkAt = now;
@@ -798,7 +832,7 @@ export function BlobPet({
       }
       if (!playing && index !== 0) morphTo(0);
       else if (playing && now - formedAt > 2.8 - 1.8 * tempo) {
-        morphTo((index + 1) % forms.length);
+        morphTo((index + 1) % PLAYLIST.length);
       }
 
       const zeta = reduce ? 1 : 0.95 - 0.65 * bounce;
@@ -903,6 +937,7 @@ export function BlobPet({
     if (svgRef.current) observer.observe(svgRef.current);
     else raf = requestAnimationFrame(tick);
     return () => {
+      stopPrebuild();
       observer.disconnect();
       cancelAnimationFrame(raf);
     };
