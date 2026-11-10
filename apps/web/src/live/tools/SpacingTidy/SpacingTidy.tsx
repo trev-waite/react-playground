@@ -16,7 +16,6 @@ const START_LINE_HEIGHT = 1.38;
 const JITTER_PX = 5;
 const LINE_HEIGHT_PER_PIXEL = 0.002;
 const LINE_HEIGHT_RANGE = [1, 2.2] as const;
-const HINT = "Drag anything. Scroll over the quote to change its line height.";
 
 const ceilTo8 = (value: number) => Math.ceil(value / 8) * 8;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -86,7 +85,7 @@ export function SpacingTidy({
   const [planning, setPlanning] = useState(false);
   const [useAi, setUseAi] = useState(false);
   const [showGuides, setShowGuides] = useState(true);
-  const [status, setStatus] = useState(HINT);
+  const [error, setError] = useState<string | null>(null);
   const seed = useRef(7);
   const textRef = useRef<HTMLElement>(null);
   const lastProgress = useRef(progress);
@@ -110,31 +109,29 @@ export function SpacingTidy({
     return () => text.removeEventListener("wheel", onWheel);
   }, []);
 
-  async function plan(planner: SheetPlanner | undefined, nextLineHeight: number, done: (moved: boolean) => void) {
+  async function plan(planner: SheetPlanner | undefined, nextLineHeight: number) {
     if (planning) return;
     setPlanning(true);
+    setError(null);
     const before = lineHeight;
     try {
       // Text reflows first, without moving anything, so the planner sees its final height.
       sheet.keepInPlace(() => flushSync(() => setLineHeight(nextLineHeight)));
       const { moved } = await sheet.tidy(planner);
       if (moved) setLineHeights(stack => [...stack, before]);
-      done(moved);
     } catch (error) {
-      setStatus(`Could not plan the spacing: ${error instanceof Error ? error.message : "unknown error"}`);
+      setError(`Could not plan the spacing: ${error instanceof Error ? error.message : "unknown error"}`);
     } finally {
       setPlanning(false);
     }
   }
 
   const perfect = () =>
-    plan(useAi && aiPlanner ? aiPlanner : undefined, snapLineHeight(fontSize, lineHeight) / fontSize, moved =>
-      setStatus(moved ? "Every gap is on the scale. Undo to compare." : "Already on the scale."),
-    );
+    plan(useAi && aiPlanner ? aiPlanner : undefined, snapLineHeight(fontSize, lineHeight) / fontSize);
 
   const scatter = () => {
     seed.current += 1;
-    return plan(scatterPlanner(seed.current), START_LINE_HEIGHT, () => setStatus(HINT));
+    return plan(scatterPlanner(seed.current), START_LINE_HEIGHT);
   };
 
   function undo() {
@@ -148,7 +145,7 @@ export function SpacingTidy({
       );
     }
     sheet.undo();
-    setStatus(HINT);
+    setError(null);
   }
 
   // Studio actions: Form tidies, Unform scatters, Replay does both. They run after the
@@ -249,9 +246,11 @@ export function SpacingTidy({
           Guides
           <Switch label="Guides" size="compact" defaultChecked onChange={setShowGuides} />
         </label>
-        <p className="st-status" aria-live="polite">
-          {status}
-        </p>
+        {error ? (
+          <p className="st-status" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
