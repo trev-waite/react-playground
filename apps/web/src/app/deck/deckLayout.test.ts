@@ -84,12 +84,19 @@ describe("grid anchor", () => {
     expect(anchoredScrollTop(narrow.rects, gridAnchor(wide.rects, wideTop)!)).toBeCloseTo(top);
   });
 
+  test("a grid resized at the very top stays at the top, its first row clear of the chrome", () => {
+    const narrow = gridLayout(sizes, phone);
+    const wide = gridLayout(sizes, desktop);
+    expect(anchoredScrollTop(wide.rects, gridAnchor(narrow.rects, 0)!)).toBe(0);
+    expect(anchoredScrollTop(narrow.rects, gridAnchor(wide.rects, 0)!)).toBe(0);
+  });
+
   test("anchors to the highest card still in view", () => {
     const { rects } = gridLayout(sizes, phone);
     const anchor = gridAnchor(rects, rects[1]!.y + 1)!;
     expect(rects[anchor.index]!.y + rects[anchor.index]!.height).toBeGreaterThan(rects[1]!.y + 1);
     expect(anchor.through).toBeGreaterThan(0);
-    expect(gridAnchor(rects, 0)).toEqual({ index: 0, through: 0 });
+    expect(gridAnchor(rects, 0)).toEqual({ index: 0, through: 0, above: GRID_TOP });
   });
 });
 

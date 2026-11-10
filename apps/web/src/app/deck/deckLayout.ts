@@ -112,8 +112,8 @@ export function gridLayout(
   return { rects, height };
 }
 
-/** A grid card, and how far through it (0 to 1) a scroll edge falls. */
-export type GridAnchor = { index: number; through: number };
+/** A grid card, how far through it (0 to 1) a scroll edge falls, and how far above it the edge sits. */
+export type GridAnchor = { index: number; through: number; above: number };
 
 /** The highest card still in view when the grid is scrolled to `top`. */
 export function gridAnchor(rects: readonly Rect[], top: number): GridAnchor | null {
@@ -123,13 +123,18 @@ export function gridAnchor(rects: readonly Rect[], top: number): GridAnchor | nu
   });
   const rect = rects[index];
   if (!rect) return null;
-  return { index, through: Math.min(1, Math.max(0, (top - rect.y) / Math.max(rect.height, 1))) };
+  return {
+    index,
+    through: Math.min(1, Math.max(0, (top - rect.y) / Math.max(rect.height, 1))),
+    // The scroll edge can sit above the card too, as it does above the first row at the top of the grid.
+    above: Math.max(0, rect.y - top),
+  };
 }
 
 /** The scroll that puts an anchored card back at the top, after the grid is laid out again. */
 export function anchoredScrollTop(rects: readonly Rect[], anchor: GridAnchor): number | null {
   const rect = rects[anchor.index];
-  return rect ? rect.y + anchor.through * rect.height : null;
+  return rect ? Math.max(0, rect.y + anchor.through * rect.height - anchor.above) : null;
 }
 
 /** The full-page card, in viewport coordinates. It may run under the status bar, never under a side notch. */
