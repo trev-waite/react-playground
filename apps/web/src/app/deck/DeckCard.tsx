@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { motion, useTransform } from "motion/react";
+import { m, useTransform } from "motion/react";
 import type { LiveCard, LiveCardMember } from "../../lib/catalog";
 import type { CardMotion } from "./cardMotion";
 import { observeFit } from "./fitPreview";
@@ -45,7 +45,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
   const footerY = useTransform(values.chrome, chrome => (1 - chrome) * 16);
 
   return (
-    <motion.article
+    <m.article
       className={styles.card}
       data-theme={card.theme}
       data-raised={raised || undefined}
@@ -62,7 +62,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
         ...(card.background ? ({ "--card-background": card.background } as CSSProperties) : null),
       }}
     >
-      <motion.div
+      <m.div
         className={styles.preview}
         style={{ paddingTop, paddingBottom, paddingLeft: paddingInline, paddingRight: paddingInline }}
         inert={interactive ? undefined : true}
@@ -70,10 +70,10 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
         <FitStage contentKey={`${mounted}-${resetKey}`}>
           {mounted ? <Members key={resetKey} members={card.members} /> : null}
         </FitStage>
-      </motion.div>
+      </m.div>
 
       {hasFooter ? (
-        <motion.footer
+        <m.footer
           className={styles.footer}
           style={{ opacity: values.chrome, y: footerY }}
           inert={interactive ? undefined : true}
@@ -89,7 +89,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
               {card.reset === "replay" ? "Replay" : "Reset"}
             </button>
           ) : null}
-        </motion.footer>
+        </m.footer>
       ) : null}
 
       {onOpen ? (
@@ -97,7 +97,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
           <span className={styles.openLabel}>{card.title}</span>
         </button>
       ) : null}
-    </motion.article>
+    </m.article>
   );
 }
 

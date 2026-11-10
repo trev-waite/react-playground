@@ -31,3 +31,29 @@ describe("Live app boundary", () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe("Live bundle", () => {
+  test("leaves the router to the studio; Live reads and replaces the URL itself", async () => {
+    const violations: string[] = [];
+    for (const dir of LIVE_APP_DIRS) {
+      for await (const relative of new Glob("**/*.{ts,tsx}").scan({ cwd: path.join(src, dir) })) {
+        if (relative.includes(".test.")) continue;
+        if (/["']react-router["']/.test(await Bun.file(path.join(src, dir, relative)).text())) {
+          violations.push(path.join(dir, relative));
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  test("the deck renders `m` components, so Motion's gesture and layout code stays out of the bundle", async () => {
+    const violations: string[] = [];
+    for await (const relative of new Glob("**/*.tsx").scan({ cwd: path.join(src, "app") })) {
+      if (!/^(LiveApp|LivePage)\.tsx$|^deck\//.test(relative)) continue;
+      if (/<motion\.|\bmotion\.create\(/.test(await Bun.file(path.join(src, "app", relative)).text())) {
+        violations.push(`app/${relative}: use \`m.<tag>\` inside LivePage's LazyMotion instead of \`motion.<tag>\``);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});

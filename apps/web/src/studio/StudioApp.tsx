@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Route, Routes, useNavigate } from "react-router";
 import { ChromeBar, DeckChromeSlot } from "../app/deck/DeckChrome";
 import { LivePage } from "../app/LivePage";
 import { REDUCED_MOTION, SPRING } from "../app/motion";
@@ -39,6 +39,7 @@ function ViewStack() {
   const { progress, mode, liveSlug, reducedMotion, reducedTransparency, markExperimentalReady } =
     useView();
   const [deckSlot, setDeckSlot] = useState<HTMLElement | null>(null);
+  const navigate = useNavigate();
   const live = mode === "live";
 
   const liveStyle = useLiveLayerStyle(progress, reducedMotion);
@@ -74,7 +75,11 @@ function ViewStack() {
               zIndex: 2,
             }}
           >
-            <LivePage slug={liveSlug} active={mode === "live"} />
+            <LivePage
+              slug={liveSlug}
+              active={mode === "live"}
+              onNavigate={path => navigate(path, { replace: true })}
+            />
           </motion.div>
         </div>
 

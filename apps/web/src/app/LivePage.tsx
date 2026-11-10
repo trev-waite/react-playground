@@ -1,6 +1,6 @@
 import { startTransition, Suspense, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router";
+import { domMin, LazyMotion } from "motion/react";
 import { cardIndexForSlug } from "../lib/catalog";
 import { useLiveCards } from "../lib/liveCatalog";
 import { CardDeck, type DeckView } from "./deck/CardDeck";
@@ -12,21 +12,25 @@ type LivePageProps = {
   slug: string | null;
   /** False while another view covers Live (the local studio). */
   active?: boolean;
+  /** Replaces the current URL with `path`. */
+  onNavigate: (path: string) => void;
 };
 
-export function LivePage({ slug, active = true }: LivePageProps) {
+export function LivePage({ slug, active = true, onNavigate }: LivePageProps) {
   return (
     <div className={styles.page}>
-      <Suspense fallback={<Status>Loading…</Status>}>
-        <LiveDeck slug={slug} active={active} />
-      </Suspense>
+      {/* The deck only binds motion values and animates; it skips Motion's gesture and layout code. */}
+      <LazyMotion features={domMin}>
+        <Suspense fallback={null}>
+          <LiveDeck slug={slug} active={active} onNavigate={onNavigate} />
+        </Suspense>
+      </LazyMotion>
     </div>
   );
 }
 
-function LiveDeck({ slug, active }: { slug: string | null; active: boolean }) {
+function LiveDeck({ slug, active, onNavigate }: Required<LivePageProps>) {
   const cards = useLiveCards();
-  const navigate = useNavigate();
   const slot = useContext(DeckChromeSlot);
   const [view, setView] = useState<DeckView>("grid");
   const found = cardIndexForSlug(cards, slug);
@@ -35,7 +39,7 @@ function LiveDeck({ slug, active }: { slug: string | null; active: boolean }) {
 
   function show(index: number) {
     const next = cards[index];
-    if (next) navigate(`/${next.slug}`, { replace: true });
+    if (next) onNavigate(`/${next.slug}`);
   }
 
   useEffect(() => {

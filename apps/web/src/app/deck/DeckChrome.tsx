@@ -1,5 +1,5 @@
 import { createContext, useId, type ReactNode } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { m, useReducedMotion } from "motion/react";
 import { REDUCED_MOTION, SPRING } from "../motion";
 import type { DeckView } from "./CardDeck";
 import styles from "./DeckChrome.module.css";
@@ -75,7 +75,7 @@ function ViewIcon({ grid }: { grid: boolean }) {
         const tileState = { x: tile.x, y: tile.y, width: TILE, height: TILE, rx: 2 };
         const pageState = index === 0 ? PAGE : { ...tile.from, width: TILE, height: TILE, rx: 2 };
         return (
-          <motion.rect
+          <m.rect
             key={index}
             initial={false}
             animate={grid ? tileState : pageState}
