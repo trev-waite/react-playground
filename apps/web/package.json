@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "vite preview --port 3000 --strictPort",
+    "start": "wrangler dev --port 3000",
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json",
-    "og": "bun scripts/og/capture.ts"
+    "og": "bun scripts/og/capture.ts",
+    "smoke": "bun scripts/smoke.ts"
   },
   "dependencies": {
     "@react-playground/api": "workspace:*",
@@ -27,6 +28,7 @@
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
     "playwright": "1.62.1",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "wrangler": "4.154.0"
   }
 }

@@ -308,6 +308,9 @@ const CSS = `
   cursor: pointer;
   transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), opacity 160ms ease;
 }
+@media (prefers-reduced-motion: reduce) {
+  .st-primary, .st-secondary, .st-modeOption { transition: none; }
+}
 .st-primary { background: #1c2430; color: #ffffff; }
 .st-secondary { background: #ffffff; color: #1c2430; box-shadow: inset 0 0 0 1px rgba(28, 36, 48, 0.14); }
 .st-switch {

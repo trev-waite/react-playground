@@ -306,7 +306,7 @@
 .iconSwap[data-state="a"] .icon[data-icon="a"],
 .iconSwap[data-state="b"] .icon[data-icon="b"] {
   opacity: 1;
-  filter: blur(0);
+  filter: none;
   transform: scale(1);
 }
 

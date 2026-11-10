@@ -19,4 +19,5 @@ Consult deeper documentation only when the task warrants it, rather than loading
 - Never expose secrets, credentials, or sensitive data.
 - Do not add code comments unless the context is absolutely necessary and the code cannot fully explain the reason for it.
 - Clean up unused code and unneeded additional docs after all code changes
+- Finish only when `bun run lint`, `bun run typecheck`, and `bun run test` pass. Fix what they flag rather than adding exceptions; see [Best Practices](docs/BEST_PRACTICES.md#checks).
 - Organize for findability: group related files in folders named by feature or layer, give each distinct set of content or concern its own clearly named file where appropriate.

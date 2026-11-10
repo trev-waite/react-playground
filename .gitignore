@@ -47,7 +47,7 @@ Thumbs.db
 
 # misc
 *.local
-.vercel
+.wrangler/
 
 # Experimental idea projects are reviewable source; only their two canonical files are tracked.
 apps/web/src/experimental/ideas/*

@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import path from "node:path";
+import {
+  ALLOW,
+  allowedNear,
+  cssRules,
+  declarations,
+  lineOf,
+  readSource,
+  report,
+  sources,
+  stripCssComments,
+  transitionedProperties,
+} from "./source";
 
 /**
  * Performance lint. Each rule guards a fix that took a transition from
@@ -8,81 +19,11 @@ import path from "node:path";
  * flagged CSS rule, or on or just above the flagged line of code.
  */
 
-const src = import.meta.dir;
 /** UI we own. Experimental ideas are WIP sketches and stay unlinted. */
 const CHROME_DIRS = ["app", "studio", "experimental"];
-const ALLOW = "perf-allow:";
-
-type SourceFile = { file: string; text: string };
-
-async function sources(dirs: string[], pattern: string): Promise<SourceFile[]> {
-  const files: SourceFile[] = [];
-  for (const dir of dirs) {
-    for await (const relative of new Bun.Glob(pattern).scan({ cwd: path.join(src, dir) })) {
-      if (relative.includes(".test.") || relative.startsWith("ideas/")) continue;
-      const file = path.join(dir, relative);
-      files.push({ file, text: await Bun.file(path.join(src, file)).text() });
-    }
-  }
-  return files;
-}
-
-function lineOf(text: string, index: number): number {
-  return text.slice(0, index).split("\n").length;
-}
-
-/** True when `perf-allow:` sits on the line at `index` or one of the two above it. */
-function allowedNear(text: string, index: number): boolean {
-  const lines = text.split("\n");
-  const line = lineOf(text, index) - 1;
-  return lines.slice(Math.max(0, line - 2), line + 1).some(l => l.includes(ALLOW));
-}
-
-type CssRule = { selector: string; body: string; line: number; allowed: boolean };
-
-/** Innermost `selector { body }` blocks, which covers rules inside @media and keyframe steps. */
-function cssRules(text: string): CssRule[] {
-  return [...text.matchAll(/([^{}]*)\{([^{}]*)\}/g)].map(match => ({
-    selector: match[1]!.replace(/\/\*[\s\S]*?\*\//g, "").trim(),
-    body: match[2]!,
-    line: lineOf(text, match.index! + match[1]!.length),
-    allowed: match[0].includes(ALLOW),
-  }));
-}
-
-function declarations(body: string, property: string): string[] {
-  const pattern = new RegExp(`(?:^|[;\\s])${property}\\s*:\\s*([^;]+)`, "g");
-  return [...body.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(pattern)].map(m => m[1]!.trim());
-}
-
-/** Splits a comma list without breaking `cubic-bezier(0.2, 1, …)` apart. */
-function splitTopLevel(value: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < value.length; i++) {
-    if (value[i] === "(") depth++;
-    else if (value[i] === ")") depth--;
-    else if (value[i] === "," && depth === 0) {
-      parts.push(value.slice(start, i));
-      start = i + 1;
-    }
-  }
-  parts.push(value.slice(start));
-  return parts.map(part => part.trim()).filter(Boolean);
-}
 
 const LAYOUT_PROPERTY =
   /^(all|width|height|(min|max)-(width|height)|top|right|bottom|left|inset(-\w+)?|(margin|padding)(-\w+)?|gap|flex(-basis)?|grid-template-\w+)$/;
-
-function transitionedProperties(rule: CssRule): string[] {
-  return [
-    ...declarations(rule.body, "transition").flatMap(value =>
-      splitTopLevel(value).map(part => part.split(/\s+/)[0]!),
-    ),
-    ...declarations(rule.body, "transition-property").flatMap(splitTopLevel),
-  ];
-}
 
 /** Bodies of the functions handed to requestAnimationFrame, by name or inline. */
 function frameCallbacks(text: string): { body: string; index: number }[] {
@@ -106,10 +47,6 @@ function frameCallbacks(text: string): { body: string; index: number }[] {
     }
   }
   return callbacks;
-}
-
-function report(violations: string[]) {
-  expect(violations, violations.join("\n")).toEqual([]);
 }
 
 describe("performance lint: CSS", () => {
@@ -161,8 +98,8 @@ describe("performance lint: CSS", () => {
   });
 
   test("deck cards carry no backdrop blur, since they move", async () => {
-    const text = await Bun.file(path.join(src, "app/deck/DeckCard.module.css")).text();
-    expect(text.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("backdrop-filter");
+    const text = await readSource("app/deck/DeckCard.module.css");
+    expect(stripCssComments(text)).not.toContain("backdrop-filter");
   });
 });
 

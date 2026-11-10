@@ -4,11 +4,9 @@ const PLACEHOLDER = "%SITE_URL%";
 
 /**
  * The public origin the Live app is served from, without a trailing slash.
- * `SITE_URL` wins; Vercel production builds fall back to their project domain.
  */
 export function resolveSiteUrl(env: Record<string, string | undefined>): string | null {
-  const url = env.SITE_URL || (env.VERCEL_PROJECT_PRODUCTION_URL && `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`);
-  return url ? url.replace(/\/+$/, "") : null;
+  return env.SITE_URL ? env.SITE_URL.replace(/\/+$/, "") : null;
 }
 
 /**

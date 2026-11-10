@@ -30,4 +30,11 @@ Hold 60 fps on integrated GPUs. Measure transitions in real Chrome (frame gaps, 
 - Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), and memoize subtrees a transition re-renders.
 - Pause offscreen loops (`IntersectionObserver`) and defer expensive resize work until the size settles.
 
-`apps/web/src/performance.test.ts` enforces these rules in `bun run test`. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code.
+`apps/web/src/lint/performance.test.ts` enforces these rules in `bun run test`. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code.
+
+## Checks
+
+`bun run lint` (oxlint, configured in `.oxlintrc.json`), `bun run typecheck`, and `bun run test` must pass before work is done; CI runs all three. The lint covers React's rules (hooks, refs, no state set in Effects), accessibility, and leftovers such as unused code and `console.log`. Files listed in the `.oxlintrc.json` baseline override predate a rule; fix them when you touch them and drop them from the list, and never add new files to it.
+
+`apps/web/src/lint/standards.test.ts` enforces the house rules no off-the-shelf linter knows: Live components stay portable, honor `prefers-reduced-motion`, and gate hover styles behind `@media (hover: hover)`; filters settle on `filter: none` rather than `blur(0)`, which Safari leaves blurred; and no commented-out code. A component's own motion contract (shared timing, compositor-only properties) lives in a test beside it, such as `MenuPill.test.ts`.
+

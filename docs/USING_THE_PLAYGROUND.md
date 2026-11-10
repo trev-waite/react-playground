@@ -57,14 +57,15 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 | `bun run dev` | Studio + local API |
 | `bun run test` | All package tests |
 | `bun run typecheck` | Strict TypeScript |
+| `bun run lint` | oxlint: React, accessibility, and leftover-code rules |
 | `bun run build` / `bun run start` | Build and preview the deployable Live app |
 
 ## Deploy
 
-Host `apps/web/dist` as a static site with an SPA fallback to `index.html`. Make Live writes source files, so commit and rebuild to update it.
+Merging to `main` deploys Live to Cloudflare; see [Deployment](DEPLOYMENT.md). Make Live writes source files, so commit them to publish.
 
-Set `SITE_URL` (for example `https://playground.example.com`) when building so link previews get absolute `og:image` and `og:video` URLs. Vercel production builds fall back to their project domain. The preview assets are `apps/web/public/og.png` (1200×630) and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
+Builds use `SITE_URL` for absolute `og:image` and `og:video` URLs; CI sets it to the production origin. The preview assets are `apps/web/public/og.png` (1200×630) and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
 
 ## Stack
 
-Turborepo · Vite · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU) · Bun API
+Turborepo · Vite · Cloudflare Workers · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU) · Bun API

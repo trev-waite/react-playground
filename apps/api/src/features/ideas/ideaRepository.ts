@@ -115,7 +115,7 @@ async function readProjectMetadata(
     if (typeof parsed === "object" && parsed != null) {
       return parsed as Record<string, unknown>;
     }
-  } catch (error) {
+  } catch {
     throw new IdeaError(
       "invalid_document",
       `Saved project ${path.basename(directory)} has invalid JSON`,

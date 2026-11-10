@@ -65,7 +65,7 @@
   margin-top: 0;
   opacity: 1;
   transform: none;
-  filter: blur(0);
+  filter: none;
   pointer-events: auto;
 }
 
