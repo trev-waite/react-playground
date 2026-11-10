@@ -50,11 +50,12 @@ export function useAnimatedValues<K extends string>(
  * Calls `render` in the render step of each frame that moves one of `values`,
  * and once each commit has finished (so values a parent set in its own layout
  * effect are painted in the same frame), in case other inputs changed.
- * `values` must keep the same length.
  */
 export function useMotionRender(values: readonly MotionValue[], render: () => void) {
   const latest = useRef(render);
-  latest.current = render;
+  useLayoutEffect(() => {
+    latest.current = render;
+  });
 
   useLayoutEffect(() => {
     const draw = () => latest.current();
@@ -64,7 +65,7 @@ export function useMotionRender(values: readonly MotionValue[], render: () => vo
       for (const unsubscribe of unsubscribes) unsubscribe();
       frame.cancel(draw);
     };
-  }, values);
+  }, [values]);
 
   useLayoutEffect(() => queueMicrotask(() => latest.current()));
 }

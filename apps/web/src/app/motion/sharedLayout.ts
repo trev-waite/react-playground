@@ -1,4 +1,4 @@
-import { useLayoutEffect, type RefObject } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 import { mixNumber } from "./generators";
 import { animate, MotionValue } from "./motionValue";
 import type { Transition } from "./transitions";
@@ -51,23 +51,25 @@ function flyFrom(element: HTMLElement, from: DOMRect, transition: Transition): (
 /**
  * One element shown in different places, like Motion's `layoutId`: each
  * mount of it flies in from where the last one was on screen when it left.
- * `slot` is shared by every place the element can appear.
+ * `slotRef` is shared by every place the element can appear.
  */
 export function useSharedLayout(
   ref: RefObject<HTMLElement | null>,
-  slot: RefObject<DOMRect | null>,
+  slotRef: RefObject<DOMRect | null>,
   transition: Transition,
 ) {
+  // Each mount flies once, with the transition it mounted with.
+  const mountTransition = useRef(transition);
+
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const from = slot.current;
-    slot.current = null;
-    const stop = from ? flyFrom(element, from, transition) : undefined;
+    const from = slotRef.current;
+    slotRef.current = null;
+    const stop = from ? flyFrom(element, from, mountTransition.current) : undefined;
     return () => {
-      slot.current = element.getBoundingClientRect();
+      slotRef.current = element.getBoundingClientRect();
       stop?.();
     };
-    // Each mount flies once, with the transition it mounted with.
-  }, [ref, slot]);
+  }, [ref, slotRef]);
 }
