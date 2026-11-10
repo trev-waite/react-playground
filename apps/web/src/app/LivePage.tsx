@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { cardIndexForSlug } from "../lib/catalog";
 import { useLiveCards } from "../lib/liveCatalog";
 import { CardDeck, type DeckView } from "./deck/CardDeck";
-import { ChromeBar, DeckChromeSlot, DeckPager, DeckViewButton } from "./deck/DeckChrome";
+import { BackPill, ChromeBar, DeckChromeSlot, DeckPager, DeckViewButton } from "./deck/DeckChrome";
 import { RefreshCatalogButton } from "./RefreshCatalogButton";
 import styles from "./LivePage.module.css";
 
@@ -83,7 +83,13 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
       className={styles.deck}
       data-chrome={active ? (view === "page" ? card.theme : "light") : undefined}
     >
-      {slot ? createPortal(viewButton, slot) : <ChromeBar>{viewButton}</ChromeBar>}
+      {slot ? (
+        createPortal(viewButton, slot)
+      ) : (
+        <ChromeBar>
+          <BackPill>{viewButton}</BackPill>
+        </ChromeBar>
+      )}
       <DeckPager
         hidden={view === "grid"}
         index={activeIndex}

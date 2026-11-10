@@ -1,6 +1,7 @@
-import { createContext, useId, useRef, useState, type ReactNode } from "react";
+import { createContext, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useAnimatedValues, useMotionRender, useReducedMotion } from "../motion/hooks";
 import { REDUCED_MOTION, SPRING, type Transition } from "../motion/transitions";
+import { backPillPath } from "./backPillShape";
 import type { DeckView } from "./CardDeck";
 import styles from "./DeckChrome.module.css";
 
@@ -13,6 +14,125 @@ export const DeckChromeSlot = createContext<HTMLElement | null>(null);
 /** Floating row at the top center of the page for primary view controls. */
 export function ChromeBar({ children }: { children: ReactNode }) {
   return <div className={styles.bar}>{children}</div>;
+}
+
+/** Room around the pill for its shadow to spread into. */
+const SHADOW_BLEED = 40;
+
+/**
+ * One piece of glass for the ways back: home to the main site first, then
+ * whatever the host adds. Each button keeps its own circle, and a neck that
+ * dips in like water holds the circles together.
+ */
+export function BackPill({ children }: { children?: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const size = useBorderBoxSize(ref);
+  const id = useId();
+  const path = size ? backPillPath(size.width, size.height) : null;
+  const bleed = size && {
+    x: -SHADOW_BLEED,
+    y: -SHADOW_BLEED,
+    width: size.width + SHADOW_BLEED * 2,
+    height: size.height + SHADOW_BLEED * 2,
+  };
+
+  return (
+    <div ref={ref} className={styles.backPill}>
+      {path && bleed ? (
+        <>
+          <span className={styles.glass} style={{ clipPath: `path("${path}")` }} aria-hidden="true" />
+          <svg className={styles.outline} width={size.width} height={size.height} aria-hidden="true">
+            <defs>
+              <clipPath id={`${id}inside`}>
+                <path d={path} />
+              </clipPath>
+              <mask id={`${id}outside`} maskUnits="userSpaceOnUse" {...bleed}>
+                <rect {...bleed} fill="white" />
+                <path d={path} fill="black" />
+              </mask>
+              {/* --chrome-shadow, redrawn around the shape since a box-shadow would stay a box. */}
+              <filter id={`${id}shadow`} filterUnits="userSpaceOnUse" {...bleed}>
+                <ShadowLayer dy={1} blur={1} opacity={0.04} result="contact" />
+                <ShadowLayer dy={6} blur={18} opacity={0.1} result="lift" />
+                <feMerge>
+                  <feMergeNode in="lift" />
+                  <feMergeNode in="contact" />
+                </feMerge>
+              </filter>
+            </defs>
+            <path d={path} filter={`url(#${id}shadow)`} mask={`url(#${id}outside)`} />
+            <path className={styles.edge} d={path} clipPath={`url(#${id}inside)`} />
+          </svg>
+        </>
+      ) : null}
+      <HomeLink />
+      {children}
+    </div>
+  );
+}
+
+/** One box-shadow layer as a filter: the shadow alone, without the shape that casts it, so no dark rim is left at the edge. */
+function ShadowLayer({ dy, blur, opacity, result }: { dy: number; blur: number; opacity: number; result: string }) {
+  return (
+    <>
+      <feGaussianBlur in="SourceAlpha" stdDeviation={blur / 2} />
+      <feOffset dy={dy} />
+      <feComponentTransfer result={result}>
+        <feFuncA type="linear" slope={opacity} />
+      </feComponentTransfer>
+    </>
+  );
+}
+
+function useBorderBoxSize(ref: RefObject<HTMLElement | null>) {
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => {
+      const { width, height } = element.getBoundingClientRect();
+      setSize(current => (current?.width === width && current.height === height ? current : { width, height }));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  return size;
+}
+
+const HOME_URL = "https://trevorwaite.com";
+
+/** The way back to the main site, whether or not the visitor came from it. */
+function HomeLink() {
+  const hint = "Back to trevorwaite.com";
+  const hintId = useId();
+
+  return (
+    <span className={styles.hintHost}>
+      <a
+        href={HOME_URL}
+        className={styles.iconButton}
+        aria-label={hint}
+        aria-describedby={hintId}
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path
+            d="M15.5 10H4.5M9 5.5L4.5 10L9 14.5"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </a>
+      <span id={hintId} role="tooltip" className={styles.hint}>
+        {hint}
+      </span>
+    </span>
+  );
 }
 
 type DeckViewButtonProps = {

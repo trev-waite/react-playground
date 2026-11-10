@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router";
-import { ChromeBar, DeckChromeSlot } from "../app/deck/DeckChrome";
+import { BackPill, ChromeBar, DeckChromeSlot } from "../app/deck/DeckChrome";
 import { LivePage } from "../app/LivePage";
 import { opacity, px, transform, useAnimatedValues, useMotionStyle } from "../app/motion/hooks";
 import { REDUCED_MOTION, SPRING } from "../app/motion/transitions";
@@ -32,8 +32,8 @@ export function StudioApp() {
   );
 }
 
-/** Room for Live's 44px view button and the gap before the toggle. */
-const DECK_SLOT_WIDTH = 52;
+/** Room for Live's 44px view button. */
+const DECK_SLOT_WIDTH = 44;
 
 function ViewStack() {
   const { progress, mode, liveSlug, reducedMotion, reducedTransparency, markExperimentalReady } =
@@ -88,7 +88,9 @@ function ViewStack() {
         </div>
 
         <ChromeBar>
-          <DeckSlot ref={setDeckSlot} live={live} reducedMotion={reducedMotion} />
+          <BackPill>
+            <DeckSlot ref={setDeckSlot} live={live} reducedMotion={reducedMotion} />
+          </BackPill>
           <ViewToggle />
         </ChromeBar>
 
@@ -100,7 +102,7 @@ function ViewStack() {
   );
 }
 
-/** Live docks its grid button here; it folds away while Experimental shows. */
+/** Live docks its grid button here, in the back pill; it folds away while Experimental shows. */
 function DeckSlot({
   ref,
   live,

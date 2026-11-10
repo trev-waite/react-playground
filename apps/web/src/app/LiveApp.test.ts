@@ -46,3 +46,14 @@ describe("Live bundle", () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe("Top bar", () => {
+  test("the deployed app and the studio both lead the bar with one back pill, home to trevorwaite.com first", async () => {
+    const read = (file: string) => Bun.file(path.join(src, file)).text();
+    const chrome = await read("app/deck/DeckChrome.tsx");
+    expect(chrome).toMatch(/<HomeLink \/>\s*\{children\}\s*<\/div>/);
+    expect(chrome).toContain('"https://trevorwaite.com"');
+    expect(await read("app/LivePage.tsx")).toMatch(/<ChromeBar>\s*<BackPill>\{viewButton\}<\/BackPill>/);
+    expect(await read("studio/StudioApp.tsx")).toMatch(/<ChromeBar>\s*<BackPill>\s*<DeckSlot/);
+  });
+});
