@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveCard } from "../../lib/catalog";
 import { useReducedMotion } from "../motion/hooks";
-import { animate, type Animation } from "../motion/motionValue";
 import { SPRING } from "../motion/transitions";
 import { createCardMotion, jumpCard, moveCard, stopCard, type CardMotion } from "./cardMotion";
 import { DeckCard } from "./DeckCard";
 import { useDocumentScroll } from "./useDocumentScroll";
+import { commitDistance, EDGE_PULL, PageScroll } from "./pageScroll";
 import { usePaging } from "./usePaging";
 import {
   anchoredScrollTop,
@@ -146,7 +146,16 @@ export function CardDeck({
     anchor: null,
   });
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const glide = useRef<Animation | null>(null);
+  const [pages] = useState(
+    () =>
+      new PageScroll(
+        top => {
+          const host = scrollingElement();
+          if (host) host.scrollTop = top;
+        },
+        () => delete scrollerRef.current?.dataset.gliding,
+      ),
+  );
 
   const grid = useMemo(
     () => gridLayout(cards.map(card => card.size), viewport, viewport.insets),
@@ -273,9 +282,19 @@ export function CardDeck({
   }, [view, paged, grid, scrollsDocument]);
 
   function stopGlide() {
-    glide.current?.stop();
-    glide.current = null;
+    pages.stop();
     delete scrollerRef.current?.dataset.gliding;
+  }
+
+  /** Moves the page column toward `target` from wherever it is, turning snapping off until it rests. */
+  function scrollPages(target: number, how: "follow" | "glide") {
+    const scroller = scrollerRef.current;
+    const host = scrollingElement();
+    if (!scroller || !host) return;
+    pages.sync(host.scrollTop);
+    scroller.dataset.gliding = "";
+    if (how === "follow") pages.follow(target);
+    else pages.glide(target);
   }
 
   // Glide to pages chosen by wheel, keys, the pager, or a link. Scroll-snap
@@ -286,20 +305,14 @@ export function CardDeck({
     if (!scroller || !host || layout !== "pages") return;
     setNearIndex(activeIndex);
     const target = activeIndex * viewport.height;
-    stopGlide();
-    if (Math.abs(host.scrollTop - target) < 1) return;
+    if (!pages.moving && Math.abs(host.scrollTop - target) < 1) return;
     if (reducedMotion || Math.abs(host.scrollTop - target) > viewport.height * 1.5) {
+      stopGlide();
       host.scrollTop = target;
       return;
     }
-    scroller.dataset.gliding = "";
-    glide.current = animate(host.scrollTop, target, {
-      ...SPRING.morph,
-      onUpdate: top => {
-        host.scrollTop = top;
-      },
-      onComplete: stopGlide,
-    });
+    // Carries on from a pull or an earlier glide at the speed the page already has.
+    scrollPages(target, "glide");
   }, [activeIndex, layout, viewport.height, reducedMotion, scrollsDocument]);
 
   useEffect(() => {
@@ -314,7 +327,7 @@ export function CardDeck({
   useEffect(
     () => () => {
       clearTimeout(settleTimer.current);
-      glide.current?.stop();
+      pages.stop();
       for (const motion of motions.current.values()) stopCard(motion);
     },
     [],
@@ -330,9 +343,23 @@ export function CardDeck({
     return whenIdle(() => setWarm(current => new Set(current).add(next.slug)));
   }, [cards, layout, warm]);
 
-  usePaging(scrollerRef, listening && layout === "pages", direction => {
-    const next = Math.min(cards.length - 1, Math.max(0, latest.current.activeIndex + direction));
-    if (next !== latest.current.activeIndex) onActiveChange(next);
+  const restingTop = () => latest.current.activeIndex * viewport.height;
+  usePaging(scrollerRef, listening && layout === "pages", {
+    commitAt: commitDistance(viewport.height),
+    pull: travel => {
+      if (reducedMotion) return;
+      const index = latest.current.activeIndex;
+      const pastEnd = (travel < 0 && index === 0) || (travel > 0 && index === cards.length - 1);
+      scrollPages(restingTop() + travel * (pastEnd ? EDGE_PULL : 1), "follow");
+    },
+    step: direction => {
+      const next = Math.min(cards.length - 1, Math.max(0, latest.current.activeIndex + direction));
+      if (next !== latest.current.activeIndex) onActiveChange(next);
+      else if (pages.moving) scrollPages(restingTop(), "glide");
+    },
+    release: () => {
+      if (pages.moving || scrollingElement()?.scrollTop !== restingTop()) scrollPages(restingTop(), "glide");
+    },
   });
 
   function onScroll() {
@@ -343,8 +370,9 @@ export function CardDeck({
     const index = Math.round(host.scrollTop / viewport.height);
     setNearIndex(index);
     clearTimeout(settleTimer.current);
+    // Only a scroll the reader made picks the page; a glide already knows where it is going.
     settleTimer.current = setTimeout(() => {
-      if (index !== latest.current.activeIndex) onActiveChange(index);
+      if (!pages.moving && index !== latest.current.activeIndex) onActiveChange(index);
     }, SCROLL_SETTLE_MS);
   }
 
