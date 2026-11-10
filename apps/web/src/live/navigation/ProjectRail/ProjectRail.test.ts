@@ -22,3 +22,14 @@ describe("ProjectRail title rendering", () => {
     expect(declarations(ruleFor(css, ".item[data-selected] .header").body, "filter")).toEqual([]);
   });
 });
+
+describe("ProjectRail pill corners", () => {
+  test("the pill keeps one corner radius, half its height, as it opens into a card", async () => {
+    const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
+    expect(declarations(ruleFor(css, ".rail").body, "--open-radius")).toEqual(["calc(var(--toggle-size) / 2)"]);
+    expect(declarations(ruleFor(css, ".item[data-selected] .morph").body, "border-radius")).toEqual([
+      "var(--open-radius)",
+    ]);
+    expect(declarations(ruleFor(css, ".item[data-open] .morph").body, "border-radius")).toEqual([]);
+  });
+});
