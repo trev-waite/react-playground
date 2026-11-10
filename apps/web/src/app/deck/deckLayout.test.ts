@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  anchoredScrollTop,
   CAMERA_MAX_SCALE,
   cameraPose,
   centeredScrollTop,
   GRID_GAP,
   GRID_TOP,
+  gridAnchor,
   gridColumns,
   gridLayout,
   pageFrame,
@@ -66,6 +68,28 @@ describe("gridLayout", () => {
 
   test("is empty without cards", () => {
     expect(gridLayout([], desktop)).toEqual({ rects: [], height: 0 });
+  });
+});
+
+describe("grid anchor", () => {
+  const sizes = ["wide", "small", "small", "tall", "wide", "small", "large", "small"] as const;
+
+  test("keeps the top card in place when the grid relayouts", () => {
+    const narrow = gridLayout(sizes, phone);
+    const wide = gridLayout(sizes, desktop);
+    const top = 700;
+    const anchor = gridAnchor(narrow.rects, top)!;
+    const wideTop = anchoredScrollTop(wide.rects, anchor)!;
+    expect(gridAnchor(wide.rects, wideTop)?.index).toBe(anchor.index);
+    expect(anchoredScrollTop(narrow.rects, gridAnchor(wide.rects, wideTop)!)).toBeCloseTo(top);
+  });
+
+  test("anchors to the highest card still in view", () => {
+    const { rects } = gridLayout(sizes, phone);
+    const anchor = gridAnchor(rects, rects[1]!.y + 1)!;
+    expect(rects[anchor.index]!.y + rects[anchor.index]!.height).toBeGreaterThan(rects[1]!.y + 1);
+    expect(anchor.through).toBeGreaterThan(0);
+    expect(gridAnchor(rects, 0)).toEqual({ index: 0, through: 0 });
   });
 });
 

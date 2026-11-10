@@ -8,10 +8,13 @@ import { DeckCard } from "./DeckCard";
 import { useDocumentScroll } from "./useDocumentScroll";
 import { usePaging } from "./usePaging";
 import {
+  anchoredScrollTop,
   cameraPose,
   centeredScrollTop,
+  gridAnchor,
   gridLayout,
   gridPose,
+  type GridAnchor,
   NO_INSETS,
   offsetRect,
   pageFrame,
@@ -53,19 +56,6 @@ function whenIdle(callback: () => void): () => void {
 
 type Viewport = Size & { insets: Insets };
 type GridLayout = ReturnType<typeof gridLayout>;
-/** A grid card, and how far through it (0 to 1) the scroll edge falls. */
-type Anchor = { index: number; through: number };
-
-/** The highest card still in view at `top`. */
-function topCard(grid: GridLayout, top: number): Anchor | null {
-  let index = -1;
-  grid.rects.forEach((rect, i) => {
-    if (rect.y + rect.height > top && (index < 0 || rect.y < grid.rects[index]!.y)) index = i;
-  });
-  const rect = grid.rects[index];
-  if (!rect) return null;
-  return { index, through: Math.min(1, Math.max(0, (top - rect.y) / Math.max(rect.height, 1))) };
-}
 
 function sameViewport(a: Viewport, b: Viewport): boolean {
   return (
@@ -150,7 +140,7 @@ export function CardDeck({
   const motions = useRef(new Map<string, CardMotion>());
   const flight = useRef(0);
   /** The last scroll the reader saw, and the grid card at the top of it, so a relayout keeps their place. */
-  const scrolled = useRef<{ host: HTMLElement | null; top: number; anchor: Anchor | null }>({
+  const scrolled = useRef<{ host: HTMLElement | null; top: number; anchor: GridAnchor | null }>({
     host: null,
     top: 0,
     anchor: null,
@@ -186,7 +176,7 @@ export function CardDeck({
 
   function remember(host: HTMLElement, grid?: GridLayout) {
     const top = host.scrollTop;
-    scrolled.current = { host, top, anchor: grid ? topCard(grid, top) : null };
+    scrolled.current = { host, top, anchor: grid ? gridAnchor(grid.rects, top) : null };
   }
   const previous = useRef<{ view: DeckView; paged: boolean; grid: typeof grid } | null>(null);
 
@@ -272,8 +262,8 @@ export function CardDeck({
       each((motion, index) => jumpCard(motion, gridPose(grid.rects[index]!)));
       // A resize, or crossing the phone breakpoint (which swaps the scrolling element), keeps the top card in place.
       const anchor = scrolled.current.anchor;
-      const anchored = anchor ? grid.rects[anchor.index] : undefined;
-      if (prior && anchor && anchored) host.scrollTop = anchored.y + anchor.through * anchored.height;
+      const top = anchor ? anchoredScrollTop(grid.rects, anchor) : null;
+      if (prior && top !== null) host.scrollTop = top;
       remember(host, grid);
     } else if (paged) {
       showPages();
