@@ -3,7 +3,8 @@ import { cardFromPlan, planCards, type LiveCard } from "./catalog";
 import { liveCatalog } from "./discover";
 import { requestCatalogRefresh } from "./devRefresh";
 import { moduleStore } from "./moduleStore";
-import type { LiveCatalog, PlaygroundEntry, PreviewModule } from "./types";
+import { previewModule } from "./previewModule";
+import type { LiveCatalog } from "./types";
 
 const catalog = moduleStore(liveCatalog);
 
@@ -36,40 +37,10 @@ export function useLiveEntries() {
   return useLiveCatalog().entries;
 }
 
-type TrackedPromise<T> = Promise<T> & { status?: "pending" | "fulfilled" | "rejected"; value?: T; reason?: unknown };
-
-const modules = new WeakMap<PlaygroundEntry["load"], Promise<PreviewModule>>();
-
-/**
- * One promise per loader, started once. It records how it settled in the
- * fields React's `use` reads, so a module that is already here renders
- * without a loading frame.
- */
-function moduleFor(entry: PlaygroundEntry): Promise<PreviewModule> {
-  let module = modules.get(entry.load);
-  if (!module) {
-    const tracked: TrackedPromise<PreviewModule> = entry.load();
-    tracked.status = "pending";
-    tracked.then(
-      value => {
-        tracked.status = "fulfilled";
-        tracked.value = value;
-      },
-      reason => {
-        tracked.status = "rejected";
-        tracked.reason = reason;
-      },
-    );
-    module = tracked;
-    modules.set(entry.load, module);
-  }
-  return module;
-}
-
 /** Every card, straight away. Each preview loads on its own inside its card. */
 export function useLiveCards(): LiveCard[] {
   const snapshot = useLiveCatalog();
-  return useMemo(() => planCards(snapshot).map(plan => cardFromPlan(plan, moduleFor)), [snapshot]);
+  return useMemo(() => planCards(snapshot).map(plan => cardFromPlan(plan, previewModule)), [snapshot]);
 }
 
 export async function refreshLiveCatalog(slug?: string): Promise<void> {

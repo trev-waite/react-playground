@@ -1,10 +1,10 @@
 import type { CardSize } from "../../lib/types";
 
 export type Size = { width: number; height: number };
-/** Screen room kept clear for the notch and the home indicator. */
-export type Insets = { top: number; bottom: number };
+/** Screen room kept clear for the notch, rounded corners, and the home indicator. */
+export type Insets = { top: number; right: number; bottom: number; left: number };
 
-const NO_INSETS: Insets = { top: 0, bottom: 0 };
+export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 export type Rect = { x: number; y: number; width: number; height: number };
 
 /**
@@ -67,10 +67,12 @@ export function gridLayout(
 ): { rects: Rect[]; height: number } {
   const top = GRID_TOP + insets.top;
   const gutter = gridGutter(viewport.width);
-  const width = Math.min(GRID_MAX_WIDTH, Math.max(0, viewport.width - gutter * 2));
+  const sideLeft = Math.max(gutter, insets.left);
+  const room = Math.max(0, viewport.width - sideLeft - Math.max(gutter, insets.right));
+  const width = Math.min(GRID_MAX_WIDTH, room);
   const columns = gridColumns(width);
   const cell = (width - GRID_GAP * (columns - 1)) / columns;
-  const left = (viewport.width - width) / 2;
+  const left = sideLeft + (room - width) / 2;
   const taken: boolean[][] = [];
 
   const isFree = (row: number, column: number, span: { columns: number; rows: number }) => {
@@ -110,12 +112,12 @@ export function gridLayout(
   return { rects, height };
 }
 
-/** The full-page card, in viewport coordinates. */
-export function pageFrame(viewport: Size): Rect {
+/** The full-page card, in viewport coordinates. It may run under the status bar, never under a side notch. */
+export function pageFrame(viewport: Size, insets: Insets = NO_INSETS): Rect {
   return {
-    x: PAGE_INSET,
+    x: PAGE_INSET + insets.left,
     y: PAGE_INSET,
-    width: Math.max(0, viewport.width - PAGE_INSET * 2),
+    width: Math.max(0, viewport.width - PAGE_INSET * 2 - insets.left - insets.right),
     height: Math.max(0, viewport.height - PAGE_INSET * 2),
   };
 }

@@ -180,7 +180,7 @@ const Members = memo(function Members({ members }: { members: LiveCardMember[] }
 
 function Member({ member }: { member: LiveCardMember }) {
   return (
-    <PreviewBoundary title={member.title}>
+    <PreviewBoundary title={member.title} module={member.module}>
       <LoadedPreview module={member.module} />
     </PreviewBoundary>
   );
@@ -200,12 +200,16 @@ function PreviewError({ title, message }: { title: string; message?: string }) {
   );
 }
 
-/** One broken preview should not take the rest of the deck down with it. */
-class PreviewBoundary extends Component<
-  { title: string; children: ReactNode },
-  { message: string | null }
-> {
-  override state: { message: string | null } = { message: null };
+type PreviewBoundaryProps = { title: string; module: Promise<PreviewModule>; children: ReactNode };
+type PreviewBoundaryState = { message: string | null; module: Promise<PreviewModule> };
+
+/** One broken preview should not take the rest of the deck down with it. A new module gets a fresh try. */
+class PreviewBoundary extends Component<PreviewBoundaryProps, PreviewBoundaryState> {
+  override state: PreviewBoundaryState = { message: null, module: this.props.module };
+
+  static getDerivedStateFromProps(props: PreviewBoundaryProps, state: PreviewBoundaryState) {
+    return props.module === state.module ? null : { message: null, module: props.module };
+  }
 
   static getDerivedStateFromError(error: unknown) {
     return { message: error instanceof Error ? error.message : "Render failed" };

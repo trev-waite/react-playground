@@ -52,9 +52,16 @@ describe("gridLayout", () => {
 
   test("keeps the grid clear of the notch and the home indicator", () => {
     const bare = gridLayout(["small", "small", "small"], phone);
-    const inset = gridLayout(["small", "small", "small"], phone, { top: 59, bottom: 34 });
+    const inset = gridLayout(["small", "small", "small"], phone, { top: 59, right: 0, bottom: 34, left: 0 });
     expect(inset.rects.map(rect => rect.y)).toEqual(bare.rects.map(rect => rect.y + 59));
     expect(inset.height).toBe(bare.height + 59 + 34);
+  });
+
+  test("keeps a landscape grid clear of the side notch", () => {
+    const landscape = { width: 844, height: 390 };
+    const { rects } = gridLayout(["small", "small", "small"], landscape, { top: 0, right: 0, bottom: 21, left: 59 });
+    expect(Math.min(...rects.map(rect => rect.x))).toBeGreaterThanOrEqual(59);
+    expect(Math.max(...rects.map(rect => rect.x + rect.width))).toBeCloseTo(844 - 32);
   });
 
   test("is empty without cards", () => {
@@ -69,6 +76,16 @@ describe("pageFrame", () => {
       y: PAGE_INSET,
       width: desktop.width - PAGE_INSET * 2,
       height: desktop.height - PAGE_INSET * 2,
+    });
+  });
+
+  test("moves in from a side notch but may run under the status bar", () => {
+    const landscape = { width: 844, height: 390 };
+    expect(pageFrame(landscape, { top: 47, right: 0, bottom: 21, left: 59 })).toEqual({
+      x: PAGE_INSET + 59,
+      y: PAGE_INSET,
+      width: 844 - PAGE_INSET * 2 - 59,
+      height: 390 - PAGE_INSET * 2,
     });
   });
 });

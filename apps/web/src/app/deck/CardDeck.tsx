@@ -12,6 +12,7 @@ import {
   centeredScrollTop,
   gridLayout,
   gridPose,
+  NO_INSETS,
   offsetRect,
   pageFrame,
   pagePose,
@@ -51,13 +52,36 @@ function whenIdle(callback: () => void): () => void {
 }
 
 type Viewport = Size & { insets: Insets };
+type GridLayout = ReturnType<typeof gridLayout>;
+/** A grid card, and how far through it (0 to 1) the scroll edge falls. */
+type Anchor = { index: number; through: number };
 
-const NO_INSETS: Insets = { top: 0, bottom: 0 };
+/** The highest card still in view at `top`. */
+function topCard(grid: GridLayout, top: number): Anchor | null {
+  let index = -1;
+  grid.rects.forEach((rect, i) => {
+    if (rect.y + rect.height > top && (index < 0 || rect.y < grid.rects[index]!.y)) index = i;
+  });
+  const rect = grid.rects[index];
+  if (!rect) return null;
+  return { index, through: Math.min(1, Math.max(0, (top - rect.y) / Math.max(rect.height, 1))) };
+}
+
+function sameViewport(a: Viewport, b: Viewport): boolean {
+  return (
+    a.width === b.width &&
+    a.height === b.height &&
+    a.insets.top === b.insets.top &&
+    a.insets.right === b.insets.right &&
+    a.insets.bottom === b.insets.bottom &&
+    a.insets.left === b.insets.left
+  );
+}
 
 /**
- * The page size the deck lays out for. Its own scroller gives it on desktop.
- * When the document scrolls, a probe gives the small viewport height (so pages
- * hold still while Safari's toolbars collapse) and the safe-area insets.
+ * The page size the deck lays out for, and the safe-area insets from a probe.
+ * The deck's own scroller gives the height, unless the document scrolls: then
+ * the probe's small viewport height holds pages still while Safari's toolbars collapse.
  */
 function useViewport(
   scrollerRef: RefObject<HTMLElement | null>,
@@ -71,31 +95,27 @@ function useViewport(
   }));
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller) return;
     const probe = probeRef.current;
+    if (!scroller || !probe) return;
     const measure = () => {
-      const style = probe ? getComputedStyle(probe) : null;
+      const style = getComputedStyle(probe);
       const next: Viewport = {
         width: scroller.clientWidth,
-        height: probe ? probe.clientHeight : scroller.clientHeight,
-        insets: style
-          ? { top: parseFloat(style.paddingTop) || 0, bottom: parseFloat(style.paddingBottom) || 0 }
-          : NO_INSETS,
+        height: scrollsDocument ? probe.clientHeight : scroller.clientHeight,
+        insets: {
+          top: parseFloat(style.paddingTop) || 0,
+          right: parseFloat(style.paddingRight) || 0,
+          bottom: parseFloat(style.paddingBottom) || 0,
+          left: parseFloat(style.paddingLeft) || 0,
+        },
       };
-      setViewport(current =>
-        current.width === next.width &&
-        current.height === next.height &&
-        current.insets.top === next.insets.top &&
-        current.insets.bottom === next.insets.bottom
-          ? current
-          : next,
-      );
+      setViewport(current => (sameViewport(current, next) ? current : next));
     };
     // A classic scrollbar makes the scroller narrower than the window; lay out for it before the first paint.
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(scroller);
-    if (probe) observer.observe(probe);
+    observer.observe(probe);
     return () => observer.disconnect();
   }, [scrollerRef, probeRef, scrollsDocument]);
   return viewport;
@@ -129,7 +149,12 @@ export function CardDeck({
   const [warm, setWarm] = useState<ReadonlySet<string>>(() => new Set());
   const motions = useRef(new Map<string, CardMotion>());
   const flight = useRef(0);
-  const scrollTop = useRef(0);
+  /** The last scroll the reader saw, and the grid card at the top of it, so a relayout keeps their place. */
+  const scrolled = useRef<{ host: HTMLElement | null; top: number; anchor: Anchor | null }>({
+    host: null,
+    top: 0,
+    anchor: null,
+  });
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const glide = useRef<Animation | null>(null);
 
@@ -137,7 +162,7 @@ export function CardDeck({
     () => gridLayout(cards.map(card => card.size), viewport, viewport.insets),
     [cards, viewport],
   );
-  const frame = pageFrame(viewport);
+  const frame = pageFrame(viewport, viewport.insets);
   const layout = view === "grid" ? "grid" : paged ? "pages" : "flight";
   const transition = reducedMotion ? INSTANT : SPRING.morph;
   const pageRect = (index: number) => offsetRect(frame, index * viewport.height);
@@ -158,12 +183,18 @@ export function CardDeck({
   function scrollingElement(): HTMLElement | null {
     return latest.current.scrollsDocument ? document.documentElement : scrollerRef.current;
   }
+
+  function remember(host: HTMLElement, grid?: GridLayout) {
+    const top = host.scrollTop;
+    scrolled.current = { host, top, anchor: grid ? topCard(grid, top) : null };
+  }
   const previous = useRef<{ view: DeckView; paged: boolean; grid: typeof grid } | null>(null);
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
-    const host = scrollingElement();
-    if (!scroller || !host) return;
+    if (!scroller) return;
+    const host = scrollsDocument ? document.documentElement : scroller;
+    const hostChanged = scrolled.current.host !== null && scrolled.current.host !== host;
     const { cards, grid, frame, viewport, activeIndex, transition } = latest.current;
     const prior = previous.current;
     previous.current = { view, paged, grid };
@@ -173,7 +204,7 @@ export function CardDeck({
 
     const showPages = () => {
       host.scrollTop = activeIndex * viewport.height;
-      scrollTop.current = host.scrollTop;
+      remember(host);
       each((motion, index) => jumpCard(motion, pagePose(offsetRect(frame, index * viewport.height))));
     };
 
@@ -195,10 +226,10 @@ export function CardDeck({
       if (view === "grid") {
         if (prior.paged) {
           // Hand over from the page column to the grid's scroll without a visible jump.
-          const visibleTop = motionFor(cards[activeIndex]!, activeIndex).top.get() - scrollTop.current;
+          const visibleTop = motionFor(cards[activeIndex]!, activeIndex).top.get() - scrolled.current.top;
           const top = centeredScrollTop(focus, viewport, grid.height);
           host.scrollTop = top;
-          scrollTop.current = top;
+          remember(host, grid);
           const camera = offsetRect(frame, top);
           each((motion, index) =>
             jumpCard(
@@ -233,18 +264,23 @@ export function CardDeck({
       return;
     }
 
-    if (prior && prior.grid === grid) return;
+    if (prior && prior.grid === grid && !hostChanged) return;
     // First paint, a resize, or a catalog change: settle where the current view rests.
     flight.current++;
     delete scroller.dataset.flying;
     if (view === "grid") {
       each((motion, index) => jumpCard(motion, gridPose(grid.rects[index]!)));
+      // A resize, or crossing the phone breakpoint (which swaps the scrolling element), keeps the top card in place.
+      const anchor = scrolled.current.anchor;
+      const anchored = anchor ? grid.rects[anchor.index] : undefined;
+      if (prior && anchor && anchored) host.scrollTop = anchored.y + anchor.through * anchored.height;
+      remember(host, grid);
     } else if (paged) {
       showPages();
     } else {
       setPaged(true);
     }
-  }, [view, paged, grid]);
+  }, [view, paged, grid, scrollsDocument]);
 
   function stopGlide() {
     glide.current?.stop();
@@ -312,7 +348,7 @@ export function CardDeck({
   function onScroll() {
     const host = scrollingElement();
     if (!host) return;
-    scrollTop.current = host.scrollTop;
+    remember(host, layout === "grid" ? latest.current.grid : undefined);
     if (layout !== "pages") return;
     const index = Math.round(host.scrollTop / viewport.height);
     setNearIndex(index);
@@ -336,7 +372,7 @@ export function CardDeck({
 
   return (
     <div className={styles.deck}>
-      {scrollsDocument ? <div ref={probeRef} className={styles.probe} aria-hidden="true" /> : null}
+      <div ref={probeRef} className={styles.probe} aria-hidden="true" />
       <div
         ref={scrollerRef}
         className={styles.scroller}
