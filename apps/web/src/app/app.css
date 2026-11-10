@@ -32,6 +32,9 @@
   /* CSS easing for small state changes. Travel uses the springs in motion.ts. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* SPRING.pill sampled for CSS; pair it with --ease-pill-duration. */
+  --ease-pill: linear(0, 0.145, 0.433, 0.714, 0.921, 1.038, 1.084, 1.084, 1.062, 1.036, 1.014, 1.001, 0.994, 0.992, 0.994, 0.996, 1);
+  --ease-pill-duration: 300ms;
 
   /* Shell tokens — cool neutral canvas, not purple / cream cliché */
   --shell-bg: #e8eaee;
