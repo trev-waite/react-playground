@@ -101,7 +101,6 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
   );
 }
 
-/** Fades and rises in as the card becomes a page. */
 function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; interactive: boolean; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const footerStyle = useMotionStyle(ref, [chrome], style => {
