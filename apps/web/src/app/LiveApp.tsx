@@ -18,5 +18,5 @@ export function LiveApp() {
     startTransition(() => setPathname(path));
   }
 
-  return <LivePage slug={liveSlugFromPath(pathname)} onNavigate={replacePath} />;
+  return <LivePage slug={liveSlugFromPath(pathname)} onNavigate={replacePath} documentScroll />;
 }

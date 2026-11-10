@@ -43,6 +43,34 @@
   overflow: clip;
 }
 
+/* Phones: the document scrolls and snaps, and the deck sits in its flow. */
+:global(:root[data-scroll="document"]) .deck,
+:global(:root[data-scroll="document"]) .scroller {
+  position: relative;
+  inset: auto;
+  overflow: visible;
+}
+
+:global(:root[data-scroll="document"]):has(.scroller[data-layout="pages"]:not([data-gliding])) {
+  scroll-snap-type: y mandatory;
+}
+
+:global(:root[data-scroll="document"]) .scroller[data-layout="flight"] {
+  touch-action: none;
+}
+
+/* The small viewport (toolbars shown) and the safe-area insets, for CardDeck to measure. */
+.probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 100svh;
+  padding: var(--safe-top) 0 var(--safe-bottom);
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .snap {
   scroll-snap-align: start;
   scroll-snap-stop: always;

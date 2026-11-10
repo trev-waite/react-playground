@@ -11,6 +11,12 @@
   inset: 0;
 }
 
+:global(:root[data-scroll="document"]) .page {
+  height: auto;
+  overflow: visible;
+  background: none;
+}
+
 .status {
   display: grid;
   place-items: center;

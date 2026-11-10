@@ -13,17 +13,19 @@ type LivePageProps = {
   active?: boolean;
   /** Replaces the current URL with `path`. */
   onNavigate: (path: string) => void;
+  /** Live owns the page (not the studio), so phones may scroll the document itself. */
+  documentScroll?: boolean;
 };
 
-export function LivePage({ slug, active = true, onNavigate }: LivePageProps) {
+export function LivePage({ slug, active = true, onNavigate, documentScroll = false }: LivePageProps) {
   return (
     <div className={styles.page}>
-      <LiveDeck slug={slug} active={active} onNavigate={onNavigate} />
+      <LiveDeck slug={slug} active={active} onNavigate={onNavigate} documentScroll={documentScroll} />
     </div>
   );
 }
 
-function LiveDeck({ slug, active, onNavigate }: Required<LivePageProps>) {
+function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePageProps>) {
   const cards = useLiveCards();
   const slot = useContext(DeckChromeSlot);
   const [view, setView] = useState<DeckView>("grid");
@@ -96,6 +98,7 @@ function LiveDeck({ slug, active, onNavigate }: Required<LivePageProps>) {
         view={view}
         activeIndex={activeIndex}
         listening={active}
+        documentScroll={documentScroll}
         onActiveChange={show}
         onOpen={index => {
           // Router navigations run as transitions; zoom in the same commit as the URL change.

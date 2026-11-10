@@ -9,6 +9,11 @@
   --space-7: 64px;
 
 
+  /* Room the device keeps clear: the notch, rounded corners, and home indicator. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
   /* Cards: a full page rests inset on the canvas; tiles tighten their corners.
      Keep in sync with deck/deckLayout.ts. */
   --page-inset: var(--space-2);
@@ -102,6 +107,17 @@ body,
 
 body {
   min-width: 320px;
+}
+
+/* Phones scroll the document itself (see deck/useDocumentScroll.ts), so Safari
+   draws its toolbars as glass over the cards. Keep the root background opaque,
+   and keep any fixed shell at the screen's top or bottom edge transparent: paint
+   its fill on an absolute child or pseudo-element instead. */
+:root[data-scroll="document"],
+:root[data-scroll="document"] body,
+:root[data-scroll="document"] #root {
+  height: auto;
+  overflow: visible;
 }
 
 button,

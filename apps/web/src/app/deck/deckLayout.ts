@@ -1,6 +1,10 @@
 import type { CardSize } from "../../lib/types";
 
 export type Size = { width: number; height: number };
+/** Screen room kept clear for the notch and the home indicator. */
+export type Insets = { top: number; bottom: number };
+
+const NO_INSETS: Insets = { top: 0, bottom: 0 };
 export type Rect = { x: number; y: number; width: number; height: number };
 
 /**
@@ -59,7 +63,9 @@ export function gridColumns(availableWidth: number): number {
 export function gridLayout(
   sizes: readonly CardSize[],
   viewport: Size,
+  insets: Insets = NO_INSETS,
 ): { rects: Rect[]; height: number } {
+  const top = GRID_TOP + insets.top;
   const gutter = gridGutter(viewport.width);
   const width = Math.min(GRID_MAX_WIDTH, Math.max(0, viewport.width - gutter * 2));
   const columns = gridColumns(width);
@@ -92,7 +98,7 @@ export function gridLayout(
         rows = Math.max(rows, row + span.rows);
         return {
           x: left + column * (cell + GRID_GAP),
-          y: GRID_TOP + row * (cell + GRID_GAP),
+          y: top + row * (cell + GRID_GAP),
           width: span.columns * cell + (span.columns - 1) * GRID_GAP,
           height: span.rows * cell + (span.rows - 1) * GRID_GAP,
         };
@@ -100,7 +106,7 @@ export function gridLayout(
     }
   });
 
-  const height = rows === 0 ? 0 : GRID_TOP + rows * cell + (rows - 1) * GRID_GAP + GRID_BOTTOM;
+  const height = rows === 0 ? 0 : top + rows * cell + (rows - 1) * GRID_GAP + GRID_BOTTOM + insets.bottom;
   return { rects, height };
 }
 

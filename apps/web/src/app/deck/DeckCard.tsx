@@ -22,8 +22,9 @@ import styles from "./DeckCard.module.css";
 const TILE_PADDING = 16;
 const PAGE_PADDING = { top: 80, inline: 24, bottom: 80, footer: 112 };
 
-function padding(page: number, chrome: number) {
-  return px(TILE_PADDING + (page - TILE_PADDING) * chrome);
+function padding(page: number, chrome: number, safeArea?: "--safe-top" | "--safe-bottom") {
+  const value = px(TILE_PADDING + (page - TILE_PADDING) * chrome);
+  return safeArea ? `calc(${value} + ${chrome} * var(${safeArea}))` : value;
 }
 
 type DeckCardProps = {
@@ -56,8 +57,8 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
 
   const previewStyle = useMotionStyle(previewRef, [chrome], style => {
     const inline = padding(PAGE_PADDING.inline, chrome.get());
-    style("paddingTop", padding(PAGE_PADDING.top, chrome.get()));
-    style("paddingBottom", padding(hasFooter ? PAGE_PADDING.footer : PAGE_PADDING.bottom, chrome.get()));
+    style("paddingTop", padding(PAGE_PADDING.top, chrome.get(), "--safe-top"));
+    style("paddingBottom", padding(hasFooter ? PAGE_PADDING.footer : PAGE_PADDING.bottom, chrome.get(), "--safe-bottom"));
     style("paddingLeft", inline);
     style("paddingRight", inline);
   });

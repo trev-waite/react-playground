@@ -50,6 +50,13 @@ describe("gridLayout", () => {
     expect(rects[1]?.y).toBeGreaterThan(rects[0]!.y + rects[0]!.height);
   });
 
+  test("keeps the grid clear of the notch and the home indicator", () => {
+    const bare = gridLayout(["small", "small", "small"], phone);
+    const inset = gridLayout(["small", "small", "small"], phone, { top: 59, bottom: 34 });
+    expect(inset.rects.map(rect => rect.y)).toEqual(bare.rects.map(rect => rect.y + 59));
+    expect(inset.height).toBe(bare.height + 59 + 34);
+  });
+
   test("is empty without cards", () => {
     expect(gridLayout([], desktop)).toEqual({ rects: [], height: 0 });
   });
