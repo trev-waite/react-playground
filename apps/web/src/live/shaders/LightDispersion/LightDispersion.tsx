@@ -3,8 +3,10 @@ import { clock, effect, sampler, type Frame } from "vgpu";
 import {
   createBlurChain,
   createTextMask,
+  maskFits,
   pausableLoop,
   useGpu,
+  viewportMaskSize,
   WGSL_HASH,
   WGSL_NOISE,
   WGSL_SPECTRUM,
@@ -203,31 +205,27 @@ export function LightDispersion() {
         },
       });
 
-      // Resizes are coalesced and flushed at the top of the next frame: rasterising the mask and
-      // re-blurring every resize event is wasteful, and frame() cannot run inside onResize.
-      let pendingSize: [number, number] | null =
-        canvasSurface.size[0] > 1 && canvasSurface.size[1] > 1
-          ? [canvasSurface.size[0], canvasSurface.size[1]]
-          : null;
+      // The mask is sized for the screen, not the canvas, so a zoom just resamples it. Resizes are
+      // coalesced and flushed at the top of a frame, since frame() cannot run inside onResize, and a
+      // rebuild (~30ms) waits until the size settles in case the viewport is still being dragged.
+      let pending: { aspect: number; dpr: number } | null = null;
       let resizedAt = 0;
       let masked = false;
-      const unsubscribeResize = canvasSurface.onResize(({ width, height }) => {
-        pendingSize = [Math.max(1, width), Math.max(1, height)];
+      const unsubscribeResize = canvasSurface.onResize(({ width, height, dpr }) => {
+        pending = { aspect: Math.max(1, width) / Math.max(1, height), dpr };
         resizedAt = performance.now();
       });
       const flushResize = (frame: Frame) => {
-        if (!pendingSize) return;
-        // A rebuild re-rasterises the text and reallocates the glow chain (~30ms). While the
-        // canvas is still being resized (a layout animation), keep stretching the last mask
-        // and rebuild once the size settles.
+        if (!pending) return;
         if (masked && performance.now() - resizedAt < RESIZE_SETTLE_MS) return;
-        const [width, height] = pendingSize;
-        pendingSize = null;
+        const size = viewportMaskSize(pending.aspect, [window.innerWidth, window.innerHeight], pending.dpr);
+        pending = null;
+        if (masked && maskFits(textMask.size, size)) return;
         masked = true;
-        const mask = textMask.update(width, height);
-        glow.resize([width, height]);
+        const mask = textMask.update(size[0], size[1]);
+        glow.resize(size);
         glow.render(frame, mask);
-        dispersionEffect.set({ textMask: mask, params: { resolution: [width, height] } });
+        dispersionEffect.set({ textMask: mask });
       };
 
       const updatePointer = (event: PointerEvent) => {
@@ -292,6 +290,7 @@ export function LightDispersion() {
 
         dispersionEffect.set({
           params: {
+            resolution: canvasSurface.size,
             pointer: [pointerCurrent.x, pointerCurrent.y],
             velocity: [pointerVelocity.x, pointerVelocity.y],
             time: still ? 0 : time.time,
@@ -336,8 +335,9 @@ export function LightDispersion() {
           position: "relative",
           display: "grid",
           placeItems: "center",
-          padding: "1.15rem 1.85rem 1.05rem",
-          borderRadius: "1rem",
+          fontSize: "min(30cqh, 16.1cqw)",
+          padding: "0.11em 0.17em 0.1em",
+          borderRadius: "0.09em",
           overflow: "hidden",
           background: "#000",
         }}
@@ -347,7 +347,6 @@ export function LightDispersion() {
           style={{
             color: "#f4f4f5",
             fontFamily: FONT_FAMILY,
-            fontSize: "min(30cqh, 16.1cqw)",
             fontWeight: 800,
             lineHeight: 0.95,
             whiteSpace: "nowrap",
