@@ -1,0 +1,15 @@
+.logo {
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: -0.04em;
+}
+
+.icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

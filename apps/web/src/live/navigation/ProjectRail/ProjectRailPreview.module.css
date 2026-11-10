@@ -1,0 +1,38 @@
+.stage {
+  display: grid;
+  grid-template-columns: 11rem 18rem;
+  align-items: start;
+  gap: 2rem;
+}
+
+.shot {
+  display: grid;
+  place-items: end start;
+  aspect-ratio: 15 / 8;
+  padding: 1rem;
+  border-radius: 12px;
+  color: #fff;
+  font: 600 1rem/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  transition: background 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.shot span {
+  animation: shot-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes shot-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shot {
+    transition: none;
+  }
+
+  .shot span {
+    animation: none;
+  }
+}

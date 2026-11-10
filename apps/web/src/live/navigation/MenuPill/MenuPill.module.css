@@ -1,0 +1,241 @@
+.root {
+  --pill-height: 48px;
+  --fade-duration: 200ms;
+  --press-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --feedback-duration: 140ms;
+
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  height: var(--pill-height);
+  pointer-events: none;
+  font: 550 0.75rem/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: 0.025em;
+}
+
+.pill {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--pill-closed-width);
+  height: var(--pill-height);
+  box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 40px;
+  background: #000;
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 0.18),
+    0 1px 3px rgb(0 0 0 / 0.1);
+  transform: translateX(-50%);
+  pointer-events: auto;
+  transition:
+    width var(--close-duration) var(--close-ease),
+    border-radius var(--close-duration) var(--close-ease),
+    box-shadow var(--fade-duration) var(--close-ease);
+}
+
+.root[data-open] .pill {
+  width: 100%;
+  border-radius: 24px;
+  box-shadow:
+    0 8px 20px rgb(0 0 0 / 0.22),
+    0 2px 5px rgb(0 0 0 / 0.12);
+  transition:
+    width var(--open-duration) var(--open-ease),
+    border-radius var(--open-duration) var(--open-ease),
+    box-shadow var(--fade-duration) var(--close-ease);
+}
+
+.links {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 100%;
+  padding: 0 2.65rem 0 1.15rem;
+  clip-path: inset(0 calc(50% - var(--pill-closed-width) / 2) round 40px);
+  pointer-events: none;
+  transition: clip-path var(--close-duration) var(--close-ease);
+}
+
+.root[data-open] .links {
+  clip-path: inset(0 round 24px);
+  pointer-events: auto;
+  transition: clip-path var(--open-duration) var(--open-ease);
+}
+
+.links > * {
+  --reveal-transition:
+    opacity var(--fade-out-duration) var(--close-ease),
+    translate var(--fade-out-duration) var(--close-ease);
+
+  opacity: 0;
+  translate: var(--reveal-shift, 0px) 0;
+  transition: var(--reveal-transition);
+}
+
+.root[data-open] .links > * {
+  --reveal-transition:
+    opacity var(--fade-in-duration) ease-out var(--reveal-delay, 0ms),
+    translate var(--open-duration) var(--close-ease) var(--reveal-delay, 0ms);
+
+  opacity: 1;
+  translate: 0 0;
+}
+
+.item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 40px;
+  padding: 0 0.45rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.66);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    var(--reveal-transition),
+    color var(--feedback-duration) ease,
+    transform var(--feedback-duration) var(--press-ease);
+}
+
+.item:focus-visible,
+.item[data-active] {
+  color: #fff;
+}
+
+.item:focus-visible,
+.trigger:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+.item:active {
+  transform: scale(0.97);
+}
+
+.item[data-active]::after {
+  content: "";
+  position: absolute;
+  top: calc(50% + 0.78em);
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 14px;
+  margin: 0 0.2rem;
+  background: rgb(255 255 255 / 0.16);
+}
+
+.trigger {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: var(--pill-closed-width);
+  height: var(--pill-height);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  transition:
+    left var(--close-duration) var(--close-ease),
+    width var(--close-duration) var(--close-ease),
+    height var(--close-duration) var(--close-ease),
+    transform var(--feedback-duration) var(--press-ease);
+}
+
+.trigger:active {
+  transform: translate(-50%, -50%) scale(0.92);
+}
+
+.root[data-open] .trigger {
+  left: calc(100% - 22px);
+  width: 40px;
+  height: 40px;
+  transition:
+    left var(--open-duration) var(--open-ease),
+    width var(--open-duration) var(--open-ease),
+    height var(--open-duration) var(--open-ease),
+    transform var(--feedback-duration) var(--press-ease);
+}
+
+.trigger span {
+  width: 14px;
+  height: 1.5px;
+  border-radius: 2px;
+  background: #fff;
+  transition:
+    width var(--fade-duration) var(--close-ease),
+    height var(--fade-duration) var(--close-ease),
+    transform var(--close-duration) var(--close-ease);
+}
+
+.root[data-open] .trigger span {
+  width: 1.5px;
+  height: 13px;
+  transform: scale(0.97);
+  transition:
+    width var(--open-duration) var(--open-ease),
+    height var(--open-duration) var(--open-ease),
+    transform var(--open-duration) var(--close-ease);
+}
+
+.swap {
+  display: grid;
+  place-items: center;
+}
+
+.swapState {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  filter: blur(2px);
+  transform: scale(0.25);
+  transition:
+    opacity 250ms ease-in-out,
+    filter 250ms ease-in-out,
+    transform 250ms ease-in-out;
+}
+
+.swapState[data-shown] {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .item:hover {
+    color: #fff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .links,
+  .links > *,
+  .item,
+  .trigger,
+  .trigger span,
+  .swapState {
+    transition: none;
+  }
+}
