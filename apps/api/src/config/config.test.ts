@@ -20,6 +20,7 @@ describe("resolveApiConfig", () => {
   test("defaults experimental and live roots under the web app", () => {
     const config = resolveApiConfig({}, "/tmp/api/src");
     expect(config.port).toBe(3001);
+    expect(config.hostname).toBe("127.0.0.1");
     expect(config.corsOrigin).toBe("http://localhost:3000");
     expect(config.webRoot).toBe(path.resolve("/tmp/web"));
     expect(config.experimentalRoot).toBe(

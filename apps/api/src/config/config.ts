@@ -2,6 +2,7 @@ import path from "node:path";
 
 export type ApiConfig = {
   port: number;
+  hostname: string;
   corsOrigin: string;
   webRoot: string;
   experimentalRoot: string;
@@ -22,6 +23,7 @@ export function resolveApiConfig(
   const webRoot = path.resolve(env.WEB_ROOT ?? path.join(srcDir, "../../web"));
   return {
     port: parsePort(env.PORT, 3001),
+    hostname: env.HOST || "127.0.0.1",
     corsOrigin: env.CORS_ORIGIN ?? "http://localhost:3000",
     webRoot,
     experimentalRoot: path.resolve(
@@ -34,6 +36,7 @@ export function resolveApiConfig(
 const config = resolveApiConfig();
 
 export const PORT = config.port;
+export const HOSTNAME = config.hostname;
 export const CORS_ORIGIN = config.corsOrigin;
 export const EXPERIMENTAL_ROOT = config.experimentalRoot;
 export const LIVE_ROOT = config.liveRoot;

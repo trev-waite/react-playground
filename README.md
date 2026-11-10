@@ -12,7 +12,7 @@ bun run dev
 ```
 
 - Studio (Live + Experimental): http://localhost:3000
-- Local API: http://localhost:3001
+- Local API: http://127.0.0.1:3001 (loopback only)
 
 `bun run build && bun run start` previews the deployable Live app.
 

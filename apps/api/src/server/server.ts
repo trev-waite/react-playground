@@ -7,17 +7,19 @@ import {
 import { IdeaError } from "../features/ideas/ideaError";
 import { createIdeaService } from "../features/ideas/ideaService";
 import { publishIdeaToDisk } from "../features/promote/promoteDisk";
-import { createHttp } from "./http";
+import { createHttp, isLoopbackRequest, isTrustedWrite } from "./http";
 
 export type PlaygroundApiServerOptions = {
   experimentalRoot: string;
   liveRoot: string;
   corsOrigin: string;
   port?: number;
+  /** Interface to listen on. Loopback by default: the API reads and writes files with no authentication. */
+  hostname?: string;
 };
 
 export function createPlaygroundApiHandler(
-  options: Omit<PlaygroundApiServerOptions, "port">,
+  options: Omit<PlaygroundApiServerOptions, "port" | "hostname">,
 ) {
   const { experimentalRoot, liveRoot, corsOrigin } = options;
   const { json, handleOptions, readJsonBody } = createHttp(corsOrigin);
@@ -100,6 +102,9 @@ export function createPlaygroundApiHandler(
   });
 
   return async function handleRequest(req: Request): Promise<Response> {
+    if (!isLoopbackRequest(req.url) || !isTrustedWrite(req, corsOrigin)) {
+      return json(req, { ok: false, code: "forbidden", error: "Forbidden" }, 403);
+    }
     if (req.method === "OPTIONS") return handleOptions(req);
     const pathname = new URL(req.url).pathname;
     if (pathname === "/api/ideas") {
@@ -117,9 +122,10 @@ export function createPlaygroundApiHandler(
 }
 
 export function startPlaygroundApi(options: PlaygroundApiServerOptions) {
-  const { port = 0, ...handlerOptions } = options;
+  const { port = 0, hostname = "127.0.0.1", ...handlerOptions } = options;
   return Bun.serve({
     port,
+    hostname,
     fetch: createPlaygroundApiHandler(handlerOptions),
   });
 }

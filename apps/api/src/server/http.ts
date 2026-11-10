@@ -1,5 +1,18 @@
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
+/** True when a request was addressed to this machine by a loopback name, not a hostname that could rebind to it. */
+export function isLoopbackRequest(url: string): boolean {
+  const { hostname } = new URL(url);
+  return LOOPBACK_HOSTS.has(hostname) || hostname === "[::1]";
+}
+
+/** Browsers send `Origin` with every write; a write from another site is refused before it touches the disk. */
+export function isTrustedWrite(req: Request, corsOrigin: string): boolean {
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return true;
+  const origin = req.headers.get("Origin");
+  return origin === null || isAllowedOrigin(origin, corsOrigin);
+}
+
 export function isAllowedOrigin(origin: string, allowed: string): boolean {
   if (allowed === "*") return true;
   if (origin === allowed) return true;
@@ -68,6 +81,16 @@ export function createHttp(corsOrigin: string): HttpHelpers {
   ): Promise<
     { ok: true; value: Record<string, unknown> } | { ok: false; response: Response }
   > {
+    if (!req.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) {
+      return {
+        ok: false,
+        response: withCors(
+          req,
+          Response.json({ ok: false, error: "Expected a JSON body" }, { status: 415 }),
+        ),
+      };
+    }
+
     let body: unknown;
     try {
       body = await req.json();

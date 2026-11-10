@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       strictPort: true,
       proxy: {
-        "/api": { target: env.API_PROXY_TARGET || "http://localhost:3001" },
+        "/api": { target: env.API_PROXY_TARGET || "http://127.0.0.1:3001" },
       },
     },
     preview: {
