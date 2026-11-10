@@ -48,8 +48,17 @@
   scroll-snap-stop: always;
 }
 
-/* Only while the camera moves: promote the cards it scales so frames are
-   composited, not repainted. The open card reflows instead, so it stays put. */
-.scroller[data-flying] .content > :not([data-raised]) {
+/* Only while the camera moves: promote every card so frames are composited,
+   not repainted. The open card still reflows each frame, so it keeps just its
+   contact shadow; a soft shadow resized every frame halves Safari's frame rate. */
+.scroller[data-flying] .content > * {
   will-change: transform;
+}
+
+.scroller[data-flying] .content > [data-raised] {
+  box-shadow: var(--card-shadow-contact);
+}
+
+.scroller:not([data-flying]) .content > [data-raised] {
+  transition: box-shadow 200ms var(--ease-out);
 }
