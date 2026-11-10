@@ -9,9 +9,9 @@ const FOLLOW_STIFFNESS = 700;
 /** Pulling past the first or last page meets this much resistance. */
 export const EDGE_PULL = 0.3;
 
-/** Scroll travel that commits to the next page: about an eighth of a page. */
+/** Scroll travel that commits to the next page: a twelfth of a page, so one mouse-wheel notch still turns it. */
 export function commitDistance(pageHeight: number): number {
-  return Math.min(140, Math.max(64, pageHeight * 0.12));
+  return Math.min(96, Math.max(48, pageHeight * 0.08));
 }
 
 /**

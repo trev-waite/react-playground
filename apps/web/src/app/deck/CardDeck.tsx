@@ -414,7 +414,8 @@ export function CardDeck({
               motion={motionFor(card, index)}
               mounted={layout !== "pages" || warm.has(card.slug) || Math.abs(index - nearIndex) <= 1}
               interactive={layout === "pages"}
-              raised={index === activeIndex}
+              // Pages never overlap. Moving the raise as the reader pages made Safari repaint two whole cards.
+              raised={layout !== "pages" && index === activeIndex}
               onOpen={layout === "grid" ? () => onOpen(index) : undefined}
             />
           ))}

@@ -61,6 +61,10 @@ describe("Safari frame rate", () => {
     );
   });
 
+  test("paging never moves the raise between page cards, which made Safari repaint both", async () => {
+    expect(await read("src/app/deck/CardDeck.tsx")).toMatch(/raised=\{layout !== "pages" && index === activeIndex\}/);
+  });
+
   test("drawings redrawn every frame have their own layer", async () => {
     expect(await rule("src/live/shells/ConfigurableShell/ExamplePreview.module.css", ".svg")).toContain(
       "will-change: transform",

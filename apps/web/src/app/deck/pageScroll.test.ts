@@ -13,10 +13,11 @@ function glide(pulled: number, speed: number) {
 }
 
 describe("page scroll", () => {
-  test("commits after about an eighth of a page, within limits", () => {
-    expect(commitDistance(800)).toBeCloseTo(96);
-    expect(commitDistance(300)).toBe(64);
-    expect(commitDistance(2000)).toBe(140);
+  test("commits after a twelfth of a page, so one mouse-wheel notch turns it", () => {
+    expect(commitDistance(800)).toBeCloseTo(64);
+    expect(commitDistance(1200)).toBeLessThanOrEqual(100);
+    expect(commitDistance(300)).toBe(48);
+    expect(commitDistance(2000)).toBe(96);
   });
 
   test("a glide starts at the page's own speed, never backwards, and capped", () => {

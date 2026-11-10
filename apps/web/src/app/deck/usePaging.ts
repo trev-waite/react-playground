@@ -1,9 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
-
-/** A gesture (including trackpad momentum) has ended after this much quiet. */
-const GESTURE_GAP_MS = 160;
-/** After a step, a clearly stronger swipe starts a new gesture even mid-momentum. */
-const RESWIPE_AFTER_MS = 420;
+import { GESTURE_GAP_MS, wheelGesture } from "./wheelGesture";
 
 const PAGE_KEYS: Record<string, -1 | 1> = {
   ArrowDown: 1,
@@ -56,11 +52,7 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !enabled) return;
-    let travel = 0;
-    let locked = false;
-    let lastEvent = 0;
-    let lastStep = 0;
-    let lastDelta = 0;
+    const gesture = wheelGesture();
     let releaseTimer: ReturnType<typeof setTimeout> | undefined;
 
     function onWheel(event: WheelEvent) {
@@ -71,28 +63,16 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
       event.preventDefault();
 
       const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaY * 16 : event.deltaY;
-      const now = event.timeStamp;
-      const reswipe =
-        now - lastStep > RESWIPE_AFTER_MS && Math.abs(delta) > Math.abs(lastDelta) * 1.5 && Math.abs(delta) > 8;
-      if (now - lastEvent > GESTURE_GAP_MS || reswipe) {
-        locked = false;
-        travel = 0;
-      }
-      lastEvent = now;
-      lastDelta = delta;
-      if (locked) return;
-
-      travel += delta;
+      const intent = gesture.read(delta, event.timeStamp, inputRef.current.commitAt);
+      if (!intent) return;
       clearTimeout(releaseTimer);
-      if (Math.abs(travel) >= inputRef.current.commitAt) {
-        locked = true;
-        lastStep = now;
-        inputRef.current.step(travel > 0 ? 1 : -1);
+      if (intent.type === "step") {
+        inputRef.current.step(intent.direction);
         return;
       }
-      inputRef.current.pull(travel);
+      inputRef.current.pull(intent.travel);
       releaseTimer = setTimeout(() => {
-        travel = 0;
+        gesture.end();
         inputRef.current.release();
       }, GESTURE_GAP_MS);
     }
