@@ -906,7 +906,15 @@ export function Example({
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="A black blob pet that morphs into expressions, shapes, and words"
-      style={{ display: "block", width: "100%", height: "100%", cursor: "pointer", touchAction: "manipulation" }}
+      style={{
+        display: "block",
+        width: "100%",
+        height: "100%",
+        cursor: "pointer",
+        touchAction: "manipulation",
+        // Its own layer: the body is redrawn every frame, and Safari otherwise repaints the scrolling page around it.
+        willChange: "transform",
+      }}
       onPointerMove={event => {
         lookRef.current = toViewBox(svgRef.current, event.clientX, event.clientY);
       }}
