@@ -53,13 +53,15 @@ function useViewportSize(ref: RefObject<HTMLElement | null>): Size {
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => {
+    const measure = () =>
       setSize(current =>
         current.width === element.clientWidth && current.height === element.clientHeight
           ? current
           : { width: element.clientWidth, height: element.clientHeight },
       );
-    });
+    // A classic scrollbar makes the scroller narrower than the window; lay out for it before the first paint.
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
   }, [ref]);
@@ -259,7 +261,6 @@ export function CardDeck({ cards, view, activeIndex, listening, onActiveChange, 
 
   return (
     <div className={styles.deck}>
-      <div className={styles.dots} aria-hidden="true" />
       <div
         ref={scrollerRef}
         className={styles.scroller}

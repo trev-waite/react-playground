@@ -2,15 +2,6 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: var(--shell-canvas);
-}
-
-.dots {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: radial-gradient(var(--shell-dot) 1px, transparent 1px);
-  background-size: var(--shell-dot-size) var(--shell-dot-size);
 }
 
 .scroller {
