@@ -10,38 +10,39 @@ export const meta: CardMeta = {
   reset: "reset",
 };
 
+/** In OKLCH so the card's color change blends through Oklab, not a muddy sRGB midpoint. */
 const PROJECTS: (ProjectRailItem & { tint: string })[] = [
   {
     id: "agent-shell",
     title: "Agent Shell",
-    tint: "#ff9f1c",
+    tint: "oklch(0.783 0.168 66.2)",
     summary: "A terminal that hands long tasks to coding agents and keeps their threads tidy.",
     links: [{ label: "Source", href: "https://github.com" }],
   },
   {
     id: "tide-charts",
     title: "Tide Charts",
-    tint: "#2448d8",
+    tint: "oklch(0.48 0.222 266.3)",
     summary: "Hourly tides for the beaches you saved, drawn as one calm curve.",
     links: [{ label: "Visit", href: "https://example.com" }],
   },
   {
     id: "paper-birds",
     title: "Paper Birds",
-    tint: "#e94f37",
+    tint: "oklch(0.637 0.194 31.6)",
     summary: "Origami cranes folded live in WebGL, one crease at a time.",
   },
   {
     id: "field-notes",
     title: "Field Notes",
-    tint: "#3aa76d",
+    tint: "oklch(0.651 0.132 156.2)",
     summary: "A pocket notebook that syncs plain-text notes across devices.",
     links: [{ label: "Source", href: "https://github.com" }],
   },
   {
     id: "night-market",
     title: "Night Market",
-    tint: "#7b5ea7",
+    tint: "oklch(0.542 0.114 301)",
     summary: "A map of late-night food stalls, ranked by the queue.",
   },
 ];

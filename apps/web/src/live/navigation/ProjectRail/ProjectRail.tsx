@@ -15,7 +15,8 @@ type ProjectRailProps = {
   onChange?: (id: string) => void;
 };
 
-const HOVER_SELECT_MS = 70;
+/** Resting on a dash this long picks it, so sweeping the pointer across the rail does not flip through every project. */
+const HOVER_SELECT_MS = 120;
 const DETAILS_REVEAL_MS = 70;
 
 /** How far a dash swells: the active one fully, and up to three on either side of the hovered one. */
@@ -118,19 +119,17 @@ export function ProjectRail({ items, label = "Select a project", defaultId, onCh
                     <span data-icon="close">−</span>
                   </span>
                 </button>
-                <h3 className={styles.title} aria-label={item.title}>
-                  {selected
-                    ? Array.from(item.title).map((character, i) => (
-                        <span
-                          key={i}
-                          className={styles.character}
-                          style={{ "--character-index": i } as CSSProperties}
-                          aria-hidden="true"
-                        >
-                          {character}
-                        </span>
-                      ))
-                    : null}
+                <h3 className={styles.title} aria-label={item.title} data-reveal={selected || undefined}>
+                  {Array.from(item.title).map((character, i) => (
+                    <span
+                      key={i}
+                      className={styles.character}
+                      style={{ "--character-index": i } as CSSProperties}
+                      aria-hidden="true"
+                    >
+                      {character}
+                    </span>
+                  ))}
                 </h3>
               </div>
               <div id={detailsId} className={styles.details} inert={!open}>

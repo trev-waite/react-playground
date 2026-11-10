@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import { cssRules, declarations, ruleFor } from "@/lint/source";
+import { cssRules, declarations, ruleFor, transitionedProperties } from "@/lint/source";
 import { lineInfluence } from "./ProjectRail";
 
 describe("ProjectRail line influence", () => {
@@ -18,18 +18,31 @@ describe("ProjectRail title rendering", () => {
     const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
     const keyframes = css.slice(css.indexOf("@keyframes character-in"));
     expect(cssRules(keyframes).some(rule => declarations(rule.body, "filter").length > 0)).toBe(false);
-    expect(declarations(ruleFor(css, ".character").body, "animation")[0]).toMatch(/\bbackwards$/);
+    expect(declarations(ruleFor(css, ".title[data-reveal] .character").body, "animation")[0]).toMatch(/\bbackwards$/);
     expect(declarations(ruleFor(css, ".item[data-selected] .header").body, "filter")).toEqual([]);
   });
 });
 
 describe("ProjectRail pill corners", () => {
-  test("the pill keeps one corner radius, half its height, as it opens into a card", async () => {
+  test("the dash, the pill, and the open card share one radius, which never animates", async () => {
     const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
     expect(declarations(ruleFor(css, ".rail").body, "--open-radius")).toEqual(["calc(var(--toggle-size) / 2)"]);
-    expect(declarations(ruleFor(css, ".item[data-selected] .morph").body, "border-radius")).toEqual([
-      "var(--open-radius)",
-    ]);
-    expect(declarations(ruleFor(css, ".item[data-open] .morph").body, "border-radius")).toEqual([]);
+    expect(declarations(ruleFor(css, ".morph").body, "border-radius")).toEqual(["var(--open-radius)"]);
+    for (const selector of [".item[data-selected] .morph", ".item[data-open] .morph"]) {
+      expect(declarations(ruleFor(css, selector).body, "border-radius")).toEqual([]);
+    }
+    expect(cssRules(css).some(rule => transitionedProperties(rule).includes("border-radius"))).toBe(false);
+  });
+});
+
+describe("ProjectRail switching", () => {
+  test("the pill is a full touch target", async () => {
+    const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
+    expect(declarations(ruleFor(css, ".rail").body, "--toggle-size")).toEqual(["44px"]);
+  });
+
+  test("a long title finishes revealing in a fixed time", async () => {
+    const css = await Bun.file(path.join(import.meta.dir, "ProjectRail.module.css")).text();
+    expect(declarations(ruleFor(css, ".title[data-reveal] .character").body, "animation-delay")[0]).toMatch(/min\(/);
   });
 });
