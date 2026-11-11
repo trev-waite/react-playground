@@ -16,7 +16,7 @@ Live deploys to [studio.trevorwaite.com](https://studio.trevorwaite.com) as a Cl
 | `apps/web/vite/assetHeadersPlugin.ts` | Adds an immutable cache rule for each hashed file the build emits, by name. Never `/assets/*`: a missing file gets the 404 page, and a blanket rule would let browsers keep that 404 for a year. |
 | `apps/web/public/404.html` | The page, with a 404 status, for any path that isn't a component. |
 | `apps/web/vite/liveRoutesPlugin.ts` | Writes the app page at `<slug>.html` for every component and family, so those are the only paths that serve the app. |
-| `apps/web/scripts/checkDeploy.ts` | The deploy allowlist (`bun run --cwd apps/web check:deploy`). It refuses anything in `public/` or `dist/` it doesn't expect: hidden files such as `.env`, source maps, unhashed scripts, pages that aren't the app, files over 3 MB, and bundles that contain local paths or the studio's API. CI runs it after the build and again before deploying. |
+| `apps/web/scripts/checkDeploy.ts` | The deploy allowlist (`bun run --cwd apps/web check:deploy`). It refuses anything in `public/` or `dist/` it doesn't expect: hidden files such as `.env`, source maps, unhashed scripts, pages that aren't the app, a missing or extra component route page (it compares them with the previews and families in `src/live`), files over 3 MB, and bundles that contain local paths or the studio's API. CI runs it after the build and again before deploying. |
 | `apps/web/scripts/smoke.ts` | Post-deploy checks against a live origin. |
 
 `bun run build && bun run start` serves the build through `wrangler dev`, with the same headers and 404 handling as production. A new file in `public/` must be added to `PUBLIC_FILES` in `checkDeploy.ts`, or the deploy stops.
