@@ -50,6 +50,8 @@ Set these as secrets of the `prod` environment (Settings → Environments), rest
 | `CLOUDFLARE_ACCOUNT_ID` | The account that owns the `trevorwaite.com` zone. |
 | `CLOUDFLARE_DEPLOY_TOKEN` | Account: Workers Admin, Account Settings Read. Zone `trevorwaite.com`: Workers Routes Edit. |
 
+The deploy job passes both only to the steps that call Cloudflare, plus the first step's check that they're set.
+
 Workers Routes is zone-wide, so this token can also change the knight site's routes. Give it an expiry and renew it before then.
 
 ## Repository settings
