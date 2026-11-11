@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useEffectEvent,
   useId,
   useMemo,
   useRef,
@@ -100,13 +101,12 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [activated, setActivated] = useState(active);
+  if (active && !activated) setActivated(true);
+  const [studioDraft, setStudioDraft] = useState<IdeaDraft | null>(null);
   const initialPathRef = useRef(location.pathname);
   const draftRef = useRef<IdeaDraft | null>(null);
   const editSequenceRef = useRef(new EditSequence());
   const savingRef = useRef(false);
-  const showIdeaRef = useRef<(idea: IdeaProject) => void>(() => {});
-  const saveIdeaRef = useRef<() => Promise<IdeaProject | null>>(async () => null);
-  const switchToRef = useRef<(next: string) => Promise<void>>(async () => {});
   const activeIdRef = useRef<string | null>(null);
   const makeLiveHostRef = useRef<HTMLDivElement>(null);
   const makeLivePanelId = useId();
@@ -149,6 +149,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
     setActiveIdea(idea);
     activeIdRef.current = idea.id;
     draftRef.current = idea.draft;
+    setStudioDraft(idea.draft);
     editSequenceRef.current.reset();
     setHasDraft(true);
     setDirty(false);
@@ -160,7 +161,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
     setStudioKey(key => key + 1);
     if (open) navigate(`/experimental/${idea.id}`, { replace: true });
   }
-  showIdeaRef.current = showIdea;
+  const openIdea = useEffectEvent((idea: IdeaProject) => showIdea(idea));
 
   function clearStudio(open = true) {
     setIdeaName(DEFAULT_IDEA_NAME);
@@ -168,6 +169,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
     setActiveIdea(null);
     activeIdRef.current = null;
     draftRef.current = null;
+    setStudioDraft(null);
     editSequenceRef.current.reset();
     setDirty(false);
     setHasDraft(false);
@@ -181,7 +183,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
     activeIdea,
     dirty,
     busy: saving || publishing || deletingIdeaId != null,
-    editVersion: editSequenceRef.current.capture(),
+    editVersion: () => editSequenceRef.current.capture(),
     onList: setIdeas,
     onReload: idea => showIdea(idea, false),
     onDeleted: () => clearStudio(active),
@@ -189,35 +191,32 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
   });
 
   useEffect(() => {
-    if (active) setActivated(true);
-  }, [active]);
-
-  useEffect(() => {
     if (!activated) return;
-    let cancelled = false;
+    const run = { cancelled: false };
 
-    void (async () => {
-      try {
-        const listed = await playgroundApi.listIdeas();
-        if (cancelled) return;
-        setIdeas(listed);
-        if (activeIdRef.current) return;
+    const hydrate = async () => {
+      const listed = await playgroundApi.listIdeas();
+      if (run.cancelled) return;
+      setIdeas(listed);
+      if (activeIdRef.current) return;
 
-        const ideaToOpen = initialIdeaId(initialPathRef.current, listed);
-        if (!ideaToOpen) return;
+      const ideaToOpen = initialIdeaId(initialPathRef.current, listed);
+      if (!ideaToOpen) return;
 
-        const loadedIdea = await playgroundApi.loadIdea(ideaToOpen);
-        if (cancelled || activeIdRef.current) return;
-        showIdeaRef.current(loadedIdea);
-      } catch {
-        if (!cancelled) setSaveError("Could not load saved projects");
-      } finally {
-        if (!cancelled) setHydrated(true);
-      }
-    })();
+      const loadedIdea = await playgroundApi.loadIdea(ideaToOpen);
+      if (run.cancelled || activeIdRef.current) return;
+      openIdea(loadedIdea);
+    };
+    void hydrate()
+      .catch(() => {
+        if (!run.cancelled) setSaveError("Could not load saved projects");
+      })
+      .then(() => {
+        if (!run.cancelled) setHydrated(true);
+      });
 
     return () => {
-      cancelled = true;
+      run.cancelled = true;
     };
   }, [activated]);
 
@@ -247,13 +246,12 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
       draft: baked,
     };
 
+    const persist = activeIdea
+      ? () => playgroundApi.updateIdea(activeIdea.id, { ...input, expectedRevision: activeIdea.revision })
+      : () => playgroundApi.createIdea(input);
+    let result: IdeaProject | null = null;
     try {
-      const saved = activeIdea
-        ? await playgroundApi.updateIdea(activeIdea.id, {
-            ...input,
-            expectedRevision: activeIdea.revision,
-          })
-        : await playgroundApi.createIdea(input);
+      const saved = await persist();
       setActiveIdea(saved);
       activeIdRef.current = saved.id;
       rememberIdea(saved);
@@ -264,16 +262,17 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
       if (options.open !== false) {
         navigate(`/experimental/${saved.id}`, { replace: true });
       }
-      return saved;
+      result = saved;
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Save failed");
-      return null;
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
     }
+    savingRef.current = false;
+    setSaving(false);
+    return result;
   }
-  saveIdeaRef.current = () => saveIdea();
+  const saveFromShortcut = useEffectEvent(() => {
+    if (canSave) void saveIdea();
+  });
 
   async function persistIfDirty(): Promise<boolean> {
     if (savingRef.current) return false;
@@ -292,7 +291,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
       setSaveError(err instanceof Error ? err.message : "Could not open project");
     }
   }
-  switchToRef.current = switchTo;
+  const switchFromUrl = useEffectEvent((next: string) => void switchTo(next));
 
   async function startNewIdea(name: string) {
     const nextName = name.trim();
@@ -311,17 +310,16 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
       showIdea(created);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not create idea");
-    } finally {
-      savingRef.current = false;
-      setSaving(false);
     }
+    savingRef.current = false;
+    setSaving(false);
   }
 
   useEffect(() => {
     if (!hydrated) return;
     const fromUrl = ideaIdFromPath(location.pathname);
     if (!fromUrl || fromUrl === activeIdRef.current) return;
-    void switchToRef.current(fromUrl);
+    switchFromUrl(fromUrl);
   }, [hydrated, location.pathname]);
 
   async function onDelete(ideaIdToDelete: string) {
@@ -337,19 +335,20 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
 
     setSaveError(null);
     setDeletingIdeaId(ideaIdToDelete);
+    const deletingActive = ideaIdToDelete === activeIdea?.id;
     try {
       await playgroundApi.deleteIdea(ideaIdToDelete);
       const remaining = ideas.filter(item => item.id !== ideaIdToDelete);
       setIdeas(remaining);
-      if (ideaIdToDelete !== activeIdea?.id) return;
-      const fallback = remaining[0];
-      if (fallback) showIdea(await playgroundApi.loadIdea(fallback.id));
-      else clearStudio();
+      if (deletingActive) {
+        const fallback = remaining[0];
+        if (fallback) showIdea(await playgroundApi.loadIdea(fallback.id));
+        else clearStudio();
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not delete project");
-    } finally {
-      setDeletingIdeaId(null);
     }
+    setDeletingIdeaId(null);
   }
 
   function onMakeLive() {
@@ -415,13 +414,12 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
         return;
       }
       event.preventDefault();
-      if (!canSave) return;
-      void saveIdeaRef.current();
+      saveFromShortcut();
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [active, canSave]);
+  }, [active]);
 
   useEffect(() => {
     if (!dirty || !hasDraft) return;
@@ -614,7 +612,7 @@ export function ExperimentalPage({ active, onReady }: ExperimentalPageProps) {
           <IdeaWorkbench
             key={studioKey}
             componentName={activeIdea?.componentName ?? null}
-            draft={draftRef.current ?? emptyIdeaDraft}
+            draft={studioDraft ?? emptyIdeaDraft}
             onMutate={markDirty}
             onDraftChange={next => {
               draftRef.current = next;

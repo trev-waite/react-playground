@@ -57,6 +57,12 @@ function sharedObserver(): ResizeObserver {
   return observer;
 }
 
+/** Fits `area` again after its content changed but the area did not resize, such as a preview finishing loading. */
+export function refitArea(area: Element) {
+  const fit = fits.get(area);
+  if (fit) refit([fit]);
+}
+
 /**
  * Keeps `content` laid out at a readable size and scaled into `area`. Sizes come
  * from layout boxes, never transformed rects, because cards zoom in flight.

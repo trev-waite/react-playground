@@ -34,7 +34,7 @@ export function ogCardHtml({ favicon, grid }: OgCardImages): string {
 </style>
 <div class="copy">
   <img class="mark" src="${mark}" alt="">
-  <h1>React<br>Playground</h1>
+  <h1>Trev’s<br>Studio</h1>
   <p>Small React components, built and tuned one at a time.</p>
 </div>
 <div class="shot"><img src="${shot}" alt=""></div>`;

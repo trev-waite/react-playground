@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { snapLineHeight, tidy, type SheetPlanner } from "@react-playground/layout-sheet";
 import { SheetGuides, useSheet, useSheetState } from "@react-playground/layout-sheet/react";
@@ -16,7 +16,6 @@ const START_LINE_HEIGHT = 1.38;
 const JITTER_PX = 5;
 const LINE_HEIGHT_PER_PIXEL = 0.002;
 const LINE_HEIGHT_RANGE = [1, 2.2] as const;
-const HINT = "Drag anything. Scroll over the quote to change its line height.";
 
 const ceilTo8 = (value: number) => Math.ceil(value / 8) * 8;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -77,8 +76,11 @@ export function Example({
   const columns = Math.round(clamp(sliders.columns ?? SLIDERS.columns, 2, 4));
   const board = boardSize(columns, size, fontSize);
   const squareIds = Array.from({ length: columns * ROWS }, (_, index) => `square-${index}`);
+  const quoteHintId = useId();
+  const guidesId = useId();
 
   const sheet = useSheet();
+  const { root: sheetRoot } = sheet;
   const canUndo = useSheetState(sheet, snapshot => snapshot.canUndo);
   const [lineHeight, setLineHeight] = useState(START_LINE_HEIGHT);
   /** The line height before each plan, paired with the sheet's own undo history. */
@@ -86,14 +88,17 @@ export function Example({
   const [planning, setPlanning] = useState(false);
   const [useAi, setUseAi] = useState(false);
   const [showGuides, setShowGuides] = useState(true);
-  const [status, setStatus] = useState(HINT);
+  const [error, setError] = useState<string | null>(null);
   const seed = useRef(7);
-  const textRef = useRef<HTMLElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
   const lastProgress = useRef(progress);
 
   // The screen starts hand-placed: a few pixels off wherever its own CSS put things.
-  useLayoutEffect(() => {
+  const placeByHand = useEffectEvent(() => {
     sheet.setOffsets(jitter(seed.current, [...squareIds, "quote", "credit"]));
+  });
+  useLayoutEffect(() => {
+    placeByHand();
   }, [sheet]);
 
   useEffect(() => {
@@ -110,31 +115,28 @@ export function Example({
     return () => text.removeEventListener("wheel", onWheel);
   }, []);
 
-  async function plan(planner: SheetPlanner | undefined, nextLineHeight: number, done: (moved: boolean) => void) {
+  async function plan(planner: SheetPlanner | undefined, nextLineHeight: number) {
     if (planning) return;
     setPlanning(true);
+    setError(null);
     const before = lineHeight;
     try {
       // Text reflows first, without moving anything, so the planner sees its final height.
       sheet.keepInPlace(() => flushSync(() => setLineHeight(nextLineHeight)));
       const { moved } = await sheet.tidy(planner);
       if (moved) setLineHeights(stack => [...stack, before]);
-      done(moved);
     } catch (error) {
-      setStatus(`Could not plan the spacing: ${error instanceof Error ? error.message : "unknown error"}`);
-    } finally {
-      setPlanning(false);
+      setError(`Could not plan the spacing: ${error instanceof Error ? error.message : "unknown error"}`);
     }
+    setPlanning(false);
   }
 
   const perfect = () =>
-    plan(useAi && aiPlanner ? aiPlanner : undefined, snapLineHeight(fontSize, lineHeight) / fontSize, moved =>
-      setStatus(moved ? "Every gap is on the scale. Undo to compare." : "Already on the scale."),
-    );
+    plan(useAi && aiPlanner ? aiPlanner : undefined, snapLineHeight(fontSize, lineHeight) / fontSize);
 
   const scatter = () => {
     seed.current += 1;
-    return plan(scatterPlanner(seed.current), START_LINE_HEIGHT, () => setStatus(HINT));
+    return plan(scatterPlanner(seed.current), START_LINE_HEIGHT);
   };
 
   function undo() {
@@ -148,16 +150,19 @@ export function Example({
       );
     }
     sheet.undo();
-    setStatus(HINT);
+    setError(null);
   }
 
   // Studio actions: Form tidies, Unform scatters, Replay does both. They run after the
   // effect, since planning flushes React synchronously and effects may not.
+  const runStudioAction = useEffectEvent((action: "form" | "unform") => {
+    void (action === "form" ? perfect() : scatter());
+  });
   useEffect(() => {
     const before = lastProgress.current;
     lastProgress.current = progress;
-    if (progress <= 0.001 && before > 0.001) queueMicrotask(() => void scatter());
-    else if (progress >= 0.999 && before < 0.999) queueMicrotask(() => void perfect());
+    if (progress <= 0.001 && before > 0.001) queueMicrotask(() => runStudioAction("unform"));
+    else if (progress >= 0.999 && before < 0.999) queueMicrotask(() => runStudioAction("form"));
   }, [progress]);
 
   function onQuoteKey(event: KeyboardEvent<HTMLElement>) {
@@ -172,7 +177,7 @@ export function Example({
     <div className="st-root">
       <style>{CSS}</style>
       <div
-        ref={sheet.root}
+        ref={sheetRoot}
         className="st-board"
         style={{ width: board.width, height: board.height }}
       >
@@ -194,27 +199,31 @@ export function Example({
           ))}
         </div>
 
-        <figure ref={textRef} className="st-text">
-          <blockquote
+        <div ref={textRef} className="st-text">
+          <div
             ref={sheet.item("quote", { group: "text" })}
             className="st-quote"
             role="button"
+            tabIndex={0}
             aria-roledescription="draggable"
-            aria-description="Arrow keys move it. Alt with up or down changes its line height."
+            aria-describedby={quoteHintId}
             style={{ fontSize, lineHeight }}
             onKeyDown={onQuoteKey}
           >
             {QUOTE}
-          </blockquote>
-          <figcaption
+          </div>
+          <span id={quoteHintId} hidden>
+            Arrow keys move it. Alt with up or down changes its line height.
+          </span>
+          <div
             ref={sheet.item("credit", { group: "text" })}
             className="st-credit"
             role="button"
             aria-roledescription="draggable"
           >
             — {CREDIT}
-          </figcaption>
-        </figure>
+          </div>
+        </div>
 
         {showGuides ? <SheetGuides sheet={sheet} /> : null}
       </div>
@@ -245,13 +254,15 @@ export function Example({
         <button type="button" className="st-secondary" onClick={undo} disabled={!canUndo || planning}>
           Undo
         </button>
-        <label className="st-switch">
-          Guides
-          <Switch label="Guides" size="compact" defaultChecked onChange={setShowGuides} />
-        </label>
-        <p className="st-status" aria-live="polite">
-          {status}
-        </p>
+        <div className="st-switch">
+          <label htmlFor={guidesId}>Guides</label>
+          <Switch id={guidesId} label="Guides" size="compact" defaultChecked onChange={setShowGuides} />
+        </div>
+        {error ? (
+          <p className="st-status" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -313,17 +324,22 @@ const CSS = `
 .st-switch {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
   box-sizing: border-box;
   height: 44px;
-  padding: 0 6px 0 20px;
+  padding-right: 6px;
   border-radius: 999px;
   background: #ffffff;
   box-shadow: inset 0 0 0 1px rgba(28, 36, 48, 0.14);
   font-size: 15px;
   font-weight: 600;
-  cursor: pointer;
   user-select: none;
+}
+.st-switch label {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 12px 0 20px;
+  cursor: pointer;
 }
 .st-primary:disabled, .st-secondary:disabled { opacity: 0.4; cursor: default; }
 .st-primary:active:not(:disabled), .st-secondary:active:not(:disabled) { transform: scale(0.97); }

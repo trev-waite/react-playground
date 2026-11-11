@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { IdeaSummary } from "@react-playground/api";
 import { filterIdeas, formatUpdatedAt } from "./projectSwitch";
 import styles from "./IdeaProjects.module.css";
@@ -66,12 +66,10 @@ export function IdeaProjects({
     return () => observer.disconnect();
   }, [open, count, query, matches.length]);
 
+  const close = useEffectEvent(() => setOpen(false));
+
   useEffect(() => {
     if (!open) return;
-
-    function close() {
-      setOpen(false);
-    }
 
     function onPointerDown(event: PointerEvent) {
       if (!rootRef.current?.contains(event.target as Node)) close();

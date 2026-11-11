@@ -4,11 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { animate, useMotionValue, type AnimationPlaybackControls, type MotionValue } from "motion/react";
+import { useMotionValue } from "../app/motion/hooks";
+import { animate, type MotionValue } from "../app/motion/motionValue";
 import { useLocation, useNavigate } from "react-router";
 import { liveSlugFromPath } from "../lib/catalog";
 import { DEFAULT_DURATION_MS, REDUCED_MOTION_MS } from "./diagonalBand";
@@ -21,7 +21,7 @@ type ViewContextValue = {
    * 0 = Live covering; 1 = Experimental revealed. A motion value so the
    * dissolve updates styles without re-rendering the studio every frame.
    */
-  progress: MotionValue<number>;
+  progress: MotionValue;
   animating: boolean;
   liveSlug: string | null;
   reducedMotion: boolean;
@@ -86,8 +86,10 @@ export function ViewProvider({ children }: ViewProviderProps) {
   const liveSlug = urlSlug ?? rememberedSlug;
 
   const progress = useMotionValue(urlMode === "experimental" ? 1 : 0);
-  const [mode, setModeState] = useState<ViewMode>(urlMode);
-  const [animating, setAnimating] = useState(false);
+  const mode = urlMode;
+  // The mode the dissolve last finished on; the view is animating until it catches up.
+  const [settledMode, setSettledMode] = useState<ViewMode>(urlMode);
+  const animating = settledMode !== mode;
   // Mounting a project mid-dissolve drops frames, so the first reveal waits for it.
   const [experimentalReady, setExperimentalReady] = useState(urlMode === "experimental");
   const markExperimentalReady = useCallback(() => setExperimentalReady(true), []);
@@ -96,10 +98,10 @@ export function ViewProvider({ children }: ViewProviderProps) {
     prefersReducedTransparency,
   );
 
-  const dissolve = useRef<AnimationPlaybackControls | null>(null);
-  const modeRef = useRef(mode);
-
-  modeRef.current = mode;
+  if (urlMode === "experimental" && experimentalHref !== location.pathname) {
+    setExperimentalHref(location.pathname);
+  }
+  if (urlSlug && urlSlug !== rememberedSlug) setRememberedSlug(urlSlug);
 
   useEffect(() => {
     const motionMq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -117,55 +119,22 @@ export function ViewProvider({ children }: ViewProviderProps) {
   }, []);
 
   useEffect(() => {
-    if (urlMode !== "experimental") return;
-    setExperimentalHref(location.pathname);
-  }, [location.pathname, urlMode]);
-
-  useEffect(() => {
-    if (urlSlug) setRememberedSlug(urlSlug);
-  }, [urlSlug]);
-
-  const animateTo = useCallback(
-    (target: number, nextMode: ViewMode) => {
-      dissolve.current?.stop();
-      setModeState(nextMode);
-      if (Math.abs(progress.get() - target) < 0.001) {
-        progress.jump(target);
-        setAnimating(false);
-        return;
-      }
-      setAnimating(true);
-      dissolve.current = animate(progress, target, {
-        duration: (reducedMotion ? REDUCED_MOTION_MS : DEFAULT_DURATION_MS) / 1000,
-        ease: reducedMotion ? "linear" : easeOutExpo,
-        onComplete: () => setAnimating(false),
-      });
-    },
-    [progress, reducedMotion],
-  );
-
-  useEffect(() => () => dissolve.current?.stop(), []);
-
-  useEffect(() => {
     if (urlMode !== "experimental" || experimentalReady) return;
-    setModeState("experimental");
     const timer = setTimeout(markExperimentalReady, EXPERIMENTAL_READY_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [urlMode, experimentalReady, markExperimentalReady]);
 
   useEffect(() => {
     if (urlMode === "experimental" && !experimentalReady) return;
-    if (urlMode === modeRef.current && !animating) {
-      const expected = urlMode === "experimental" ? 1 : 0;
-      if (Math.abs(progress.get() - expected) > 0.01) {
-        animateTo(expected, urlMode);
-      }
-      return;
-    }
-    if (urlMode !== modeRef.current) {
-      animateTo(urlMode === "experimental" ? 1 : 0, urlMode);
-    }
-  }, [urlMode, animateTo, animating, progress, experimentalReady]);
+    const target = urlMode === "experimental" ? 1 : 0;
+    const there = Math.abs(progress.get() - target) < 0.001;
+    const dissolve = animate(progress, target, {
+      duration: there ? 0 : (reducedMotion ? REDUCED_MOTION_MS : DEFAULT_DURATION_MS) / 1000,
+      ease: reducedMotion ? "linear" : easeOutExpo,
+      onComplete: () => setSettledMode(urlMode),
+    });
+    return () => dissolve.stop();
+  }, [urlMode, experimentalReady, progress, reducedMotion]);
 
   const setMode = useCallback(
     (next: ViewMode) => {

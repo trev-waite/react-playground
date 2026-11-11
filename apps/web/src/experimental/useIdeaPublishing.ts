@@ -19,18 +19,18 @@ export function useIdeaPublishing() {
     setPublishing(true);
     setPublishError(null);
 
+    let published = false;
     try {
       const { slug } = await playgroundApi.publishIdea(id, input);
       await refreshLiveCatalog(slug);
       navigate(`/${slug}`);
-      return true;
+      published = true;
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : "Publish failed");
-      return false;
-    } finally {
-      publishingRef.current = false;
-      setPublishing(false);
     }
+    publishingRef.current = false;
+    setPublishing(false);
+    return published;
   }, [navigate]);
 
   return {

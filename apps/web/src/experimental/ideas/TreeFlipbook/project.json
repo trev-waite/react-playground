@@ -1,9 +1,9 @@
 {
   "id": "bcc8217e-9c44-480d-9488-13ae5861cbcc",
-  "revision": 7,
+  "revision": 8,
   "name": "Tree Flipbook",
   "componentName": "TreeFlipbook",
-  "updatedAt": "2026-09-26T19:28:25.414Z",
+  "updatedAt": "2026-11-11T04:39:51.407Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "307562ba8ae5083d23cba599c504808cf1b99b237726d58cd917973e98ec4fd7",
+  "sourceDigest": "f4601eb1670c971f186319ab2f77e891ec07013e40bcecce2b18d2e52d0b1063",
   "createdAt": "2026-09-26T16:20:12.516Z"
 }

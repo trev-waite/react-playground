@@ -31,3 +31,29 @@ describe("Live app boundary", () => {
     expect(violations).toEqual([]);
   });
 });
+
+describe("Live bundle", () => {
+  test("leaves the router to the studio; Live reads and replaces the URL itself", async () => {
+    const violations: string[] = [];
+    for (const dir of LIVE_APP_DIRS) {
+      for await (const relative of new Glob("**/*.{ts,tsx}").scan({ cwd: path.join(src, dir) })) {
+        if (relative.includes(".test.")) continue;
+        if (/["']react-router["']/.test(await Bun.file(path.join(src, dir, relative)).text())) {
+          violations.push(path.join(dir, relative));
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+});
+
+describe("Top bar", () => {
+  test("the deployed app and the studio both lead the bar with one back pill, home to trevorwaite.com first", async () => {
+    const read = (file: string) => Bun.file(path.join(src, file)).text();
+    const chrome = await read("app/deck/DeckChrome.tsx");
+    expect(chrome).toMatch(/<HomeLink \/>\s*\{children\}\s*<\/div>/);
+    expect(chrome).toContain('"https://trevorwaite.com"');
+    expect(await read("app/LivePage.tsx")).toMatch(/<ChromeBar>\s*<BackPill>\{viewButton\}<\/BackPill>/);
+    expect(await read("studio/StudioApp.tsx")).toMatch(/<ChromeBar>\s*<BackPill>\s*<DeckSlot/);
+  });
+});

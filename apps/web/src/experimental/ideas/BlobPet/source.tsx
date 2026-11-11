@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 const SLIDERS = {"bounce":75,"wobble":45,"tempo":30};
 
@@ -725,6 +725,172 @@ function toViewBox(svg: SVGSVGElement | null, clientX: number, clientY: number):
   return { x: point.x, y: point.y };
 }
 
+function animateBlob({
+  bodyRef,
+  shadowRef,
+  featureRefs,
+  pupilRefs,
+  lookRef,
+  pokeRef,
+  settings,
+}: {
+  bodyRef: RefObject<SVGPathElement | null>;
+  shadowRef: RefObject<SVGEllipseElement | null>;
+  featureRefs: RefObject<(SVGPathElement | null)[]>;
+  pupilRefs: RefObject<(SVGEllipseElement | null)[]>;
+  lookRef: RefObject<Point | null>;
+  pokeRef: RefObject<number>;
+  settings: RefObject<{ bounce: number; wobble: number; tempo: number; playing: boolean }>;
+}): () => void {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const forms = PLAYLIST.map(target => (target === REST ? REST_FORM : buildForm(target)));
+  const body = REST_FORM.body.map(particle);
+  const features = REST_FORM.features.map(contour => contour.map(particle));
+  const look = { x: { value: 0, velocity: 0 }, y: { value: 0, velocity: 0 } };
+  const pupilSize: Spring = { value: REST_FORM.pupil, velocity: 0 };
+  const squash: Spring = { value: 0, velocity: 0 };
+  const color: Spring[] = REST_FORM.color.map(value => ({ value, velocity: 0 }));
+  let index = 0;
+  let form = REST_FORM;
+  // Kept after leaving a word until its pieces have rejoined, so letters flow back without threads.
+  let pieces = NO_PIECES;
+  // Sequencing, idle motion, and physics share one clamped clock so a slow tab slows everything together.
+  let now = 0;
+  let formedAt = 0;
+  let blinkAt = 2;
+  let poke = pokeRef.current;
+  let last = performance.now();
+  let raf = 0;
+
+  const morphTo = (next: number) => {
+    index = next;
+    form = forms[next] ?? REST_FORM;
+    formedAt = now;
+    const { bounce, tempo } = settings.current;
+    const offset = retarget(body, form.body, now, reduce ? 0 : 0.34 - 0.2 * tempo);
+    if (form.bridges.length) pieces = { bridges: form.bridges, offset };
+    form.features.forEach((shape, i) => {
+      const particles = features[i];
+      if (particles) retarget(particles, shape, now, 0);
+    });
+    if (!reduce) squash.velocity += 1 + 2.4 * bounce;
+  };
+
+  const tick = (ms: number) => {
+    const dt = Math.min(1 / 30, (ms - last) / 1000);
+    last = ms;
+    now += dt;
+    const { bounce, wobble, tempo, playing } = settings.current;
+
+    if (pokeRef.current !== poke) {
+      poke = pokeRef.current;
+      if (playing) morphTo((index + 1) % forms.length);
+      else if (!reduce) {
+        squash.velocity += 1.5 + 2 * bounce;
+        blinkAt = now;
+      }
+    }
+    if (!playing && index !== 0) morphTo(0);
+    else if (playing && now - formedAt > 2.8 - 1.8 * tempo) {
+      morphTo((index + 1) % forms.length);
+    }
+
+    const zeta = reduce ? 1 : 0.95 - 0.65 * bounce;
+    const bodyDamping = 2 * zeta * Math.sqrt(STIFFNESS);
+    const faceDamping = 2 * zeta * Math.sqrt(FACE_STIFFNESS);
+    const squashDamping = 2 * (0.55 - 0.3 * bounce) * Math.sqrt(260);
+    const amount = reduce ? 0 : wobble * 2;
+    const h = dt / 2;
+    /** Returns the squared distance still left to the goal. */
+    const settle = (p: Particle, stiffness: number, damping: number) => {
+      const target = goalOf(p, now);
+      const goal = idleAt(target.x, target.y, form, now, amount);
+      stepParticle(p, goal, stiffness, damping, h);
+      stepParticle(p, goal, stiffness, damping, h);
+      return (p.x - goal.x) ** 2 + (p.y - goal.y) ** 2;
+    };
+    let lag = 0;
+    for (const p of body) lag += settle(p, STIFFNESS, bodyDamping);
+    const softness = clamp(Math.sqrt(lag / body.length) / SOFT_LAG, 0, 1);
+    for (const particles of features) {
+      for (const p of particles) settle(p, FACE_STIFFNESS, faceDamping);
+    }
+    stepSpring(squash, 0, 260, squashDamping, h);
+    stepSpring(squash, 0, 260, squashDamping, h);
+    color.forEach((channel, i) =>
+      stepSpring(channel, form.color[i] ?? 0, COLOR_OMEGA ** 2, 2 * COLOR_OMEGA, dt),
+    );
+    stepSpring(pupilSize, form.pupil, 220, 2 * 0.8 * Math.sqrt(220), dt);
+
+    if (now > blinkAt + BLINK_SECONDS) blinkAt = now + 2.2 + Math.random() * 3;
+    const blinkPhase = (now - blinkAt) / BLINK_SECONDS;
+    const blink =
+      form.blinks && blinkPhase >= 0 && blinkPhase <= 1
+        ? 1 - 0.92 * Math.sin(Math.PI * blinkPhase)
+        : 1;
+
+    const s = clamp(squash.value, -0.35, 0.35);
+    const cx = form.center.x;
+    const warp = (x: number, y: number): Point => ({
+      x: cx + (x - cx) * (1 + s),
+      y: GROUND - (GROUND - Math.min(y, GROUND)) * (1 - s),
+    });
+
+    const outline = body.map(p => warp(p.x, p.y));
+    const bounds = boundsOf(outline);
+    if (!form.bridges.length && piecesJoined(outline, pieces)) pieces = NO_PIECES;
+    bodyRef.current?.setAttribute("d", bodyPath(outline, pieces, SOFT_SIGMA * softness));
+    const [L = 0, a = 0, b = 0] = color.map(channel => channel.value);
+    bodyRef.current?.style.setProperty("fill", `oklab(${L.toFixed(4)} ${a.toFixed(4)} ${b.toFixed(4)})`);
+
+    const eyeCenters = features.slice(0, 2).map(centroid);
+    features.forEach((particles, i) => {
+      const center = eyeCenters[i];
+      const squeeze = center ? blink : 1;
+      const pivot = center?.y ?? 0;
+      featureRefs.current[i]?.setAttribute(
+        "d",
+        pathOf(particles.map(p => warp(p.x, pivot + (p.y - pivot) * squeeze))),
+      );
+    });
+
+    const face = centroid(eyeCenters);
+    const gaze = lookRef.current ?? {
+      x: face.x + 70 * Math.sin(now * 0.6),
+      y: face.y + 30 * Math.sin(now * 0.9),
+    };
+    const gx = gaze.x - face.x;
+    const gy = gaze.y - face.y;
+    const reach = (form.pupilTravel * Math.min(1, Math.hypot(gx, gy) / 80)) / (Math.hypot(gx, gy) || 1);
+    stepSpring(look.x, gx * reach, 180, 2 * 0.75 * Math.sqrt(180), dt);
+    stepSpring(look.y, gy * reach, 180, 2 * 0.75 * Math.sqrt(180), dt);
+    eyeCenters.forEach((center, i) => {
+      const pupil = pupilRefs.current[i];
+      if (!pupil) return;
+      const at = warp(center.x + look.x.value, center.y + look.y.value * blink);
+      const radius = Math.max(0, pupilSize.value);
+      pupil.setAttribute("cx", at.x.toFixed(1));
+      pupil.setAttribute("cy", at.y.toFixed(1));
+      pupil.setAttribute("rx", radius.toFixed(2));
+      pupil.setAttribute("ry", (radius * blink).toFixed(2));
+    });
+
+    const lift = clamp((GROUND - bounds.maxY) / 50, 0, 1);
+    const shadow = shadowRef.current;
+    if (shadow) {
+      shadow.setAttribute("cx", ((bounds.minX + bounds.maxX) / 2).toFixed(1));
+      shadow.setAttribute("rx", ((bounds.maxX - bounds.minX) * 0.46 * (1 - 0.35 * lift)).toFixed(1));
+      shadow.setAttribute("ry", (7 * (1 - 0.3 * lift)).toFixed(2));
+      shadow.setAttribute("opacity", (0.13 * (1 - 0.6 * lift)).toFixed(3));
+    }
+
+    raf = requestAnimationFrame(tick);
+  };
+
+  raf = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(raf);
+}
+
 export function Example({
   sliders = SLIDERS,
   progress = 1,
@@ -740,162 +906,16 @@ export function Example({
   const lookRef = useRef<Point | null>(null);
   const pokeRef = useRef(0);
   const settings = useRef({ bounce: 0, wobble: 0, tempo: 0, playing: true });
-  settings.current = {
-    bounce: clamp((sliders.bounce ?? SLIDERS.bounce) / 100, 0, 1),
-    wobble: clamp((sliders.wobble ?? SLIDERS.wobble) / 100, 0, 1),
-    tempo: clamp((sliders.tempo ?? SLIDERS.tempo) / 100, 0, 1),
-    playing: progress >= 0.5,
-  };
-
-  useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const forms = PLAYLIST.map(target => (target === REST ? REST_FORM : buildForm(target)));
-    const body = REST_FORM.body.map(particle);
-    const features = REST_FORM.features.map(contour => contour.map(particle));
-    const look = { x: { value: 0, velocity: 0 }, y: { value: 0, velocity: 0 } };
-    const pupilSize: Spring = { value: REST_FORM.pupil, velocity: 0 };
-    const squash: Spring = { value: 0, velocity: 0 };
-    const color: Spring[] = REST_FORM.color.map(value => ({ value, velocity: 0 }));
-    let index = 0;
-    let form = REST_FORM;
-    // Kept after leaving a word until its pieces have rejoined, so letters flow back without threads.
-    let pieces = NO_PIECES;
-    // Sequencing, idle motion, and physics share one clamped clock so a slow tab slows everything together.
-    let now = 0;
-    let formedAt = 0;
-    let blinkAt = 2;
-    let poke = pokeRef.current;
-    let last = performance.now();
-    let raf = 0;
-
-    const morphTo = (next: number) => {
-      index = next;
-      form = forms[next] ?? REST_FORM;
-      formedAt = now;
-      const { bounce, tempo } = settings.current;
-      const offset = retarget(body, form.body, now, reduce ? 0 : 0.34 - 0.2 * tempo);
-      if (form.bridges.length) pieces = { bridges: form.bridges, offset };
-      form.features.forEach((shape, i) => {
-        const particles = features[i];
-        if (particles) retarget(particles, shape, now, 0);
-      });
-      if (!reduce) squash.velocity += 1 + 2.4 * bounce;
+  useLayoutEffect(() => {
+    settings.current = {
+      bounce: clamp((sliders.bounce ?? SLIDERS.bounce) / 100, 0, 1),
+      wobble: clamp((sliders.wobble ?? SLIDERS.wobble) / 100, 0, 1),
+      tempo: clamp((sliders.tempo ?? SLIDERS.tempo) / 100, 0, 1),
+      playing: progress >= 0.5,
     };
+  }, [sliders, progress]);
 
-    const tick = (ms: number) => {
-      const dt = Math.min(1 / 30, (ms - last) / 1000);
-      last = ms;
-      now += dt;
-      const { bounce, wobble, tempo, playing } = settings.current;
-
-      if (pokeRef.current !== poke) {
-        poke = pokeRef.current;
-        if (playing) morphTo((index + 1) % forms.length);
-        else if (!reduce) {
-          squash.velocity += 1.5 + 2 * bounce;
-          blinkAt = now;
-        }
-      }
-      if (!playing && index !== 0) morphTo(0);
-      else if (playing && now - formedAt > 2.8 - 1.8 * tempo) {
-        morphTo((index + 1) % forms.length);
-      }
-
-      const zeta = reduce ? 1 : 0.95 - 0.65 * bounce;
-      const bodyDamping = 2 * zeta * Math.sqrt(STIFFNESS);
-      const faceDamping = 2 * zeta * Math.sqrt(FACE_STIFFNESS);
-      const squashDamping = 2 * (0.55 - 0.3 * bounce) * Math.sqrt(260);
-      const amount = reduce ? 0 : wobble * 2;
-      const h = dt / 2;
-      /** Returns the squared distance still left to the goal. */
-      const settle = (p: Particle, stiffness: number, damping: number) => {
-        const target = goalOf(p, now);
-        const goal = idleAt(target.x, target.y, form, now, amount);
-        stepParticle(p, goal, stiffness, damping, h);
-        stepParticle(p, goal, stiffness, damping, h);
-        return (p.x - goal.x) ** 2 + (p.y - goal.y) ** 2;
-      };
-      let lag = 0;
-      for (const p of body) lag += settle(p, STIFFNESS, bodyDamping);
-      const softness = clamp(Math.sqrt(lag / body.length) / SOFT_LAG, 0, 1);
-      for (const particles of features) {
-        for (const p of particles) settle(p, FACE_STIFFNESS, faceDamping);
-      }
-      stepSpring(squash, 0, 260, squashDamping, h);
-      stepSpring(squash, 0, 260, squashDamping, h);
-      color.forEach((channel, i) =>
-        stepSpring(channel, form.color[i] ?? 0, COLOR_OMEGA ** 2, 2 * COLOR_OMEGA, dt),
-      );
-      stepSpring(pupilSize, form.pupil, 220, 2 * 0.8 * Math.sqrt(220), dt);
-
-      if (now > blinkAt + BLINK_SECONDS) blinkAt = now + 2.2 + Math.random() * 3;
-      const blinkPhase = (now - blinkAt) / BLINK_SECONDS;
-      const blink =
-        form.blinks && blinkPhase >= 0 && blinkPhase <= 1
-          ? 1 - 0.92 * Math.sin(Math.PI * blinkPhase)
-          : 1;
-
-      const s = clamp(squash.value, -0.35, 0.35);
-      const cx = form.center.x;
-      const warp = (x: number, y: number): Point => ({
-        x: cx + (x - cx) * (1 + s),
-        y: GROUND - (GROUND - Math.min(y, GROUND)) * (1 - s),
-      });
-
-      const outline = body.map(p => warp(p.x, p.y));
-      const bounds = boundsOf(outline);
-      if (!form.bridges.length && piecesJoined(outline, pieces)) pieces = NO_PIECES;
-      bodyRef.current?.setAttribute("d", bodyPath(outline, pieces, SOFT_SIGMA * softness));
-      const [L = 0, a = 0, b = 0] = color.map(channel => channel.value);
-      bodyRef.current?.style.setProperty("fill", `oklab(${L.toFixed(4)} ${a.toFixed(4)} ${b.toFixed(4)})`);
-
-      const eyeCenters = features.slice(0, 2).map(centroid);
-      features.forEach((particles, i) => {
-        const center = eyeCenters[i];
-        const squeeze = center ? blink : 1;
-        const pivot = center?.y ?? 0;
-        featureRefs.current[i]?.setAttribute(
-          "d",
-          pathOf(particles.map(p => warp(p.x, pivot + (p.y - pivot) * squeeze))),
-        );
-      });
-
-      const face = centroid(eyeCenters);
-      const gaze = lookRef.current ?? {
-        x: face.x + 70 * Math.sin(now * 0.6),
-        y: face.y + 30 * Math.sin(now * 0.9),
-      };
-      const gx = gaze.x - face.x;
-      const gy = gaze.y - face.y;
-      const reach = (form.pupilTravel * Math.min(1, Math.hypot(gx, gy) / 80)) / (Math.hypot(gx, gy) || 1);
-      stepSpring(look.x, gx * reach, 180, 2 * 0.75 * Math.sqrt(180), dt);
-      stepSpring(look.y, gy * reach, 180, 2 * 0.75 * Math.sqrt(180), dt);
-      eyeCenters.forEach((center, i) => {
-        const pupil = pupilRefs.current[i];
-        if (!pupil) return;
-        const at = warp(center.x + look.x.value, center.y + look.y.value * blink);
-        const radius = Math.max(0, pupilSize.value);
-        pupil.setAttribute("cx", at.x.toFixed(1));
-        pupil.setAttribute("cy", at.y.toFixed(1));
-        pupil.setAttribute("rx", radius.toFixed(2));
-        pupil.setAttribute("ry", (radius * blink).toFixed(2));
-      });
-
-      const lift = clamp((GROUND - bounds.maxY) / 50, 0, 1);
-      const shadow = shadowRef.current;
-      if (shadow) {
-        shadow.setAttribute("cx", ((bounds.minX + bounds.maxX) / 2).toFixed(1));
-        shadow.setAttribute("rx", ((bounds.maxX - bounds.minX) * 0.46 * (1 - 0.35 * lift)).toFixed(1));
-        shadow.setAttribute("ry", (7 * (1 - 0.3 * lift)).toFixed(2));
-        shadow.setAttribute("opacity", (0.13 * (1 - 0.6 * lift)).toFixed(3));
-      }
-
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  useEffect(() => animateBlob({ bodyRef, shadowRef, featureRefs, pupilRefs, lookRef, pokeRef, settings }), []);
 
   const restEyes = REST_FORM.features.slice(0, 2).map(centroid);
 
@@ -906,7 +926,15 @@ export function Example({
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="A black blob pet that morphs into expressions, shapes, and words"
-      style={{ display: "block", width: "100%", height: "100%", cursor: "pointer", touchAction: "manipulation" }}
+      style={{
+        display: "block",
+        width: "100%",
+        height: "100%",
+        cursor: "pointer",
+        touchAction: "manipulation",
+        // Its own layer: the body is redrawn every frame, and Safari otherwise repaints the scrolling page around it.
+        willChange: "transform",
+      }}
       onPointerMove={event => {
         lookRef.current = toViewBox(svgRef.current, event.clientX, event.clientY);
       }}

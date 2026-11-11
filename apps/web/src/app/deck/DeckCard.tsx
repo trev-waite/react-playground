@@ -1,24 +1,30 @@
 import {
   Component,
   memo,
+  Suspense,
+  use,
+  useCallback,
   useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { motion, useTransform } from "motion/react";
 import type { LiveCard, LiveCardMember } from "../../lib/catalog";
+import { opacity, px, transform, useMotionStyle } from "../motion/hooks";
+import type { MotionValue } from "../motion/motionValue";
+import type { PreviewModule } from "../../lib/types";
 import type { CardMotion } from "./cardMotion";
-import { observeFit } from "./fitPreview";
+import { observeFit, refitArea } from "./fitPreview";
 import styles from "./DeckCard.module.css";
 
 /** Padding as a tile (chrome 0) and as a page (chrome 1). The page top clears the floating chrome. */
 const TILE_PADDING = 16;
 const PAGE_PADDING = { top: 80, inline: 24, bottom: 80, footer: 112 };
 
-function padding(page: number) {
-  return (chrome: number) => TILE_PADDING + (page - TILE_PADDING) * chrome;
+function padding(page: number, chrome: number, safeArea?: "--safe-top" | "--safe-bottom") {
+  const value = px(TILE_PADDING + (page - TILE_PADDING) * chrome);
+  return safeArea ? `calc(${value} + ${chrome} * var(${safeArea}))` : value;
 }
 
 type DeckCardProps = {
@@ -36,48 +42,47 @@ type DeckCardProps = {
 export function DeckCard({ card, motion: values, mounted, interactive, onOpen, raised }: DeckCardProps) {
   const [resetKey, setResetKey] = useState(0);
   const hasFooter = Boolean(card.description || card.reset);
-  const paddingTop = useTransform(values.chrome, padding(PAGE_PADDING.top));
-  const paddingInline = useTransform(values.chrome, padding(PAGE_PADDING.inline));
-  const paddingBottom = useTransform(
-    values.chrome,
-    padding(hasFooter ? PAGE_PADDING.footer : PAGE_PADDING.bottom),
-  );
-  const footerY = useTransform(values.chrome, chrome => (1 - chrome) * 16);
+  const cardRef = useRef<HTMLElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const { left, top, width, height, x, y, scale, radius, chrome } = values;
+
+  const cardStyle = useMotionStyle(cardRef, [left, top, width, height, x, y, scale, radius], style => {
+    style("left", px(left.get()));
+    style("top", px(top.get()));
+    style("width", px(width.get()));
+    style("height", px(height.get()));
+    style("transform", transform({ x: x.get(), y: y.get(), scale: scale.get() }));
+    style("borderRadius", px(radius.get()));
+  });
+
+  const previewStyle = useMotionStyle(previewRef, [chrome], style => {
+    const inline = padding(PAGE_PADDING.inline, chrome.get());
+    style("paddingTop", padding(PAGE_PADDING.top, chrome.get(), "--safe-top"));
+    style("paddingBottom", padding(hasFooter ? PAGE_PADDING.footer : PAGE_PADDING.bottom, chrome.get(), "--safe-bottom"));
+    style("paddingLeft", inline);
+    style("paddingRight", inline);
+  });
 
   return (
-    <motion.article
+    <article
+      ref={cardRef}
       className={styles.card}
       data-theme={card.theme}
       data-raised={raised || undefined}
       aria-label={card.title}
       style={{
-        left: values.left,
-        top: values.top,
-        width: values.width,
-        height: values.height,
-        x: values.x,
-        y: values.y,
-        scale: values.scale,
-        borderRadius: values.radius,
+        ...cardStyle,
         ...(card.background ? ({ "--card-background": card.background } as CSSProperties) : null),
       }}
     >
-      <motion.div
-        className={styles.preview}
-        style={{ paddingTop, paddingBottom, paddingLeft: paddingInline, paddingRight: paddingInline }}
-        inert={interactive ? undefined : true}
-      >
+      <div ref={previewRef} className={styles.preview} style={previewStyle} inert={interactive ? undefined : true}>
         <FitStage contentKey={`${mounted}-${resetKey}`}>
           {mounted ? <Members key={resetKey} members={card.members} /> : null}
         </FitStage>
-      </motion.div>
+      </div>
 
       {hasFooter ? (
-        <motion.footer
-          className={styles.footer}
-          style={{ opacity: values.chrome, y: footerY }}
-          inert={interactive ? undefined : true}
-        >
+        <CardFooter chrome={chrome} interactive={interactive}>
           {card.description ? <p className={styles.description}>{card.description}</p> : null}
           {card.reset ? (
             <button
@@ -89,7 +94,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
               {card.reset === "replay" ? "Replay" : "Reset"}
             </button>
           ) : null}
-        </motion.footer>
+        </CardFooter>
       ) : null}
 
       {onOpen ? (
@@ -97,7 +102,20 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
           <span className={styles.openLabel}>{card.title}</span>
         </button>
       ) : null}
-    </motion.article>
+    </article>
+  );
+}
+
+function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; interactive: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  const footerStyle = useMotionStyle(ref, [chrome], style => {
+    style("opacity", opacity(chrome.get()));
+    style("transform", transform({ y: (1 - chrome.get()) * 16 }));
+  });
+  return (
+    <footer ref={ref} className={styles.footer} style={footerStyle} inert={interactive ? undefined : true}>
+      {children}
+    </footer>
   );
 }
 
@@ -113,13 +131,27 @@ function FitStage({ contentKey, children }: { contentKey: string; children: Reac
     return observeFit(area, content);
   }, [contentKey]);
 
+  // The loaded preview can overflow where the placeholder did not, and the area never resized.
+  const refit = useCallback(() => {
+    if (areaRef.current) refitArea(areaRef.current);
+  }, []);
+
   return (
     <div ref={areaRef} className={styles.area}>
       <div ref={contentRef} className={styles.fit}>
-        {children}
+        <Suspense fallback={<div className={styles.loading} aria-hidden="true" />}>
+          {children}
+          <Revealed onReveal={refit} />
+        </Suspense>
       </div>
     </div>
   );
+}
+
+/** Mounts after the previews beside it, so its layout effect runs once they are on the page. */
+function Revealed({ onReveal }: { onReveal: () => void }) {
+  useLayoutEffect(onReveal, [onReveal]);
+  return null;
 }
 
 /**
@@ -147,15 +179,17 @@ const Members = memo(function Members({ members }: { members: LiveCardMember[] }
 });
 
 function Member({ member }: { member: LiveCardMember }) {
-  const { Preview } = member;
-  if (!Preview) {
-    return <PreviewError title={member.title} message={member.error} />;
-  }
   return (
-    <PreviewBoundary title={member.title}>
-      <Preview />
+    <PreviewBoundary title={member.title} module={member.module}>
+      <LoadedPreview module={member.module} />
     </PreviewBoundary>
   );
+}
+
+/** Suspends its card until the module arrives; a failed load lands in the boundary above. */
+function LoadedPreview({ module }: { module: Promise<PreviewModule> }) {
+  const { default: Preview } = use(module);
+  return <Preview />;
 }
 
 function PreviewError({ title, message }: { title: string; message?: string }) {
@@ -166,12 +200,16 @@ function PreviewError({ title, message }: { title: string; message?: string }) {
   );
 }
 
-/** One broken preview should not take the rest of the deck down with it. */
-class PreviewBoundary extends Component<
-  { title: string; children: ReactNode },
-  { message: string | null }
-> {
-  override state: { message: string | null } = { message: null };
+type PreviewBoundaryProps = { title: string; module: Promise<PreviewModule>; children: ReactNode };
+type PreviewBoundaryState = { message: string | null; module: Promise<PreviewModule> };
+
+/** One broken preview should not take the rest of the deck down with it. A new module gets a fresh try. */
+class PreviewBoundary extends Component<PreviewBoundaryProps, PreviewBoundaryState> {
+  override state: PreviewBoundaryState = { message: null, module: this.props.module };
+
+  static getDerivedStateFromProps(props: PreviewBoundaryProps, state: PreviewBoundaryState) {
+    return props.module === state.module ? null : { message: null, module: props.module };
+  }
 
   static getDerivedStateFromError(error: unknown) {
     return { message: error instanceof Error ? error.message : "Render failed" };

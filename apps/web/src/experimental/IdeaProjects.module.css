@@ -157,7 +157,7 @@
 .iconSwap[data-state="open"] .icon[data-icon="open"],
 .iconSwap[data-state="close"] .icon[data-icon="close"] {
   opacity: 1;
-  filter: blur(0);
+  filter: none;
   transform: scale(1);
 }
 
@@ -204,7 +204,7 @@
 .surface[data-open] .menu {
   opacity: 1;
   transform: translateX(0) scale(1);
-  filter: blur(0);
+  filter: none;
   pointer-events: auto;
 }
 

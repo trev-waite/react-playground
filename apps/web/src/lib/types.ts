@@ -30,6 +30,8 @@ export type PreviewModule = {
 export type PlaygroundEntry = {
   slug: string;
   title: string;
+  /** Read at build time, so cards show before their component loads. */
+  meta?: CardMeta;
   load: () => Promise<PreviewModule>;
 };
 
@@ -40,4 +42,6 @@ export type LiveCatalog = {
   entries: PlaygroundEntry[];
   /** Keyed by Live folder name. */
   families: Record<string, FamilyMeta>;
+  /** Card slugs in display order; unlisted cards follow alphabetically. */
+  order: readonly string[];
 };

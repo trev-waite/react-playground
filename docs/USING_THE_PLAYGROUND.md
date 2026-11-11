@@ -27,7 +27,11 @@ export const meta: CardMeta = {
 
 With neither `description` nor `reset`, the card has no footer.
 
+Keep `meta` a plain literal, with no variables, spreads, or calls. The build reads it without running the preview, so every card lays out at once and shows a loading shimmer until its own component arrives; a slow one, such as a shader, never holds up the rest.
+
 **Families.** Add `apps/web/src/live/<group>/family.ts` exporting a `FamilyMeta` (`title` plus the same fields) to show every component in that folder together on one card, as in `apps/web/src/live/controls/`. Member slugs such as `/controls/Switch` open the family card.
+
+**Order.** Cards appear in the order listed in `apps/web/src/live/order.ts`, then any unlisted cards alphabetically. The grid packs each card into the first cell it fits, so list wide cards before narrow ones and start a tall card at the beginning of a row to avoid holes.
 
 ## Export
 
@@ -57,14 +61,15 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 | `bun run dev` | Studio + local API |
 | `bun run test` | All package tests |
 | `bun run typecheck` | Strict TypeScript |
+| `bun run lint` | oxlint: React, accessibility, and leftover-code rules |
 | `bun run build` / `bun run start` | Build and preview the deployable Live app |
 
 ## Deploy
 
-Host `apps/web/dist` as a static site with an SPA fallback to `index.html`. Make Live writes source files, so commit and rebuild to update it.
+Merging to `main` deploys Live to Cloudflare; see [Deployment](DEPLOYMENT.md). Make Live writes source files, so commit them to publish.
 
-Set `SITE_URL` (for example `https://playground.example.com`) when building so link previews get absolute `og:image` and `og:video` URLs. Vercel production builds fall back to their project domain. The preview assets are `apps/web/public/og.png` (1200×630) and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
+Builds use `SITE_URL` for absolute `og:image` and `og:video` URLs; CI sets it to the production origin. The preview assets are `apps/web/public/og.png` (1200×630), the Trev’s Studio card beside the Live grid, and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
 
 ## Stack
 
-Turborepo · Vite · React 19.2 · CSS Modules · React Router · Motion · vgpu (WebGPU) · Bun API
+Turborepo · Vite · Cloudflare Workers · React 19.2 · CSS Modules · React Router · vgpu (WebGPU) · Bun API

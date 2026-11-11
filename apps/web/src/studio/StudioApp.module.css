@@ -46,5 +46,5 @@
 .deckSlot {
   display: flex;
   flex-shrink: 0;
-  transform-origin: right center;
+  justify-content: center;
 }

@@ -30,7 +30,7 @@ describe("isAllowedOrigin", () => {
 describe("createHttp", () => {
   test("echoes a loopback alias origin on CORS headers", () => {
     const { corsHeaders, handleOptions } = createHttp("http://localhost:3000");
-    const req = new Request("http://api.test/api/ideas", {
+    const req = new Request("http://localhost:3001/api/ideas", {
       method: "OPTIONS",
       headers: { Origin: "http://127.0.0.1:3000" },
     });
@@ -43,7 +43,7 @@ describe("createHttp", () => {
   test("rejects invalid JSON bodies", async () => {
     const { readJsonBody } = createHttp("http://localhost:3000");
     const parsed = await readJsonBody(
-      new Request("http://api.test/api/ideas", {
+      new Request("http://localhost:3001/api/ideas", {
         method: "POST",
         body: "{",
         headers: { "Content-Type": "application/json" },

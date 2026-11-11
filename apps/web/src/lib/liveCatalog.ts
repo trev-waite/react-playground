@@ -1,8 +1,9 @@
-import { use, useDeferredValue, useSyncExternalStore } from "react";
-import { cardFromPlan, planCards, type LiveCard, type LoadedPreview } from "./catalog";
+import { useMemo, useSyncExternalStore } from "react";
+import { cardFromPlan, planCards, type LiveCard } from "./catalog";
 import { liveCatalog } from "./discover";
 import { requestCatalogRefresh } from "./devRefresh";
 import { moduleStore } from "./moduleStore";
+import { previewModule } from "./previewModule";
 import type { LiveCatalog } from "./types";
 
 const catalog = moduleStore(liveCatalog);
@@ -12,9 +13,11 @@ function mergeCatalog(next: LiveCatalog, freshSlug?: string): LiveCatalog {
   const current = new Map(catalog.getSnapshot().entries.map(entry => [entry.slug, entry]));
   return {
     families: next.families,
-    entries: next.entries.map(entry =>
-      entry.slug === freshSlug ? entry : current.get(entry.slug) ?? entry,
-    ),
+    order: next.order,
+    entries: next.entries.map(entry => {
+      const kept = entry.slug === freshSlug ? undefined : current.get(entry.slug);
+      return kept ? { ...entry, load: kept.load } : entry;
+    }),
   };
 }
 
@@ -34,36 +37,10 @@ export function useLiveEntries() {
   return useLiveCatalog().entries;
 }
 
-const loadedCards = new WeakMap<LiveCatalog, Promise<LiveCard[]>>();
-
-async function loadPreview(load: () => Promise<LoadedPreview>): Promise<LoadedPreview> {
-  try {
-    return await load();
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not load preview" };
-  }
-}
-
-function loadCards(snapshot: LiveCatalog): Promise<LiveCard[]> {
-  let cards = loadedCards.get(snapshot);
-  if (!cards) {
-    // Every card is on stage at once in the grid, so resolve all previews up front.
-    cards = Promise.all(
-      planCards(snapshot).map(async plan =>
-        cardFromPlan(plan, await Promise.all(plan.entries.map(entry => loadPreview(entry.load)))),
-      ),
-    );
-    loadedCards.set(snapshot, cards);
-  }
-  return cards;
-}
-
-/**
- * Suspends until every Live preview module has loaded. Later catalog changes
- * keep showing the current cards until the new ones are ready.
- */
+/** Every card, straight away. Each preview loads on its own inside its card. */
 export function useLiveCards(): LiveCard[] {
-  return use(loadCards(useDeferredValue(useLiveCatalog())));
+  const snapshot = useLiveCatalog();
+  return useMemo(() => planCards(snapshot).map(plan => cardFromPlan(plan, previewModule)), [snapshot]);
 }
 
 export async function refreshLiveCatalog(slug?: string): Promise<void> {

@@ -40,18 +40,18 @@ try {
     }
   }
 
-  await hold(1.2);
+  await hold(1);
+  const grid = await page.screenshot();
+  await hold(0.6);
   const pages = await page.getByRole("article").count();
+  await page.getByRole("article").first().click();
+  await page.mouse.move(WIDTH / 2, 4);
+  await hold(1.2);
   for (let i = 1; i < Math.min(pages, 4); i++) {
     await page.keyboard.press("ArrowDown");
     await hold(1.6);
   }
   await page.getByRole("button", { name: "Show all components" }).click();
-  await page.mouse.move(WIDTH / 2, 4);
-  await hold(1);
-  const grid = await page.screenshot();
-  await hold(1);
-  await page.getByRole("article").first().click();
   await page.mouse.move(WIDTH / 2, 4);
   await hold(1.2);
 

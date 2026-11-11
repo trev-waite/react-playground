@@ -6,6 +6,10 @@ Stable conventions only. Versions, commands, and folder maps live in [Using the 
 
 Use Effects only to synchronize with something outside React (browser APIs, subscriptions, network). Derive during render; handle user input in event handlers. Prefer that over Effect chains. Keep experiment previews lazy.
 
+To reset state when a prop changes, store the prop you last saw in state and compare during render, or give the component a `key`. Tell a parent about a change in the handler that made it, never from an Effect. When an Effect's listener or loop needs the latest props or callbacks without re-subscribing, wrap them in `useEffectEvent`. Copying a callback into a ref each render is the older workaround. A ref is still right for a plain value an animation loop reads every frame. `src/lint/effects.test.ts` enforces this, along with the React rules in `.oxlintrc.json`.
+
+The React Compiler (`babel-plugin-react-compiler`, set up in `apps/web/vite.config.ts`) memoizes components and hooks at build time, so new code needs no `useMemo`, `useCallback`, or `memo` for speed. It skips any component that breaks React's rules, which the lint catches. It also skips `try`/`finally`, `delete` through `?.`, and `?.`, `??`, or ternaries inside a `try` block; keep those out of components and hooks, or move the code to a plain function. Imperative loops (canvas, SVG, WebGPU) belong in a plain function the Effect starts and stops, holding their per-frame state in locals there.
+
 ## Experiments
 
 Author WIP in Experimental. Humans and agents may create `apps/web/src/experimental/ideas/<Name>/source.tsx` or Save from the UI. The app mints `project.json` when it is missing and reconciles digest and revision after source edits. Make Live asks for a Live folder and publishes only the portable component.
@@ -20,14 +24,21 @@ For saved ideas, `project.json` owns metadata and `source.tsx` owns code. Publis
 
 ## Motion
 
-Use the springs in `apps/web/src/app/motion.ts` (`morph` for the Live deck and page scroll, `panel` for edge rails, `pill` for toggles) instead of one-off curves. Motion should stay interruptible: retarget a spring rather than waiting for it to finish. Honor `prefers-reduced-motion` and `prefers-reduced-transparency`. See [UI Design](standards/ui-design.md).
+Use the springs in `apps/web/src/app/motion/transitions.ts` (`morph` for the Live deck and page scroll, `panel` for edge rails, `pill` for toggles) instead of one-off curves. Animate through the small in-house engine in `apps/web/src/app/motion/` (motion values, `animate`, and hooks that write styles on one shared frame loop); its springs are a faithful port of Motion's, checked against recorded Motion traces. CSS transitions share the same vocabulary: `cssMotion.ts` installs `--spring-<name>-duration` / `--spring-<name>-easing` (the spring sampled into a `linear()` curve) and `--reduced-motion-duration` / `--reduced-motion-easing` on the document, so use those instead of hand-written durations and curves. Motion should stay interruptible: retarget a spring rather than waiting for it to finish. Honor `prefers-reduced-motion` and `prefers-reduced-transparency`. See [UI Design](standards/ui-design.md).
 
 Hold 60 fps on integrated GPUs. Measure transitions in real Chrome (frame gaps, long animation frames, a trace) before and after a change.
 
 - Drive per-frame values with motion values, never React state. Re-rendering a page 60 times a second costs more than the animation.
 - Animate `transform` and `opacity`. Add `will-change: transform` only while something flies, and cap how far off-screen layers scale; a huge first raster stalls the whole frame.
 - Do not blur (`backdrop-filter`) a surface that moves over a flat color, and keep blur radii fixed while animating.
-- Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), and memoize subtrees a transition re-renders.
+- Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), so a transition never pays for first renders.
 - Pause offscreen loops (`IntersectionObserver`) and defer expensive resize work until the size settles.
 
-`apps/web/src/performance.test.ts` enforces these rules in `bun run test`. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code.
+`apps/web/src/lint/performance.test.ts` enforces these rules in `bun run test`. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code.
+
+## Checks
+
+`bun run lint` (oxlint, configured in `.oxlintrc.json`), `bun run typecheck`, and `bun run test` must pass before work is done; CI runs all three. The lint covers React's rules (hooks, refs, no state set in Effects), accessibility, and leftovers such as unused code and `console.log`.
+
+`apps/web/src/lint/standards.test.ts` enforces the house rules no off-the-shelf linter knows: Live components stay portable, honor `prefers-reduced-motion`, and gate hover styles behind `@media (hover: hover)`; filters settle on `filter: none` rather than `blur(0)`, which Safari leaves blurred; and no commented-out code. A component's own motion contract (shared timing, compositor-only properties) lives in a test beside it, such as `MenuPill.test.ts`.
+

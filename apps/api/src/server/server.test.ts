@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHttpPlaygroundApi, PlaygroundApiError, defaultIdeaDraft } from "@react-playground/api";
@@ -24,7 +24,7 @@ function apiHandler(root: string) {
 function apiClient(playgroundRoot: string) {
   const handler = apiHandler(playgroundRoot);
   return createHttpPlaygroundApi({
-    baseUrl: "http://api.test",
+    baseUrl: "http://localhost:3001",
     fetch: (input, init) => handler(new Request(input, init)),
   });
 }
@@ -121,16 +121,56 @@ describe("playground API handler", () => {
   test("rejects invalid ids and supports loopback CORS aliases", async () => {
     const root = await tempPlayground();
     const handler = apiHandler(root);
-    const invalid = await handler(new Request("http://api.test/api/ideas/short"));
+    const invalid = await handler(new Request("http://localhost:3001/api/ideas/short"));
     expect(invalid.status).toBe(400);
 
     const options = await handler(
-      new Request("http://api.test/api/ideas", {
+      new Request("http://localhost:3001/api/ideas", {
         method: "OPTIONS",
         headers: { Origin: "http://127.0.0.1:3000" },
       }),
     );
     expect(options.status).toBe(204);
     expect(options.headers.get("Access-Control-Allow-Methods")).toContain("PUT");
+  });
+});
+
+describe("request guards", () => {
+  const body = JSON.stringify({ name: "Sneaky", draft: defaultIdeaDraft() });
+  const create = (url: string, headers: Record<string, string>) =>
+    new Request(url, { method: "POST", headers, body });
+
+  test("refuses a request addressed to a hostname that could rebind to this machine", async () => {
+    const handler = apiHandler(await tempPlayground());
+    expect((await handler(new Request("http://evil.example:3001/api/ideas"))).status).toBe(403);
+    expect((await handler(new Request("http://127.0.0.1:3001/api/ideas"))).status).toBe(200);
+  });
+
+  test("refuses a write from another site, and writes nothing", async () => {
+    const root = await tempPlayground();
+    const handler = apiHandler(root);
+    const response = await handler(
+      create("http://localhost:3001/api/ideas", { Origin: "https://evil.example", "Content-Type": "application/json" }),
+    );
+    expect(response.status).toBe(403);
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  test("refuses a body that is not declared as JSON, which a page could post without a preflight", async () => {
+    const root = await tempPlayground();
+    const handler = apiHandler(root);
+    const response = await handler(
+      create("http://localhost:3001/api/ideas", { Origin: "http://localhost:3000", "Content-Type": "text/plain" }),
+    );
+    expect(response.status).toBe(415);
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  test("accepts a JSON write from the studio's origin", async () => {
+    const handler = apiHandler(await tempPlayground());
+    const response = await handler(
+      create("http://localhost:3001/api/ideas", { Origin: "http://localhost:3000", "Content-Type": "application/json" }),
+    );
+    expect(response.status).toBe(201);
   });
 });

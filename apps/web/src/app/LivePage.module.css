@@ -3,12 +3,18 @@
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background: var(--shell-canvas);
+  background: var(--shell-backdrop);
 }
 
 .deck {
   position: absolute;
   inset: 0;
+}
+
+:global(:root[data-scroll="document"]) .page {
+  height: auto;
+  overflow: visible;
+  background: none;
 }
 
 .status {

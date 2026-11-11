@@ -1,6 +1,12 @@
 export { useGpu, type GpuSession, type GpuStatus, type UseGpuOptions } from "./useGpu";
 export { GPU_DPR_RANGE, physicalCanvasSize, webGpuSupported } from "./host";
-export { createTextMask, type TextMask, type TextMaskOptions } from "./textMask";
+export {
+  createTextMask,
+  maskFits,
+  viewportMaskSize,
+  type TextMask,
+  type TextMaskOptions,
+} from "./textMask";
 export { createBlurChain, type BlurChain, type BlurChainOptions } from "./blurChain";
 export { pausableLoop, type PausableLoop } from "./pausableLoop";
 export { bilinearGaussianTaps, gaussianKernel, type BilinearTap } from "./gaussian";

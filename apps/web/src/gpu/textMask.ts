@@ -18,10 +18,42 @@ export type TextMaskOptions = {
 export type TextMask = {
   /** White text on black, `rgba8unorm`. Replaced by `update`; old textures are destroyed. */
   readonly texture: GPUTexture;
+  /** Texel size of `texture`. */
+  readonly size: readonly [number, number];
   /** Rasterises at the new size and uploads. Returns the new texture. */
   update(width: number, height: number): GPUTexture;
   destroy(): void;
 };
+
+/** Keeps a full-screen mask near 16 MB, well inside WebGPU's 8192 texture limit. */
+const MAX_MASK_SIDE = 4096;
+/** Drift a mask absorbs by resampling, such as a zooming canvas rounding to whole pixels. */
+const MASK_SIZE_TOLERANCE = 0.02;
+
+/**
+ * Mask size for a canvas of `aspect` (width / height) at the largest it can get on this screen.
+ * It ignores the canvas's current size, so a canvas that animates its size (a card zooming open)
+ * keeps sampling one mask: the text scales smoothly instead of stretching a stale mask and
+ * snapping when a new one lands.
+ */
+export function viewportMaskSize(
+  aspect: number,
+  viewport: readonly [number, number],
+  dpr: number,
+): [number, number] {
+  const width = Math.min(viewport[0], viewport[1] * aspect) * dpr;
+  const height = width / aspect;
+  const shrink = Math.min(1, MAX_MASK_SIDE / Math.max(width, height));
+  return [Math.max(1, Math.round(width * shrink)), Math.max(1, Math.round(height * shrink))];
+}
+
+/** True when a mask of `current` size can stand in for `next` without a visible difference. */
+export function maskFits(current: readonly [number, number], next: readonly [number, number]): boolean {
+  return (
+    Math.abs(current[0] - next[0]) <= next[0] * MASK_SIZE_TOLERANCE &&
+    Math.abs(current[1] - next[1]) <= next[1] * MASK_SIZE_TOLERANCE
+  );
+}
 
 function rasterise(canvas: HTMLCanvasElement, width: number, height: number, options: TextMaskOptions) {
   canvas.width = width;
@@ -66,6 +98,9 @@ export function createTextMask(gpu: Gpu, options: TextMaskOptions): TextMask {
   return {
     get texture() {
       return texture;
+    },
+    get size(): readonly [number, number] {
+      return [texture.width, texture.height];
     },
     update(width, height) {
       const nextWidth = Math.max(1, Math.floor(width));

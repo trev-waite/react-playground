@@ -12,9 +12,8 @@ export function RefreshCatalogButton({ className }: { className?: string }) {
       await refreshLiveCatalog();
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not refresh catalog.");
-    } finally {
-      setRefreshing(false);
     }
+    setRefreshing(false);
   }
 
   return <>

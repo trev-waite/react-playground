@@ -6,27 +6,33 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "vite preview --port 3000 --strictPort",
+    "start": "wrangler dev --port 3000",
     "test": "bun test",
     "typecheck": "tsc -p tsconfig.json",
-    "og": "bun scripts/og/capture.ts"
+    "og": "bun scripts/og/capture.ts",
+    "smoke": "bun scripts/smoke.ts",
+    "check:deploy": "bun scripts/checkDeploy.ts"
   },
   "dependencies": {
     "@react-playground/api": "workspace:*",
     "@react-playground/layout-sheet": "workspace:*",
     "@webgpu/types": "^0.1.72",
-    "motion": "^13.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0",
     "vgpu": "^0.3.1"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@rolldown/plugin-babel": "^0.3.1",
+    "@types/babel__core": "^7.20.5",
     "@types/bun": "1.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "playwright": "1.62.1",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "wrangler": "4.154.0"
   }
 }

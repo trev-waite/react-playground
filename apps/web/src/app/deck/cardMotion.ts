@@ -1,17 +1,18 @@
-import { animate, motionValue, type MotionValue, type Transition } from "motion/react";
+import { animate, MotionValue } from "../motion/motionValue";
+import type { Transition } from "../motion/transitions";
 import type { CardPose } from "./deckLayout";
 
 /** Live values a card renders from. The deck drives them; React never re-renders for motion. */
 export type CardMotion = {
-  left: MotionValue<number>;
-  top: MotionValue<number>;
-  width: MotionValue<number>;
-  height: MotionValue<number>;
-  x: MotionValue<number>;
-  y: MotionValue<number>;
-  scale: MotionValue<number>;
-  radius: MotionValue<number>;
-  chrome: MotionValue<number>;
+  left: MotionValue;
+  top: MotionValue;
+  width: MotionValue;
+  height: MotionValue;
+  x: MotionValue;
+  y: MotionValue;
+  scale: MotionValue;
+  radius: MotionValue;
+  chrome: MotionValue;
 };
 
 function entries(pose: CardPose): [keyof CardMotion, number][] {
@@ -28,18 +29,50 @@ function entries(pose: CardPose): [keyof CardMotion, number][] {
   ];
 }
 
-export function createCardMotion(pose: CardPose): CardMotion {
+function createCardMotion(pose: CardPose): CardMotion {
   return {
-    left: motionValue(pose.rect.x),
-    top: motionValue(pose.rect.y),
-    width: motionValue(pose.rect.width),
-    height: motionValue(pose.rect.height),
-    x: motionValue(pose.x),
-    y: motionValue(pose.y),
-    scale: motionValue(pose.scale),
-    radius: motionValue(pose.radius),
-    chrome: motionValue(pose.chrome),
+    left: new MotionValue(pose.rect.x),
+    top: new MotionValue(pose.rect.y),
+    width: new MotionValue(pose.rect.width),
+    height: new MotionValue(pose.rect.height),
+    x: new MotionValue(pose.x),
+    y: new MotionValue(pose.y),
+    scale: new MotionValue(pose.scale),
+    radius: new MotionValue(pose.radius),
+    chrome: new MotionValue(pose.chrome),
   };
+}
+
+function stopCard(motion: CardMotion) {
+  for (const value of Object.values(motion)) value.stop();
+}
+
+/** Every card's motion by slug, so a card keeps its place across layouts and catalog changes. */
+export class CardMotions {
+  readonly #motions = new Map<string, CardMotion>();
+
+  /** The card's motion, starting at `pose` the first time it is asked for. */
+  for(slug: string, pose: CardPose): CardMotion {
+    let motion = this.#motions.get(slug);
+    if (!motion) {
+      motion = createCardMotion(pose);
+      this.#motions.set(slug, motion);
+    }
+    return motion;
+  }
+
+  /** Stops and forgets every card not in `slugs`. */
+  keep(slugs: ReadonlySet<string>) {
+    for (const [slug, motion] of this.#motions) {
+      if (slugs.has(slug)) continue;
+      stopCard(motion);
+      this.#motions.delete(slug);
+    }
+  }
+
+  stopAll() {
+    for (const motion of this.#motions.values()) stopCard(motion);
+  }
 }
 
 /** Places a card without animating, cancelling any flight in progress. */

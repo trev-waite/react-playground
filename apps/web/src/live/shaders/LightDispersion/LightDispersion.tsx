@@ -3,8 +3,11 @@ import { clock, effect, sampler, type Frame } from "vgpu";
 import {
   createBlurChain,
   createTextMask,
+  maskFits,
   pausableLoop,
   useGpu,
+  type GpuSession,
+  viewportMaskSize,
   WGSL_HASH,
   WGSL_NOISE,
   WGSL_SPECTRUM,
@@ -142,183 +145,182 @@ fn sampleMask(tex: texture_2d<f32>, uv: vec2f) -> f32 {
 
 type Point = { x: number; y: number };
 
+function startDispersion({ gpu, surface: canvasSurface, canvas }: GpuSession) {
+  // Keep the mask crisp so each spectral tap reads as its own band instead of blending to pastel.
+  const textMask = createTextMask(gpu, {
+    text: TEXT,
+    font: textFont,
+    label: "Hello There mask",
+    softness: 0.0012,
+    // Plaque is already tight to the type; fill it instead of the old 30%-of-stage default.
+    scale: { height: 0.78, width: 0.52 },
+    fitWidth: 0.9,
+  });
+  const glow = createBlurChain(gpu, { levels: 3, format: "r8unorm", label: "Hello There glow" });
+  const maskSampler = sampler(gpu, {
+    minFilter: "linear",
+    magFilter: "linear",
+    addressModeU: "clamp-to-edge",
+    addressModeV: "clamp-to-edge",
+  });
+  const pointerTarget: Point = { x: 0.5, y: 0.5 };
+  const pointerCurrent: Point = { x: 0.5, y: 0.5 };
+  const pointerVelocity: Point = { x: 0, y: 0 };
+  let lastPointer: Point = { ...pointerTarget };
+  let lastPointerTime = performance.now();
+  let activePointerId: number | null = null;
+  let pointerLive = false;
+  let pointerStrength = 0;
+  let heat = 0;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const time = clock(gpu);
+  const unsubscribeError = gpu.onError(error => {
+    console.error("Unable to run the light dispersion shader", error);
+  });
+
+  const dispersionEffect = effect(gpu, LIGHT_DISPERSION_SHADER, {
+    label: "Refracted text",
+    set: {
+      textMask: textMask.texture,
+      glowNear: glow.levels[0],
+      glowMid: glow.levels[1],
+      glowFar: glow.levels[2],
+      maskSampler,
+      params: {
+        resolution: [1, 1],
+        pointer: [0.5, 0.5],
+        velocity: [0, 0],
+        time: 0,
+        dispersion: sliderUnit(SLIDERS, "slider1"),
+        bloom: sliderUnit(SLIDERS, "slider2"),
+        motion: sliderUnit(SLIDERS, "slider3"),
+        presence: 1,
+        pointerStrength: 0,
+        heat: 0,
+      },
+    },
+  });
+
+  // The mask is sized for the screen, not the canvas, so a zoom just resamples it. Resizes are
+  // coalesced and flushed at the top of a frame, since frame() cannot run inside onResize, and a
+  // rebuild (~30ms) waits until the size settles in case the viewport is still being dragged.
+  let pending: { aspect: number; dpr: number } | null = null;
+  let resizedAt = 0;
+  let masked = false;
+  const unsubscribeResize = canvasSurface.onResize(({ width, height, dpr }) => {
+    pending = { aspect: Math.max(1, width) / Math.max(1, height), dpr };
+    resizedAt = performance.now();
+  });
+  const flushResize = (frame: Frame) => {
+    if (!pending) return;
+    if (masked && performance.now() - resizedAt < RESIZE_SETTLE_MS) return;
+    const size = viewportMaskSize(pending.aspect, [window.innerWidth, window.innerHeight], pending.dpr);
+    pending = null;
+    if (masked && maskFits(textMask.size, size)) return;
+    masked = true;
+    const mask = textMask.update(size[0], size[1]);
+    glow.resize(size);
+    glow.render(frame, mask);
+    dispersionEffect.set({ textMask: mask });
+  };
+
+  const updatePointer = (event: PointerEvent) => {
+    if (event.pointerType === "touch" && activePointerId !== event.pointerId) return;
+    const bounds = canvas.getBoundingClientRect();
+    const next = {
+      x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / Math.max(bounds.width, 1))),
+      y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / Math.max(bounds.height, 1))),
+    };
+    const now = performance.now();
+    const deltaSeconds = Math.max((now - lastPointerTime) / 1000, 1 / 120);
+    pointerVelocity.x = Math.max(-2.5, Math.min(2.5, (next.x - lastPointer.x) / deltaSeconds));
+    pointerVelocity.y = Math.max(-2.5, Math.min(2.5, (next.y - lastPointer.y) / deltaSeconds));
+    pointerTarget.x = next.x;
+    pointerTarget.y = next.y;
+    lastPointer = next;
+    lastPointerTime = now;
+    pointerLive = true;
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (activePointerId !== null) return;
+    activePointerId = event.pointerId;
+    canvas.setPointerCapture(event.pointerId);
+    updatePointer(event);
+  };
+  const onPointerMove = (event: PointerEvent) => updatePointer(event);
+  const onPointerEnd = (event: PointerEvent) => {
+    if (activePointerId !== event.pointerId) return;
+    activePointerId = null;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (event.pointerType !== "mouse") pointerLive = false;
+  };
+  const onPointerLeave = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse") return;
+    pointerLive = false;
+  };
+
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerEnd);
+  canvas.addEventListener("pointercancel", onPointerEnd);
+  canvas.addEventListener("pointerleave", onPointerLeave);
+
+  const loop = pausableLoop(gpu, canvas, frame => {
+    flushResize(frame);
+
+    const deltaSeconds = Math.min(time.deltaTime, 0.05);
+    const still = reducedMotion.matches;
+    const follow = still ? 1 : 1 - Math.exp(-deltaSeconds * 8);
+    pointerCurrent.x += (pointerTarget.x - pointerCurrent.x) * follow;
+    pointerCurrent.y += (pointerTarget.y - pointerCurrent.y) * follow;
+    pointerVelocity.x *= Math.exp(-deltaSeconds * 5);
+    pointerVelocity.y *= Math.exp(-deltaSeconds * 5);
+    const strengthTarget = pointerLive && !still ? 1 : 0;
+    pointerStrength += (strengthTarget - pointerStrength) * (1 - Math.exp(-deltaSeconds * 7));
+    // Heat builds with pointer speed and lingers a moment after the pointer stops.
+    const speed = Math.hypot(pointerVelocity.x, pointerVelocity.y);
+    const heatTarget = pointerLive && !still ? Math.min(1, 0.45 + speed * 0.5) : 0;
+    const heatRate = heatTarget > heat ? 6 : 2.5;
+    heat += (heatTarget - heat) * (1 - Math.exp(-deltaSeconds * heatRate));
+
+    dispersionEffect.set({
+      params: {
+        resolution: canvasSurface.size,
+        pointer: [pointerCurrent.x, pointerCurrent.y],
+        velocity: [pointerVelocity.x, pointerVelocity.y],
+        time: still ? 0 : time.time,
+        dispersion: sliderUnit(SLIDERS, "slider1"),
+        bloom: sliderUnit(SLIDERS, "slider2"),
+        motion: still ? 0 : sliderUnit(SLIDERS, "slider3"),
+        presence: 1,
+        pointerStrength,
+        heat: pointerStrength * heat,
+      },
+    });
+    frame.pass(canvasSurface, dispersionEffect);
+  });
+
+  return () => {
+    loop.stop();
+    unsubscribeResize();
+    unsubscribeError();
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointermove", onPointerMove);
+    canvas.removeEventListener("pointerup", onPointerEnd);
+    canvas.removeEventListener("pointercancel", onPointerEnd);
+    canvas.removeEventListener("pointerleave", onPointerLeave);
+    glow.destroy();
+    textMask.destroy();
+  };
+}
+
 export function LightDispersion() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const { status } = useGpu(canvasRef, {
     label: "Light dispersion",
-    start: ({ gpu, surface: canvasSurface, canvas }) => {
-      // Keep the mask crisp so each spectral tap reads as its own band instead of blending to pastel.
-      const textMask = createTextMask(gpu, {
-        text: TEXT,
-        font: textFont,
-        label: "Hello There mask",
-        softness: 0.0012,
-        // Plaque is already tight to the type; fill it instead of the old 30%-of-stage default.
-        scale: { height: 0.78, width: 0.52 },
-        fitWidth: 0.9,
-      });
-      const glow = createBlurChain(gpu, { levels: 3, format: "r8unorm", label: "Hello There glow" });
-      const maskSampler = sampler(gpu, {
-        minFilter: "linear",
-        magFilter: "linear",
-        addressModeU: "clamp-to-edge",
-        addressModeV: "clamp-to-edge",
-      });
-      const pointerTarget: Point = { x: 0.5, y: 0.5 };
-      const pointerCurrent: Point = { x: 0.5, y: 0.5 };
-      const pointerVelocity: Point = { x: 0, y: 0 };
-      let lastPointer: Point = { ...pointerTarget };
-      let lastPointerTime = performance.now();
-      let activePointerId: number | null = null;
-      let pointerLive = false;
-      let pointerStrength = 0;
-      let heat = 0;
-      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-      const time = clock(gpu);
-      const unsubscribeError = gpu.onError(error => {
-        console.error("Unable to run the light dispersion shader", error);
-      });
-
-      const dispersionEffect = effect(gpu, LIGHT_DISPERSION_SHADER, {
-        label: "Refracted text",
-        set: {
-          textMask: textMask.texture,
-          glowNear: glow.levels[0],
-          glowMid: glow.levels[1],
-          glowFar: glow.levels[2],
-          maskSampler,
-          params: {
-            resolution: [1, 1],
-            pointer: [0.5, 0.5],
-            velocity: [0, 0],
-            time: 0,
-            dispersion: sliderUnit(SLIDERS, "slider1"),
-            bloom: sliderUnit(SLIDERS, "slider2"),
-            motion: sliderUnit(SLIDERS, "slider3"),
-            presence: 1,
-            pointerStrength: 0,
-            heat: 0,
-          },
-        },
-      });
-
-      // Resizes are coalesced and flushed at the top of the next frame: rasterising the mask and
-      // re-blurring every resize event is wasteful, and frame() cannot run inside onResize.
-      let pendingSize: [number, number] | null =
-        canvasSurface.size[0] > 1 && canvasSurface.size[1] > 1
-          ? [canvasSurface.size[0], canvasSurface.size[1]]
-          : null;
-      let resizedAt = 0;
-      let masked = false;
-      const unsubscribeResize = canvasSurface.onResize(({ width, height }) => {
-        pendingSize = [Math.max(1, width), Math.max(1, height)];
-        resizedAt = performance.now();
-      });
-      const flushResize = (frame: Frame) => {
-        if (!pendingSize) return;
-        // A rebuild re-rasterises the text and reallocates the glow chain (~30ms). While the
-        // canvas is still being resized (a layout animation), keep stretching the last mask
-        // and rebuild once the size settles.
-        if (masked && performance.now() - resizedAt < RESIZE_SETTLE_MS) return;
-        const [width, height] = pendingSize;
-        pendingSize = null;
-        masked = true;
-        const mask = textMask.update(width, height);
-        glow.resize([width, height]);
-        glow.render(frame, mask);
-        dispersionEffect.set({ textMask: mask, params: { resolution: [width, height] } });
-      };
-
-      const updatePointer = (event: PointerEvent) => {
-        if (event.pointerType === "touch" && activePointerId !== event.pointerId) return;
-        const bounds = canvas.getBoundingClientRect();
-        const next = {
-          x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / Math.max(bounds.width, 1))),
-          y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / Math.max(bounds.height, 1))),
-        };
-        const now = performance.now();
-        const deltaSeconds = Math.max((now - lastPointerTime) / 1000, 1 / 120);
-        pointerVelocity.x = Math.max(-2.5, Math.min(2.5, (next.x - lastPointer.x) / deltaSeconds));
-        pointerVelocity.y = Math.max(-2.5, Math.min(2.5, (next.y - lastPointer.y) / deltaSeconds));
-        pointerTarget.x = next.x;
-        pointerTarget.y = next.y;
-        lastPointer = next;
-        lastPointerTime = now;
-        pointerLive = true;
-      };
-
-      const onPointerDown = (event: PointerEvent) => {
-        if (activePointerId !== null) return;
-        activePointerId = event.pointerId;
-        canvas.setPointerCapture(event.pointerId);
-        updatePointer(event);
-      };
-      const onPointerMove = (event: PointerEvent) => updatePointer(event);
-      const onPointerEnd = (event: PointerEvent) => {
-        if (activePointerId !== event.pointerId) return;
-        activePointerId = null;
-        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-        if (event.pointerType !== "mouse") pointerLive = false;
-      };
-      const onPointerLeave = (event: PointerEvent) => {
-        if (event.pointerType !== "mouse") return;
-        pointerLive = false;
-      };
-
-      canvas.addEventListener("pointerdown", onPointerDown);
-      canvas.addEventListener("pointermove", onPointerMove);
-      canvas.addEventListener("pointerup", onPointerEnd);
-      canvas.addEventListener("pointercancel", onPointerEnd);
-      canvas.addEventListener("pointerleave", onPointerLeave);
-
-      const loop = pausableLoop(gpu, canvas, frame => {
-        flushResize(frame);
-
-        const deltaSeconds = Math.min(time.deltaTime, 0.05);
-        const still = reducedMotion.matches;
-        const follow = still ? 1 : 1 - Math.exp(-deltaSeconds * 8);
-        pointerCurrent.x += (pointerTarget.x - pointerCurrent.x) * follow;
-        pointerCurrent.y += (pointerTarget.y - pointerCurrent.y) * follow;
-        pointerVelocity.x *= Math.exp(-deltaSeconds * 5);
-        pointerVelocity.y *= Math.exp(-deltaSeconds * 5);
-        const strengthTarget = pointerLive && !still ? 1 : 0;
-        pointerStrength += (strengthTarget - pointerStrength) * (1 - Math.exp(-deltaSeconds * 7));
-        // Heat builds with pointer speed and lingers a moment after the pointer stops.
-        const speed = Math.hypot(pointerVelocity.x, pointerVelocity.y);
-        const heatTarget = pointerLive && !still ? Math.min(1, 0.45 + speed * 0.5) : 0;
-        const heatRate = heatTarget > heat ? 6 : 2.5;
-        heat += (heatTarget - heat) * (1 - Math.exp(-deltaSeconds * heatRate));
-
-        dispersionEffect.set({
-          params: {
-            pointer: [pointerCurrent.x, pointerCurrent.y],
-            velocity: [pointerVelocity.x, pointerVelocity.y],
-            time: still ? 0 : time.time,
-            dispersion: sliderUnit(SLIDERS, "slider1"),
-            bloom: sliderUnit(SLIDERS, "slider2"),
-            motion: still ? 0 : sliderUnit(SLIDERS, "slider3"),
-            presence: 1,
-            pointerStrength,
-            heat: pointerStrength * heat,
-          },
-        });
-        frame.pass(canvasSurface, dispersionEffect);
-      });
-
-      return () => {
-        loop.stop();
-        unsubscribeResize();
-        unsubscribeError();
-        canvas.removeEventListener("pointerdown", onPointerDown);
-        canvas.removeEventListener("pointermove", onPointerMove);
-        canvas.removeEventListener("pointerup", onPointerEnd);
-        canvas.removeEventListener("pointercancel", onPointerEnd);
-        canvas.removeEventListener("pointerleave", onPointerLeave);
-        glow.destroy();
-        textMask.destroy();
-      };
-    },
+    start: startDispersion,
   });
 
   return (
@@ -336,8 +338,9 @@ export function LightDispersion() {
           position: "relative",
           display: "grid",
           placeItems: "center",
-          padding: "1.15rem 1.85rem 1.05rem",
-          borderRadius: "1rem",
+          fontSize: "min(30cqh, 16.1cqw)",
+          padding: "0.11em 0.17em 0.1em",
+          borderRadius: "0.09em",
           overflow: "hidden",
           background: "#000",
         }}
@@ -347,7 +350,6 @@ export function LightDispersion() {
           style={{
             color: "#f4f4f5",
             fontFamily: FONT_FAMILY,
-            fontSize: "min(30cqh, 16.1cqw)",
             fontWeight: 800,
             lineHeight: 0.95,
             whiteSpace: "nowrap",

@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#e8eaee" />
+    <title>Page not found · Trev’s Studio</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      :root {
+        --ink: #1c2430;
+        --muted: #5c6678;
+        --accent: #2a5cff;
+        --pitch: clamp(13px, 3.9vw, 22px);
+        --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+        /* The deck's pill spring, sampled for CSS. */
+        --spring: linear(0, 0.145, 0.433, 0.714, 0.921, 1.038, 1.084, 1.084, 1.062, 1.036, 1.014, 1.001, 0.994, 0.992, 0.994, 0.996, 1);
+        color-scheme: light;
+        font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(rgba(40, 48, 64, 0.14) 1px, transparent 1px) 0 0 / 16px 16px,
+          radial-gradient(120% 80% at 10% 0%, #f0f2f6 0%, transparent 55%),
+          radial-gradient(90% 70% at 100% 100%, #dce1ea 0%, transparent 50%),
+          #e8eaee;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+        min-height: 100svh;
+        margin: 0;
+        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        box-sizing: border-box;
+      }
+
+      main {
+        display: grid;
+        justify-items: center;
+        gap: 24px;
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      /* 404 drawn from the canvas's own dots: three 5x7 digits with a column between each. */
+      .matrix {
+        display: grid;
+        grid-template-columns: repeat(17, var(--pitch));
+        grid-auto-rows: var(--pitch);
+        place-items: center;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .matrix i {
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* --heat (0 to 1) is how close the pointer is: 404.js sets it on the dots near the cursor or finger. */
+      .matrix i::before {
+        content: "";
+        border-radius: 50%;
+        scale: calc(1 + var(--heat, 0) * var(--swell));
+        background: color-mix(in oklab, var(--accent) calc(min(1, var(--heat, 0) * 1.8) * 100%), var(--dot));
+        transition:
+          scale 720ms var(--spring),
+          background-color 1100ms ease-in-out;
+      }
+
+      .matrix i[data-lit]::before {
+        transition:
+          scale 160ms var(--ease-out),
+          background-color 90ms linear;
+      }
+
+      .off::before {
+        --dot: rgba(40, 48, 64, 0.2);
+        --swell: 2.2;
+        width: 3px;
+        height: 3px;
+      }
+
+      .on::before {
+        --dot: var(--ink);
+        --swell: 0.45;
+        width: calc(var(--pitch) * 0.72);
+        aspect-ratio: 1;
+        animation: dot-in 640ms var(--spring) calc(80ms + var(--i) * 22ms) backwards;
+      }
+
+      /* A tap or click sends one ripple out through the digits from where it landed. */
+      .matrix[data-ping] .on::before {
+        animation: ping 560ms var(--ease-out) calc(var(--ring) * 32ms) backwards;
+      }
+
+      p {
+        margin: 0;
+        max-width: 22rem;
+        text-wrap: balance;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--muted);
+      }
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 20px 0 16px;
+        border-radius: 999px;
+        background: #111113;
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: 0 1px 1px rgba(15, 15, 17, 0.04), 0 6px 18px rgba(15, 15, 17, 0.1);
+        -webkit-tap-highlight-color: transparent;
+        transition:
+          scale 140ms var(--ease-out),
+          background-color 140ms var(--ease-out);
+      }
+
+      a:active {
+        scale: 0.97;
+      }
+
+      a:focus-visible {
+        outline: 2px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+
+      @media (hover: hover) and (pointer: fine) {
+        a:hover {
+          background: #2a2c33;
+        }
+      }
+
+      @keyframes dot-in {
+        from {
+          scale: 0.2;
+          background: rgba(40, 48, 64, 0.3);
+        }
+      }
+
+      @keyframes ping {
+        35% {
+          scale: 1.3;
+          background: var(--accent);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .matrix i::before,
+        .matrix i[data-lit]::before,
+        .matrix[data-ping] .on::before,
+        a {
+          scale: none;
+          animation: none;
+          transition: none;
+        }
+      }
+    </style>
+    <script src="/404.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1><span class="sr-only">404: </span>Nothing at this address</h1>
+      <div class="matrix" aria-hidden="true">
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:7"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="on" style="--i:9"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="on" style="--i:4"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:7"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:11"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="on" style="--i:16"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:5"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:12"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:17"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:6"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:9"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:13"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:18"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:4"></i>
+        <i class="on" style="--i:5"></i>
+        <i class="on" style="--i:6"></i>
+        <i class="on" style="--i:7"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:10"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:14"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:16"></i>
+        <i class="on" style="--i:17"></i>
+        <i class="on" style="--i:18"></i>
+        <i class="on" style="--i:19"></i>
+        <i class="on" style="--i:20"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:11"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:20"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:9"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:13"></i>
+        <i class="on" style="--i:14"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:21"></i>
+        <i class="off"></i>
+      </div>
+      <p>This page isn’t in the catalog. It may have moved, or it never existed.</p>
+      <a href="/">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.5" />
+          <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.5" />
+          <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.5" />
+          <rect x="9" y="9" width="5.5" height="5.5" rx="1.5" />
+        </svg>
+        Show all components
+      </a>
+    </main>
+  </body>
+</html>

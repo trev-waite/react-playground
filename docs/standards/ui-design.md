@@ -1,6 +1,6 @@
 # UI Design
 
-A practical foundation for clean, consistent, accessible interfaces. Tokens live in `apps/web/src/app/app.css`; springs live in `apps/web/src/app/motion.ts`.
+A practical foundation for clean, consistent, accessible interfaces. Tokens live in `apps/web/src/app/app.css`; springs live in `apps/web/src/app/motion/transitions.ts`.
 
 1. **Visual hierarchy.** Use size, weight, color, and position to establish clear levels of importance and guide attention.
 2. **Consistent spacing.** Use the 8px scale (8, 16, 24, 32, 40, 48, 64) through the `--space-*` tokens.

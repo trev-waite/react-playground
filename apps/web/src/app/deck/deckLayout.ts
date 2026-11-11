@@ -1,6 +1,10 @@
 import type { CardSize } from "../../lib/types";
 
 export type Size = { width: number; height: number };
+/** Screen room kept clear for the notch, rounded corners, and the home indicator. */
+export type Insets = { top: number; right: number; bottom: number; left: number };
+
+export const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
 export type Rect = { x: number; y: number; width: number; height: number };
 
 /**
@@ -59,12 +63,16 @@ export function gridColumns(availableWidth: number): number {
 export function gridLayout(
   sizes: readonly CardSize[],
   viewport: Size,
+  insets: Insets = NO_INSETS,
 ): { rects: Rect[]; height: number } {
+  const top = GRID_TOP + insets.top;
   const gutter = gridGutter(viewport.width);
-  const width = Math.min(GRID_MAX_WIDTH, Math.max(0, viewport.width - gutter * 2));
+  const sideLeft = Math.max(gutter, insets.left);
+  const room = Math.max(0, viewport.width - sideLeft - Math.max(gutter, insets.right));
+  const width = Math.min(GRID_MAX_WIDTH, room);
   const columns = gridColumns(width);
   const cell = (width - GRID_GAP * (columns - 1)) / columns;
-  const left = (viewport.width - width) / 2;
+  const left = sideLeft + (room - width) / 2;
   const taken: boolean[][] = [];
 
   const isFree = (row: number, column: number, span: { columns: number; rows: number }) => {
@@ -92,7 +100,7 @@ export function gridLayout(
         rows = Math.max(rows, row + span.rows);
         return {
           x: left + column * (cell + GRID_GAP),
-          y: GRID_TOP + row * (cell + GRID_GAP),
+          y: top + row * (cell + GRID_GAP),
           width: span.columns * cell + (span.columns - 1) * GRID_GAP,
           height: span.rows * cell + (span.rows - 1) * GRID_GAP,
         };
@@ -100,16 +108,41 @@ export function gridLayout(
     }
   });
 
-  const height = rows === 0 ? 0 : GRID_TOP + rows * cell + (rows - 1) * GRID_GAP + GRID_BOTTOM;
+  const height = rows === 0 ? 0 : top + rows * cell + (rows - 1) * GRID_GAP + GRID_BOTTOM + insets.bottom;
   return { rects, height };
 }
 
-/** The full-page card, in viewport coordinates. */
-export function pageFrame(viewport: Size): Rect {
+/** A grid card, how far through it (0 to 1) a scroll edge falls, and how far above it the edge sits. */
+export type GridAnchor = { index: number; through: number; above: number };
+
+/** The highest card still in view when the grid is scrolled to `top`. */
+export function gridAnchor(rects: readonly Rect[], top: number): GridAnchor | null {
+  let index = -1;
+  rects.forEach((rect, i) => {
+    if (rect.y + rect.height > top && (index < 0 || rect.y < rects[index]!.y)) index = i;
+  });
+  const rect = rects[index];
+  if (!rect) return null;
   return {
-    x: PAGE_INSET,
+    index,
+    through: Math.min(1, Math.max(0, (top - rect.y) / Math.max(rect.height, 1))),
+    // The scroll edge can sit above the card too, as it does above the first row at the top of the grid.
+    above: Math.max(0, rect.y - top),
+  };
+}
+
+/** The scroll that puts an anchored card back at the top, after the grid is laid out again. */
+export function anchoredScrollTop(rects: readonly Rect[], anchor: GridAnchor): number | null {
+  const rect = rects[anchor.index];
+  return rect ? Math.max(0, rect.y + anchor.through * rect.height - anchor.above) : null;
+}
+
+/** The full-page card, in viewport coordinates. It may run under the status bar, never under a side notch. */
+export function pageFrame(viewport: Size, insets: Insets = NO_INSETS): Rect {
+  return {
+    x: PAGE_INSET + insets.left,
     y: PAGE_INSET,
-    width: Math.max(0, viewport.width - PAGE_INSET * 2),
+    width: Math.max(0, viewport.width - PAGE_INSET * 2 - insets.left - insets.right),
     height: Math.max(0, viewport.height - PAGE_INSET * 2),
   };
 }

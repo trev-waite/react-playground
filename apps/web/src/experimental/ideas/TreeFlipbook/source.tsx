@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const SLIDERS = {"wind":55,"leaves":60,"frameRate":12};
 
@@ -368,22 +368,22 @@ export function Example({
   const fps = clamp(sliders.frameRate ?? SLIDERS.frameRate, 1, 60);
   const [frame, setFrame] = useState(0);
   const playback = useRef({ fps, rate: 1 });
-  playback.current = { fps, rate: clamp(progress, 0, 1) };
+  useLayoutEffect(() => {
+    playback.current = { fps, rate: clamp(progress, 0, 1) };
+  }, [fps, progress]);
 
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let raf = 0;
-    let last = performance.now();
-    let clock = 0;
+    const loop = { raf: 0, last: performance.now(), clock: 0 };
     const tick = (now: number) => {
       const { fps, rate } = playback.current;
-      clock += Math.min(0.1, (now - last) / 1000) * fps * rate;
-      last = now;
-      setFrame(Math.floor(clock) % FRAME_COUNT);
-      raf = requestAnimationFrame(tick);
+      loop.clock += Math.min(0.1, (now - loop.last) / 1000) * fps * rate;
+      loop.last = now;
+      setFrame(Math.floor(loop.clock) % FRAME_COUNT);
+      loop.raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    loop.raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(loop.raf);
   }, []);
 
   const scene = useMemo(() => drawFrame(frame, wind), [frame, wind]);

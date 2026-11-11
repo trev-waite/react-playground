@@ -1,6 +1,6 @@
 # React Playground
 
-Personal studio for learning React by building isolated components.
+Personal studio for learning React by building isolated components. The deployed site is branded **Trev’s Studio**; the repo and code keep the React Playground name.
 
 Write an idea in **Experimental**, tune it on the shared dock, then **Make Live**. Live is the published catalog: the component as you last configured it, no playground chrome. Live builds and deploys on its own; Experimental only runs locally.
 
@@ -12,7 +12,7 @@ bun run dev
 ```
 
 - Studio (Live + Experimental): http://localhost:3000
-- Local API: http://localhost:3001
+- Local API: http://127.0.0.1:3001 (loopback only)
 
 `bun run build && bun run start` previews the deployable Live app.
 
