@@ -1,5 +1,7 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import { Glob } from "bun";
+import { folderFromFamilyPath, slugFromPreviewPath } from "../src/lib/catalog.ts";
 
 /** Everything public/ may hold. Each one ships as is. */
 export const PUBLIC_FILES = [
@@ -46,8 +48,19 @@ async function listFiles(root: string, prefix = ""): Promise<{ files: string[]; 
   return { files: files.sort(), irregular: irregular.sort() };
 }
 
-/** Every reason `dist` should not deploy; empty when it may. */
-export async function deployProblems(dist: string, publicDir: string): Promise<string[]> {
+/** The routes the source defines: every component preview and every family folder under `liveDir`. */
+export async function catalogRoutes(liveDir: string): Promise<string[]> {
+  const routes: string[] = [];
+  for await (const file of new Glob("**/{preview.tsx,family.ts}").scan({ cwd: liveDir })) {
+    const absolute = path.join(liveDir, file);
+    const route = slugFromPreviewPath(absolute) ?? folderFromFamilyPath(absolute);
+    if (route) routes.push(route);
+  }
+  return routes.sort();
+}
+
+/** Every reason `dist` should not deploy; empty when it may. `routes` are the pages it must have, and only those. */
+export async function deployProblems(dist: string, publicDir: string, routes: readonly string[]): Promise<string[]> {
   const problems: string[] = [];
   const { files: publicFiles, irregular: publicIrregular } = await listFiles(publicDir);
   for (const file of publicIrregular) problems.push(`public/${file} is not a regular file`);
@@ -64,9 +77,15 @@ export async function deployProblems(dist: string, publicDir: string): Promise<s
     if (!distFiles.includes(required)) problems.push(`dist/${required} is missing`);
   }
   const index = await readFile(path.join(dist, "index.html"), "utf8").catch(() => "");
-  const routes = distFiles.filter(file => ROUTE_PAGE.test(file) && file !== "index.html" && !PUBLIC_FILES.includes(file));
-  if (distFiles.includes("index.html") && routes.length === 0) {
-    problems.push("dist has no component route pages, so every component would be a 404");
+  const pages = distFiles
+    .filter(file => ROUTE_PAGE.test(file) && file !== "index.html" && !PUBLIC_FILES.includes(file))
+    .map(file => file.replace(/\.html$/, ""));
+  if (routes.length === 0) problems.push("the catalog defines no component routes");
+  for (const route of routes) {
+    if (!pages.includes(route)) problems.push(`dist has no page for /${route}, so it would be a 404`);
+  }
+  for (const page of pages) {
+    if (!routes.includes(page)) problems.push(`dist/${page}.html is not a component route`);
   }
   const headers = await readFile(path.join(dist, "_headers"), "utf8").catch(() => "");
   const rules = headers.split("\n").filter(line => line.startsWith("/"));
@@ -110,10 +129,11 @@ export async function deployProblems(dist: string, publicDir: string): Promise<s
 
 if (import.meta.main) {
   const web = path.join(import.meta.dir, "..");
-  const problems = await deployProblems(path.join(web, "dist"), path.join(web, "public"));
+  const routes = await catalogRoutes(path.join(web, "src/live"));
+  const problems = await deployProblems(path.join(web, "dist"), path.join(web, "public"), routes);
   if (problems.length) {
     console.error(`The build must not deploy:\n${problems.map(problem => `  - ${problem}`).join("\n")}`);
     process.exit(1);
   }
-  console.log("The build ships only allowlisted files.");
+  console.log(`The build ships only allowlisted files, with a page for each of ${routes.length} routes.`);
 }

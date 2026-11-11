@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { deployProblems, PUBLIC_FILES } from "./checkDeploy";
+import { catalogRoutes, deployProblems, PUBLIC_FILES } from "./checkDeploy";
 
 const INDEX = '<!doctype html><div id="root"></div><script type="module" src="/assets/index-AbCd1234.js"></script>';
 const roots: string[] = [];
@@ -12,6 +12,7 @@ async function build(
   extra: Record<string, string> = {},
   publicExtra: Record<string, string> = {},
   tamper?: (dist: string, publicDir: string) => Promise<void>,
+  routes: readonly string[] = ["controls/Switch"],
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "check-deploy-"));
   roots.push(root);
@@ -34,7 +35,7 @@ async function build(
     await writeFile(path.join(publicDir, file), content);
   }
   await tamper?.(dist, publicDir);
-  return deployProblems(dist, publicDir);
+  return deployProblems(dist, publicDir, routes);
 }
 
 afterEach(async () => {
@@ -69,7 +70,10 @@ describe("deploy allowlist", () => {
   });
 
   test("refuses a page that is not the app, so nothing else ships as a route", async () => {
-    expect(await build({ "admin.html": "<h1>admin</h1>" })).toEqual(["dist/admin.html is not the app page"]);
+    expect(await build({ "admin.html": "<h1>admin</h1>" })).toEqual([
+      "dist/admin.html is not a component route",
+      "dist/admin.html is not the app page",
+    ]);
   });
 
   test("refuses bundles that leak local paths, the studio's API, or source maps", async () => {
@@ -102,11 +106,17 @@ describe("deploy allowlist", () => {
     expect(problems).toContain("public/favicon.svg is not a regular file");
   });
 
-  test("refuses a build with no route pages, which would make every component a 404", async () => {
-    const problems = await build({}, {}, async dist => {
-      await rm(path.join(dist, "controls"), { recursive: true });
-    });
-    expect(problems).toEqual(["dist has no component route pages, so every component would be a 404"]);
+  test("refuses a build missing a component's page, which would make that component a 404", async () => {
+    const problems = await build({}, {}, undefined, ["controls/Switch", "shaders/LightDispersion"]);
+    expect(problems).toEqual(["dist has no page for /shaders/LightDispersion, so it would be a 404"]);
+  });
+
+  test("refuses an extra page, even an exact copy of the app", async () => {
+    expect(await build({ "admin.html": INDEX })).toEqual(["dist/admin.html is not a component route"]);
+  });
+
+  test("refuses a catalog with no routes, so a broken scan cannot pass everything", async () => {
+    expect(await build({}, {}, undefined, [])).toContain("the catalog defines no component routes");
   });
 
   test("refuses caching all of /assets/* and more header rules than Cloudflare applies", async () => {
@@ -120,9 +130,22 @@ describe("deploy allowlist", () => {
     const root = await mkdtemp(path.join(tmpdir(), "check-deploy-"));
     roots.push(root);
     await mkdir(path.join(root, "dist"));
-    const problems = await deployProblems(path.join(root, "dist"), path.join(root, "missing-public"));
+    const problems = await deployProblems(path.join(root, "dist"), path.join(root, "missing-public"), ["controls/Switch"]);
     expect(problems).toContain("dist/index.html is missing");
     expect(problems).toContain("dist/404.html is missing");
     expect(problems).toContain("dist/_headers is missing");
+  });
+});
+
+describe("catalogRoutes", () => {
+  test("lists every component preview and family folder in the source", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "check-deploy-"));
+    roots.push(root);
+    const live = path.join(root, "src", "live");
+    for (const file of ["controls/family.ts", "controls/Switch/preview.tsx", "shaders/LightDispersion/preview.tsx", "shaders/LightDispersion/LightDispersion.tsx"]) {
+      await mkdir(path.dirname(path.join(live, file)), { recursive: true });
+      await writeFile(path.join(live, file), "");
+    }
+    expect(await catalogRoutes(live)).toEqual(["controls", "controls/Switch", "shaders/LightDispersion"]);
   });
 });
