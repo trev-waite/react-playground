@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useEffectEvent, useState, type RefObject } from "react";
 import { init, surface, type Surface } from "vgpu";
 import {
   canvasHasLayout,
@@ -79,7 +79,7 @@ export type UseGpuOptions = {
 /** Starts WebGPU on `canvas` while its layer is active, and stops it when the layer hides or the returned cleanup runs. */
 function runGpu(
   canvas: HTMLCanvasElement,
-  optionsRef: RefObject<UseGpuOptions>,
+  readOptions: () => UseGpuOptions,
   setStatus: (status: GpuStatus) => void,
   setError: (error: string | null) => void,
 ): () => void {
@@ -104,7 +104,7 @@ function runGpu(
       await waitForLayout(canvas, abort.signal);
       if (mine !== session.epoch || abort.signal.aborted) return;
 
-      const created = await initClient(optionsRef.current.label, optionsRef.current.features ?? []);
+      const created = await initClient(readOptions().label, readOptions().features ?? []);
       if (mine !== session.epoch || abort.signal.aborted) {
         created.dispose();
         return;
@@ -113,12 +113,12 @@ function runGpu(
       const gpu = created;
       session.gpu = gpu;
       const gpuSurface = surface(gpu, canvas, {
-        alphaMode: optionsRef.current.alphaMode ?? "premultiplied",
-        clearColor: optionsRef.current.clearColor ?? TRANSPARENT,
-        dpr: optionsRef.current.dpr ?? GPU_DPR_RANGE,
-        label: optionsRef.current.label,
+        alphaMode: readOptions().alphaMode ?? "premultiplied",
+        clearColor: readOptions().clearColor ?? TRANSPARENT,
+        dpr: readOptions().dpr ?? GPU_DPR_RANGE,
+        label: readOptions().label,
       });
-      session.cleanup = optionsRef.current.start({ gpu, surface: gpuSurface, canvas }) ?? (() => {});
+      session.cleanup = readOptions().start({ gpu, surface: gpuSurface, canvas }) ?? (() => {});
       if (mine !== session.epoch || abort.signal.aborted) {
         disposeSession();
         return;
@@ -171,10 +171,7 @@ export function useGpu(
   canvasRef: RefObject<HTMLCanvasElement | null>,
   options: UseGpuOptions,
 ): { status: GpuStatus; error: string | null } {
-  const optionsRef = useRef(options);
-  useLayoutEffect(() => {
-    optionsRef.current = options;
-  });
+  const readOptions = useEffectEvent(() => options);
   const [status, setStatus] = useState<GpuStatus>(() =>
     webGpuSupported() ? "idle" : "unsupported",
   );
@@ -185,7 +182,7 @@ export function useGpu(
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !webGpuSupported()) return;
-    return runGpu(canvas, optionsRef, setStatus, setError);
+    return runGpu(canvas, readOptions, setStatus, setError);
   }, [canvasRef, options.label]);
 
   return { status, error };

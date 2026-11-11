@@ -6,6 +6,8 @@ Stable conventions only. Versions, commands, and folder maps live in [Using the 
 
 Use Effects only to synchronize with something outside React (browser APIs, subscriptions, network). Derive during render; handle user input in event handlers. Prefer that over Effect chains. Keep experiment previews lazy.
 
+To reset state when a prop changes, store the prop you last saw in state and compare during render, or give the component a `key`. Tell a parent about a change in the handler that made it, never from an Effect. When an Effect's listener or loop needs the latest props or callbacks without re-subscribing, wrap them in `useEffectEvent`. Copying a callback into a ref each render is the older workaround. A ref is still right for a plain value an animation loop reads every frame. `src/lint/effects.test.ts` enforces this, along with the React rules in `.oxlintrc.json`.
+
 The React Compiler (`babel-plugin-react-compiler`, set up in `apps/web/vite.config.ts`) memoizes components and hooks at build time, so new code needs no `useMemo`, `useCallback`, or `memo` for speed. It skips any component that breaks React's rules, which the lint catches. It also skips `try`/`finally`, `delete` through `?.`, and `?.`, `??`, or ternaries inside a `try` block; keep those out of components and hooks, or move the code to a plain function. Imperative loops (canvas, SVG, WebGPU) belong in a plain function the Effect starts and stops, holding their per-frame state in locals there.
 
 ## Experiments

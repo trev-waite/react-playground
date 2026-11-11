@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveCard } from "../../lib/catalog";
 import { useReducedMotion } from "../motion/hooks";
 import { SPRING } from "../motion/transitions";
@@ -403,14 +403,10 @@ export function CardDeck({
     }, SCROLL_SETTLE_MS);
   }
 
-  const onScrollRef = useRef(onScroll);
-  useLayoutEffect(() => {
-    onScrollRef.current = onScroll;
-  });
+  const onDocumentScroll = useEffectEvent(onScroll);
 
   useEffect(() => {
     if (!scrollsDocument) return;
-    const onDocumentScroll = () => onScrollRef.current();
     window.addEventListener("scroll", onDocumentScroll, { passive: true });
     return () => window.removeEventListener("scroll", onDocumentScroll);
   }, [scrollsDocument]);

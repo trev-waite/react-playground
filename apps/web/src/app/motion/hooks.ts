@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { frame } from "./frameLoop";
 import { animate, MotionValue } from "./motionValue";
 import type { Transition } from "./transitions";
@@ -52,13 +52,10 @@ export function useAnimatedValues<K extends string>(
  * effect are painted in the same frame), in case other inputs changed.
  */
 export function useMotionRender(values: readonly MotionValue[], render: () => void) {
-  const latest = useRef(render);
-  useLayoutEffect(() => {
-    latest.current = render;
-  });
+  const renderLatest = useEffectEvent(render);
 
   useLayoutEffect(() => {
-    const draw = () => latest.current();
+    const draw = () => renderLatest();
     const schedule = () => frame.render(draw);
     const unsubscribes = values.map(value => value.on(schedule));
     return () => {
@@ -67,7 +64,7 @@ export function useMotionRender(values: readonly MotionValue[], render: () => vo
     };
   }, [values]);
 
-  useLayoutEffect(() => queueMicrotask(() => latest.current()));
+  useLayoutEffect(() => queueMicrotask(() => renderLatest()));
 }
 
 type StyleKey = Extract<keyof CSSProperties, string>;

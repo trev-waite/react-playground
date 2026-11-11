@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import type { IdeaProject, IdeaSummary } from "@react-playground/api";
 import { IDEAS_CHANGED } from "../lib/liveCatalogPath";
 import { playgroundApi } from "../lib/playgroundApi";
@@ -21,7 +21,7 @@ type IdeaChange = "updated" | "deleted" | null;
 /** Refreshes the saved ideas when the server or the window says they may have changed. */
 function syncIdeas(
   hot: NonNullable<ImportMeta["hot"]>,
-  latest: RefObject<Options>,
+  latest: () => Options,
   refreshRef: RefObject<() => void>,
   setChange: (change: IdeaChange) => void,
 ): () => void {  const sync: { sequence: number; timer: ReturnType<typeof setTimeout> | undefined } = {
@@ -33,37 +33,37 @@ function syncIdeas(
     sync.sequence += 1;
     const request = sync.sequence;
     clearTimeout(sync.timer);
-    if (latest.current.busy) {
+    if (latest().busy) {
       sync.timer = setTimeout(() => void refresh(discard), 100);
       return;
     }
-    const active = latest.current.activeIdea;
-    const editVersion = latest.current.editVersion();
+    const active = latest().activeIdea;
+    const editVersion = latest().editVersion();
     try {
       const ideas = await playgroundApi.listIdeas();
       if (request !== sync.sequence) return;
-      latest.current.onList(ideas);
+      latest().onList(ideas);
       if (!active) return;
       const exists = ideas.some(idea => idea.id === active.id);
       const loaded = exists ? await playgroundApi.loadIdea(active.id) : null;
-      if (request !== sync.sequence || latest.current.activeIdea?.id !== active.id) return;
-      if (latest.current.busy) {
+      if (request !== sync.sequence || latest().activeIdea?.id !== active.id) return;
+      if (latest().busy) {
         sync.timer = setTimeout(() => void refresh(), 100);
         return;
       }
-      if (loaded && JSON.stringify(loaded) === JSON.stringify(latest.current.activeIdea)) {
+      if (loaded && JSON.stringify(loaded) === JSON.stringify(latest().activeIdea)) {
         setChange(null);
         return;
       }
-      if (latest.current.dirty && (!discard || latest.current.editVersion() !== editVersion)) {
+      if (latest().dirty && (!discard || latest().editVersion() !== editVersion)) {
         setChange(loaded ? "updated" : "deleted");
       } else {
         setChange(null);
-        if (loaded) latest.current.onReload(loaded);
-        else latest.current.onDeleted();
+        if (loaded) latest().onReload(loaded);
+        else latest().onDeleted();
       }
     } catch (error) {
-      if (request === sync.sequence) latest.current.onError(
+      if (request === sync.sequence) latest().onError(
         error instanceof Error ? error.message : "Could not refresh saved projects.",
       );
     }
@@ -85,10 +85,7 @@ function syncIdeas(
 }
 
 export function useIdeaSync(options: Options) {
-  const latest = useRef(options);
-  useLayoutEffect(() => {
-    latest.current = options;
-  });
+  const latest = useEffectEvent(() => options);
   const [change, setChange] = useState<IdeaChange>(null);
   const activeId = options.activeIdea?.id;
   const [changeFor, setChangeFor] = useState(activeId);

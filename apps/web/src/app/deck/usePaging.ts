@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useEffectEvent, type RefObject } from "react";
 import { GESTURE_GAP_MS, wheelGesture } from "./wheelGesture";
 
 const PAGE_KEYS: Record<string, -1 | 1> = {
@@ -45,11 +45,8 @@ export type PagingInput = {
  * swipes, so intent is read here. Touch keeps native snapping.
  */
 export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: boolean, input: PagingInput) {
-  // Re-subscribing mid-gesture would drop the lock and let momentum skip pages.
-  const inputRef = useRef(input);
-  useLayoutEffect(() => {
-    inputRef.current = input;
-  });
+  // Re-subscribing mid-gesture would drop the lock and let momentum skip pages, so the listeners read the latest input.
+  const latestInput = useEffectEvent(() => input);
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -65,17 +62,17 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
       event.preventDefault();
 
       const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? event.deltaY * 16 : event.deltaY;
-      const intent = gesture.read(delta, event.timeStamp, inputRef.current.commitAt);
+      const intent = gesture.read(delta, event.timeStamp, latestInput().commitAt);
       if (!intent) return;
       clearTimeout(release.timer);
       if (intent.type === "step") {
-        inputRef.current.step(intent.direction);
+        latestInput().step(intent.direction);
         return;
       }
-      inputRef.current.pull(intent.travel);
+      latestInput().pull(intent.travel);
       release.timer = setTimeout(() => {
         gesture.end();
-        inputRef.current.release();
+        latestInput().release();
       }, GESTURE_GAP_MS);
     }
 
@@ -84,7 +81,7 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
       if (!direction || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTyping(event.target) || (event.key === " " && event.target instanceof HTMLButtonElement)) return;
       event.preventDefault();
-      inputRef.current.step(event.shiftKey && event.key === " " ? -1 : direction);
+      latestInput().step(event.shiftKey && event.key === " " ? -1 : direction);
     }
 
     scroller.addEventListener("wheel", onWheel, { passive: false });
