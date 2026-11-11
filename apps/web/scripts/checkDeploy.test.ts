@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { deployProblems, PUBLIC_FILES } from "./checkDeploy";
@@ -8,7 +8,11 @@ const INDEX = '<!doctype html><div id="root"></div><script type="module" src="/a
 const roots: string[] = [];
 
 /** A clean build: the public files, the app page, one route, and hashed assets. */
-async function build(extra: Record<string, string> = {}, publicExtra: Record<string, string> = {}) {
+async function build(
+  extra: Record<string, string> = {},
+  publicExtra: Record<string, string> = {},
+  tamper?: (dist: string, publicDir: string) => Promise<void>,
+) {
   const root = await mkdtemp(path.join(tmpdir(), "check-deploy-"));
   roots.push(root);
   const dist = path.join(root, "dist");
@@ -29,6 +33,7 @@ async function build(extra: Record<string, string> = {}, publicExtra: Record<str
     await mkdir(path.dirname(path.join(publicDir, file)), { recursive: true });
     await writeFile(path.join(publicDir, file), content);
   }
+  await tamper?.(dist, publicDir);
   return deployProblems(dist, publicDir);
 }
 
@@ -80,6 +85,35 @@ describe("deploy allowlist", () => {
 
   test("refuses anything new in public/, and notices a missing 404 page", async () => {
     expect(await build({}, { "draft.psd": "x" })).toEqual(["public/draft.psd is not on the allowlist"]);
+  });
+
+  test("refuses symlinks, which an upload would follow to files outside the build", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "check-deploy-"));
+    roots.push(root);
+    const secret = path.join(root, "secret.txt");
+    await writeFile(secret, "TOKEN=1");
+    const problems = await build({}, {}, async (dist, publicDir) => {
+      await rm(path.join(dist, "og.png"));
+      await symlink(secret, path.join(dist, "og.png"));
+      await rm(path.join(publicDir, "favicon.svg"));
+      await symlink(secret, path.join(publicDir, "favicon.svg"));
+    });
+    expect(problems).toContain("dist/og.png is not a regular file");
+    expect(problems).toContain("public/favicon.svg is not a regular file");
+  });
+
+  test("refuses a build with no route pages, which would make every component a 404", async () => {
+    const problems = await build({}, {}, async dist => {
+      await rm(path.join(dist, "controls"), { recursive: true });
+    });
+    expect(problems).toEqual(["dist has no component route pages, so every component would be a 404"]);
+  });
+
+  test("refuses caching all of /assets/* and more header rules than Cloudflare applies", async () => {
+    const blanket = await build({ _headers: "/*\n  X-Content-Type-Options: nosniff\n\n/assets/*\n  Cache-Control: immutable\n" });
+    expect(blanket).toEqual(["dist/_headers caches all of /assets/*, so a missing file's 404 would be kept for a year"]);
+    const tooMany = await build({ _headers: Array.from({ length: 101 }, (_, i) => `/a${i}\n  X: y\n`).join("") });
+    expect(tooMany).toEqual(["dist/_headers has 101 rules; Cloudflare applies only 100"]);
   });
 
   test("requires the app page, the 404 page, and the headers", async () => {

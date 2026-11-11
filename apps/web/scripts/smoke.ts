@@ -39,7 +39,7 @@ const checks: Check[] = [
     name: "a component route serves the app",
     async run(origin) {
       const route = await componentRoute();
-      if (!route) return;
+      expect(route !== null, "dist has no component route page to request");
       const response = await get(`${origin}/${route}`);
       expect(response.status === 200 && isHtml(response), `/${route} status ${response.status}`);
       expect((await response.text()).includes('<div id="root">'), `/${route} is not the app`);
@@ -57,10 +57,11 @@ const checks: Check[] = [
     },
   },
   {
-    name: "a missing script is a 404, never the app",
+    name: "a missing script is a 404 that browsers won't keep, never the app",
     async run(origin) {
       const response = await get(`${origin}/assets/smoke-missing-AbCd1234.js`);
       expect(response.status === 404, `status ${response.status}`);
+      expect(!response.headers.get("cache-control")?.includes("immutable"), "the 404 is cached as immutable");
       expect(!(await response.text()).includes('<div id="root">'), "served the app in place of a script");
     },
   },
