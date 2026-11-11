@@ -14,18 +14,18 @@ export function markThemeToggle(html: string, enabled: boolean): string {
  */
 export function themeTogglePlugin(env: Record<string, string | undefined>): Plugin {
   const enabled = env.VITE_THEME_TOGGLE === "on";
-  let outDir = "";
+  let outDir: string | null = null;
   return {
     name: "theme-toggle",
     configResolved(config) {
-      outDir = path.resolve(config.root, config.build.outDir);
+      if (config.command === "build") outDir = path.resolve(config.root, config.build.outDir);
     },
     transformIndexHtml: {
       order: "pre",
       handler: html => markThemeToggle(html, enabled),
     },
     async closeBundle() {
-      if (!enabled) return;
+      if (!enabled || !outDir) return;
       const notFound = path.join(outDir, "404.html");
       const html = await readFile(notFound, "utf8").catch(() => null);
       if (html !== null) await writeFile(notFound, markThemeToggle(html, enabled));
