@@ -84,6 +84,9 @@ jobs:
         timeout-minutes: 3
         run: bun run --cwd apps/web smoke:local --no-build
 
+      - name: Smoke test production from a runner (temporary)
+        run: bun run --cwd apps/web smoke https://studio.trevorwaite.com
+
       - name: Upload the tested build
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
