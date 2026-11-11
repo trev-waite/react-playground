@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { numberColumns } from "./numberColumns";
 import styles from "./PrimaryButton.module.css";
 
@@ -11,14 +11,11 @@ type PrimaryButtonProps = {
 };
 
 function RollingNumber({ value }: { value: number }) {
-  const previousValueRef = useRef(value);
-  const previousValue = previousValueRef.current;
+  const [roll, setRoll] = useState({ from: value, to: value });
+  if (roll.to !== value) setRoll({ from: roll.to, to: value });
+  const previousValue = roll.from;
   const transitioning = previousValue !== value;
   const valueText = String(value);
-
-  useLayoutEffect(() => {
-    previousValueRef.current = value;
-  }, [value]);
 
   return (
     <>

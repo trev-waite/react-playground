@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveCard } from "../../lib/catalog";
 import { useReducedMotion } from "../motion/hooks";
 import { SPRING } from "../motion/transitions";
-import { createCardMotion, jumpCard, moveCard, stopCard, type CardMotion } from "./cardMotion";
+import { CardMotions, jumpCard, moveCard, type CardMotion } from "./cardMotion";
 import { DeckCard } from "./DeckCard";
 import { useDocumentScroll } from "./useDocumentScroll";
 import { commitDistance, EDGE_PULL, PageScroll } from "./pageScroll";
@@ -56,6 +56,10 @@ function whenIdle(callback: () => void): () => void {
 
 type Viewport = Size & { insets: Insets };
 type GridLayout = ReturnType<typeof gridLayout>;
+
+/** Which element scrolled: the document on phones, the deck's own scroller elsewhere. */
+type ScrollHost = "document" | "deck";
+type ScrollPlace = { host: ScrollHost | null; top: number; anchor: GridAnchor | null };
 
 function sameViewport(a: Viewport, b: Viewport): boolean {
   return (
@@ -111,6 +115,21 @@ function useViewport(
   return viewport;
 }
 
+/** The element whose scroll the reader sees: the document on phones, the deck's scroller elsewhere. */
+function scrollHost(scrollsDocument: boolean, scroller: HTMLElement | null): HTMLElement | null {
+  return scrollsDocument ? document.documentElement : scroller;
+}
+
+/** Where `host` is scrolled, and the grid card at the top of it when the grid shows. */
+function scrollPlace(host: HTMLElement, grid?: GridLayout): ScrollPlace {
+  const top = host.scrollTop;
+  return {
+    host: host === document.documentElement ? "document" : "deck",
+    top,
+    anchor: grid ? gridAnchor(grid.rects, top) : null,
+  };
+}
+
 /**
  * Pages stack in a native scroll-snap column. The grid is a camera pulled
  * back from that page: the open card shrinks into its tile while the others
@@ -134,28 +153,25 @@ export function CardDeck({
   const reducedMotion = useReducedMotion();
   /** The page column has taken over from the zoom. False in the grid and in flight. */
   const [paged, setPaged] = useState(view === "page");
+  // Leaving a view hands it to the camera: the page column only returns once a flight lands.
+  const [shownView, setShownView] = useState(view);
+  if (shownView !== view) {
+    setShownView(view);
+    setPaged(false);
+  }
   const [nearIndex, setNearIndex] = useState(activeIndex);
   /** Previews mounted ahead of time, and kept, so the grid never pays for first renders mid-flight. */
   const [warm, setWarm] = useState<ReadonlySet<string>>(() => new Set());
-  const motions = useRef(new Map<string, CardMotion>());
+  const [motions] = useState(() => new CardMotions());
   const flight = useRef(0);
   /** The last scroll the reader saw, and the grid card at the top of it, so a relayout keeps their place. */
-  const scrolled = useRef<{ host: HTMLElement | null; top: number; anchor: GridAnchor | null }>({
+  const scrolled = useRef<ScrollPlace>({
     host: null,
     top: 0,
     anchor: null,
   });
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [pages] = useState(
-    () =>
-      new PageScroll(
-        top => {
-          const host = scrollingElement();
-          if (host) host.scrollTop = top;
-        },
-        () => delete scrollerRef.current?.dataset.gliding,
-      ),
-  );
+  const [pages] = useState(() => new PageScroll());
 
   const grid = useMemo(
     () => gridLayout(cards.map(card => card.size), viewport, viewport.insets),
@@ -166,44 +182,73 @@ export function CardDeck({
   const transition = reducedMotion ? INSTANT : SPRING.morph;
   const pageRect = (index: number) => offsetRect(frame, index * viewport.height);
 
-  function motionFor(card: LiveCard, index: number): CardMotion {
-    let motion = motions.current.get(card.slug);
-    if (!motion) {
-      motion = createCardMotion(pagePose(pageRect(index)));
-      motions.current.set(card.slug, motion);
-    }
-    return motion;
-  }
+  const motionFor = (card: LiveCard, index: number): CardMotion =>
+    motions.for(card.slug, pagePose(pageRect(index)));
 
   const latest = useRef({ cards, grid, frame, viewport, activeIndex, transition, scrollsDocument });
-  latest.current = { cards, grid, frame, viewport, activeIndex, transition, scrollsDocument };
-
-  /** The element whose scroll the reader sees: the document on phones, the deck's scroller elsewhere. */
-  function scrollingElement(): HTMLElement | null {
-    return latest.current.scrollsDocument ? document.documentElement : scrollerRef.current;
+  useLayoutEffect(() => {
+    latest.current = { cards, grid, frame, viewport, activeIndex, transition, scrollsDocument };
+  });
+  if (layout === "pages" ? false : cards.some(card => !warm.has(card.slug))) {
+    setWarm(new Set(cards.map(card => card.slug)));
+  }
+  const [nearFor, setNearFor] = useState({ activeIndex, layout });
+  if (nearFor.activeIndex !== activeIndex || nearFor.layout !== layout) {
+    setNearFor({ activeIndex, layout });
+    if (layout === "pages") setNearIndex(activeIndex);
   }
 
-  function remember(host: HTMLElement, grid?: GridLayout) {
-    const top = host.scrollTop;
-    scrolled.current = { host, top, anchor: grid ? gridAnchor(grid.rects, top) : null };
-  }
+
+  useLayoutEffect(
+    () =>
+      pages.attach({
+        write: top => {
+          const host = scrollHost(latest.current.scrollsDocument, scrollerRef.current);
+          if (host) host.scrollTop = top;
+        },
+        onSettle: () => scrollerRef.current?.removeAttribute("data-gliding"),
+      }),
+    [pages],
+  );
+
+  const stopGlide = useCallback(() => {
+    pages.stop();
+    scrollerRef.current?.removeAttribute("data-gliding");
+  }, [pages]);
+
+  /** Moves the page column in `host` toward `target` from wherever it is, turning snapping off until it rests. */
+  const scrollPages = useCallback(
+    (host: HTMLElement | null, target: number, how: "follow" | "glide") => {
+      const scroller = scrollerRef.current;
+      if (!scroller || !host) return;
+      pages.sync(host.scrollTop);
+      scroller.dataset.gliding = "";
+      if (how === "follow") pages.follow(target);
+      else pages.glide(target);
+    },
+    [pages],
+  );
+
   const previous = useRef<{ view: DeckView; paged: boolean; grid: typeof grid } | null>(null);
 
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    const host = scrollsDocument ? document.documentElement : scroller;
-    const hostChanged = scrolled.current.host !== null && scrolled.current.host !== host;
+    const host = scrollHost(latest.current.scrollsDocument, scrollerRef.current);
+    if (!host) return;
+    const hostChanged = scrolled.current.host !== null && scrolled.current.host !== (scrollsDocument ? "document" : "deck");
     const { cards, grid, frame, viewport, activeIndex, transition } = latest.current;
     const prior = previous.current;
     previous.current = { view, paged, grid };
+    const motionOf = (card: LiveCard, index: number) =>
+      motions.for(card.slug, pagePose(offsetRect(frame, index * viewport.height)));
     const each = (place: (motion: CardMotion, index: number) => void) =>
-      cards.forEach((card, index) => place(motionFor(card, index), index));
+      cards.forEach((card, index) => place(motionOf(card, index), index));
     const focus = grid.rects[activeIndex];
 
     const showPages = () => {
       host.scrollTop = activeIndex * viewport.height;
-      remember(host);
+      scrolled.current = scrollPlace(host);
       each((motion, index) => jumpCard(motion, pagePose(offsetRect(frame, index * viewport.height))));
     };
 
@@ -217,6 +262,21 @@ export function CardDeck({
       return true;
     };
 
+    /** Flies the camera in to the active page, then hands over to the page column. */
+    const flyToPage = (id: number) => {
+      if (!focus) return;
+      const camera = offsetRect(frame, host.scrollTop);
+      void fly(id, (card, index) =>
+        moveCard(
+          motionOf(card, index),
+          index === activeIndex ? pagePose(camera) : cameraPose(grid.rects[index]!, focus, camera),
+          transition,
+        ),
+      ).then(landed => {
+        if (landed) setPaged(true);
+      });
+    };
+
     if (prior && prior.view !== view && focus) {
       // The camera owns the scroll from here; a page glide or settle would fight it.
       stopGlide();
@@ -225,10 +285,10 @@ export function CardDeck({
       if (view === "grid") {
         if (prior.paged) {
           // Hand over from the page column to the grid's scroll without a visible jump.
-          const visibleTop = motionFor(cards[activeIndex]!, activeIndex).top.get() - scrolled.current.top;
+          const visibleTop = motionOf(cards[activeIndex]!, activeIndex).top.get() - scrolled.current.top;
           const top = centeredScrollTop(focus, viewport, grid.height);
           host.scrollTop = top;
-          remember(host, grid);
+          scrolled.current = scrollPlace(host, grid);
           const camera = offsetRect(frame, top);
           each((motion, index) =>
             jumpCard(
@@ -238,20 +298,10 @@ export function CardDeck({
                 : cameraPose(grid.rects[index]!, focus, camera),
             ),
           );
-          setPaged(false);
         }
-        void fly(id, (card, index) => moveCard(motionFor(card, index), gridPose(grid.rects[index]!), transition));
+        void fly(id, (card, index) => moveCard(motionOf(card, index), gridPose(grid.rects[index]!), transition));
       } else {
-        const camera = offsetRect(frame, host.scrollTop);
-        void fly(id, (card, index) =>
-          moveCard(
-            motionFor(card, index),
-            index === activeIndex ? pagePose(camera) : cameraPose(grid.rects[index]!, focus, camera),
-            transition,
-          ),
-        ).then(landed => {
-          if (landed) setPaged(true);
-        });
+        flyToPage(id);
       }
       return;
     }
@@ -273,37 +323,21 @@ export function CardDeck({
       const anchor = scrolled.current.anchor;
       const top = anchor ? anchoredScrollTop(grid.rects, anchor) : null;
       if (prior && top !== null) host.scrollTop = top;
-      remember(host, grid);
+      scrolled.current = scrollPlace(host, grid);
     } else if (paged) {
       showPages();
-    } else {
-      setPaged(true);
+    } else if (focus) {
+      // Resized mid-flight to a page: finish the move at the new size.
+      flyToPage(flight.current);
     }
-  }, [view, paged, grid, scrollsDocument]);
-
-  function stopGlide() {
-    pages.stop();
-    delete scrollerRef.current?.dataset.gliding;
-  }
-
-  /** Moves the page column toward `target` from wherever it is, turning snapping off until it rests. */
-  function scrollPages(target: number, how: "follow" | "glide") {
-    const scroller = scrollerRef.current;
-    const host = scrollingElement();
-    if (!scroller || !host) return;
-    pages.sync(host.scrollTop);
-    scroller.dataset.gliding = "";
-    if (how === "follow") pages.follow(target);
-    else pages.glide(target);
-  }
+  }, [view, paged, grid, scrollsDocument, motions, stopGlide]);
 
   // Glide to pages chosen by wheel, keys, the pager, or a link. Scroll-snap
   // stays off in flight so it cannot fight the spring.
   useEffect(() => {
     const scroller = scrollerRef.current;
-    const host = scrollingElement();
+    const host = scrollHost(latest.current.scrollsDocument, scrollerRef.current);
     if (!scroller || !host || layout !== "pages") return;
-    setNearIndex(activeIndex);
     const target = activeIndex * viewport.height;
     if (!pages.moving && Math.abs(host.scrollTop - target) < 1) return;
     if (reducedMotion || Math.abs(host.scrollTop - target) > viewport.height * 1.5) {
@@ -311,60 +345,54 @@ export function CardDeck({
       host.scrollTop = target;
       return;
     }
-    scrollPages(target, "glide");
-  }, [activeIndex, layout, viewport.height, reducedMotion, scrollsDocument]);
+    scrollPages(host, target, "glide");
+  }, [activeIndex, layout, viewport.height, reducedMotion, scrollsDocument, pages, scrollPages, stopGlide]);
 
   useEffect(() => {
-    const slugs = new Set(cards.map(card => card.slug));
-    for (const [slug, motion] of motions.current) {
-      if (slugs.has(slug)) continue;
-      stopCard(motion);
-      motions.current.delete(slug);
-    }
-  }, [cards]);
+    motions.keep(new Set(cards.map(card => card.slug)));
+  }, [cards, motions]);
 
   useEffect(
     () => () => {
       clearTimeout(settleTimer.current);
       pages.stop();
-      for (const motion of motions.current.values()) stopCard(motion);
+      motions.stopAll();
     },
-    [],
+    [pages, motions],
   );
 
   useEffect(() => {
-    if (layout !== "pages") {
-      if (warm.size < cards.length) setWarm(new Set(cards.map(card => card.slug)));
-      return;
-    }
+    if (layout !== "pages") return;
     const next = cards.find(card => !warm.has(card.slug));
     if (!next) return;
     return whenIdle(() => setWarm(current => new Set(current).add(next.slug)));
   }, [cards, layout, warm]);
 
   const restingTop = () => latest.current.activeIndex * viewport.height;
+  const pageHost = () => scrollHost(latest.current.scrollsDocument, scrollerRef.current);
   usePaging(scrollerRef, listening && layout === "pages", {
     commitAt: commitDistance(viewport.height),
     pull: travel => {
       if (reducedMotion) return;
       const index = latest.current.activeIndex;
       const pastEnd = (travel < 0 && index === 0) || (travel > 0 && index === cards.length - 1);
-      scrollPages(restingTop() + travel * (pastEnd ? EDGE_PULL : 1), "follow");
+      scrollPages(pageHost(), restingTop() + travel * (pastEnd ? EDGE_PULL : 1), "follow");
     },
     step: direction => {
       const next = Math.min(cards.length - 1, Math.max(0, latest.current.activeIndex + direction));
       if (next !== latest.current.activeIndex) onActiveChange(next);
-      else if (pages.moving) scrollPages(restingTop(), "glide");
+      else if (pages.moving) scrollPages(pageHost(), restingTop(), "glide");
     },
     release: () => {
-      if (pages.moving || scrollingElement()?.scrollTop !== restingTop()) scrollPages(restingTop(), "glide");
+      const host = pageHost();
+      if (pages.moving || host?.scrollTop !== restingTop()) scrollPages(host, restingTop(), "glide");
     },
   });
 
   function onScroll() {
-    const host = scrollingElement();
+    const host = pageHost();
     if (!host) return;
-    remember(host, layout === "grid" ? latest.current.grid : undefined);
+    scrolled.current = scrollPlace(host, layout === "grid" ? latest.current.grid : undefined);
     if (layout !== "pages") return;
     const index = Math.round(host.scrollTop / viewport.height);
     setNearIndex(index);

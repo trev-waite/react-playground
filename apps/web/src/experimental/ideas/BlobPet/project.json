@@ -1,9 +1,9 @@
 {
   "id": "12927743-79be-4f3b-a56d-a90069cb4da4",
-  "revision": 31,
+  "revision": 32,
   "name": "Blob Pet",
   "componentName": "BlobPet",
-  "updatedAt": "2026-11-10T21:44:53.471Z",
+  "updatedAt": "2026-11-11T04:39:51.406Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "98ba81c8b8b3971781f63d0076a73d7b8a5f48268dbbb3df5ea770ec8e93e17f",
+  "sourceDigest": "d4c3bebbb1f2045c8ce97d7bdbede1df8bc31042bb0fcf7580b24b70b8834898",
   "createdAt": "2026-09-26T16:20:12.512Z"
 }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import {
   bakeSliders,
   defaultIdeaDraft,
@@ -75,6 +75,28 @@ type IdeaWorkbenchProps = {
 };
 
 /** Commits with the content beside it, so its effect means "that content is mounted". */
+type IdeaLoader = () => Promise<{ Example?: IdeaExample }>;
+
+const stages = new WeakMap<IdeaLoader, IdeaExample>();
+
+/** One lazy component per idea loader, so a re-render never remounts the stage. */
+function stageFor(load: IdeaLoader): IdeaExample {
+  let stage = stages.get(load);
+  if (!stage) {
+    stage = lazy(async () => {
+      const module = await load();
+      return { default: module.Example ?? EmptyStage };
+    });
+    stages.set(load, stage);
+  }
+  return stage;
+}
+
+/** Renders the idea's stage, handed over as a prop: `stageFor` keeps one stable component per idea. */
+function IdeaStage({ stage: Stage, ...props }: { stage: IdeaExample } & ComponentProps<IdeaExample>) {
+  return <Stage {...props} />;
+}
+
 function ReadySignal({ onReady }: { onReady?: () => void }) {
   useEffect(() => {
     onReady?.();
@@ -98,9 +120,11 @@ export default function IdeaWorkbench({
   const [motionNonce, setMotionNonce] = useState(0);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef(progress);
-  progressRef.current = progress;
   const draftRef = useRef(draft);
-  draftRef.current = { ...draft, sliders };
+  useLayoutEffect(() => {
+    progressRef.current = progress;
+    draftRef.current = { ...draft, sliders };
+  });
 
   useEffect(
     () => () => {
@@ -110,44 +134,36 @@ export default function IdeaWorkbench({
   );
 
   useEffect(() => {
-    if (prefersReducedMotion()) {
-      setProgress(target);
-      return;
-    }
+    if (prefersReducedMotion()) return;
 
-    let frame = 0;
-    let last = performance.now();
-    let current = progressRef.current;
+    const loop = { frame: 0, last: performance.now(), current: progressRef.current };
 
     // perf-allow: ideas receive replay progress as a prop (IdeaExample), so the stage
     // re-renders each frame of a replay. Moving it to a motion value changes the idea contract.
     const tick = (now: number) => {
-      const dt = Math.min(0.048, (now - last) / 1000);
-      last = now;
-      const delta = target - current;
+      const dt = Math.min(0.048, (now - loop.last) / 1000);
+      loop.last = now;
+      const delta = target - loop.current;
       if (Math.abs(delta) < 0.002) {
-        current = target;
+        loop.current = target;
         setProgress(target);
         return;
       }
-      current += Math.sign(delta) * Math.min(
+      loop.current += Math.sign(delta) * Math.min(
         Math.abs(delta),
         PLAYBACK_RATE_PER_SECOND * dt,
       );
-      setProgress(current);
-      frame = requestAnimationFrame(tick);
+      setProgress(loop.current);
+      loop.frame = requestAnimationFrame(tick);
     };
 
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    loop.frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(loop.frame);
   }, [target, motionNonce]);
 
   const modules = useIdeaModules();
   const load = componentName ? modules[componentName] : undefined;
-  const Stage = useMemo(() => load ? lazy<IdeaExample>(async () => {
-    const module = await load();
-    return { default: module.Example ?? EmptyStage };
-  }) : null, [load]);
+  const Stage = load ? stageFor(load) : null;
   const liveSliders = sliderRecord(sliders);
   const scrollMock =
     pressedId != null &&
@@ -155,12 +171,14 @@ export default function IdeaWorkbench({
 
   function playTo(next: number) {
     setTarget(next);
+    if (prefersReducedMotion()) setProgress(next);
     setMotionNonce(nonce => nonce + 1);
   }
 
   function playReplay() {
-    progressRef.current = 0;
-    setProgress(0);
+    const start = prefersReducedMotion() ? 1 : 0;
+    progressRef.current = start;
+    setProgress(start);
     setTarget(1);
     setMotionNonce(nonce => nonce + 1);
   }
@@ -221,7 +239,7 @@ export default function IdeaWorkbench({
       {Stage ? (
         <div className={styles.stageViewport}>
           <Suspense fallback={<p className={styles.blankHint}>Loading…</p>}>
-            <Stage sliders={liveSliders} progress={progress} />
+            <IdeaStage stage={Stage} sliders={liveSliders} progress={progress} />
             <ReadySignal onReady={onReady} />
           </Suspense>
         </div>

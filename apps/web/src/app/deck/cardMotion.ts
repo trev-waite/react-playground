@@ -29,7 +29,7 @@ function entries(pose: CardPose): [keyof CardMotion, number][] {
   ];
 }
 
-export function createCardMotion(pose: CardPose): CardMotion {
+function createCardMotion(pose: CardPose): CardMotion {
   return {
     left: new MotionValue(pose.rect.x),
     top: new MotionValue(pose.rect.y),
@@ -43,8 +43,36 @@ export function createCardMotion(pose: CardPose): CardMotion {
   };
 }
 
-export function stopCard(motion: CardMotion) {
+function stopCard(motion: CardMotion) {
   for (const value of Object.values(motion)) value.stop();
+}
+
+/** Every card's motion by slug, so a card keeps its place across layouts and catalog changes. */
+export class CardMotions {
+  readonly #motions = new Map<string, CardMotion>();
+
+  /** The card's motion, starting at `pose` the first time it is asked for. */
+  for(slug: string, pose: CardPose): CardMotion {
+    let motion = this.#motions.get(slug);
+    if (!motion) {
+      motion = createCardMotion(pose);
+      this.#motions.set(slug, motion);
+    }
+    return motion;
+  }
+
+  /** Stops and forgets every card not in `slugs`. */
+  keep(slugs: ReadonlySet<string>) {
+    for (const [slug, motion] of this.#motions) {
+      if (slugs.has(slug)) continue;
+      stopCard(motion);
+      this.#motions.delete(slug);
+    }
+  }
+
+  stopAll() {
+    for (const motion of this.#motions.values()) stopCard(motion);
+  }
 }
 
 /** Places a card without animating, cancelling any flight in progress. */

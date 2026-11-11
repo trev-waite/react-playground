@@ -2,7 +2,7 @@
  * Demo-only preview content. Replace this file when experimenting with a
  * different component inside ConfigurableShell.
  */
-import { useEffect, useRef, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, type PointerEvent } from "react";
 import { blobPath } from "./exportExample";
 import styles from "./ExamplePreview.module.css";
 
@@ -27,11 +27,14 @@ export function ExamplePreview({
   const fillRef = useRef<SVGPathElement>(null);
   const ghostRef = useRef<SVGPathElement>(null);
   const paramsRef = useRef({ form, soft, drift });
-  paramsRef.current = { form, soft, drift };
+
+  useLayoutEffect(() => {
+    paramsRef.current = { form, soft, drift };
+  }, [form, soft, drift]);
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let frame = 0;
+    const loop = { frame: 0 };
     const origin = performance.now();
 
     const tick = (now: number) => {
@@ -39,7 +42,7 @@ export function ExamplePreview({
       const t = reduce ? 0 : (now - origin) / 1000;
       fillRef.current?.setAttribute("d", blobPath(f, s, d, t, 0));
       ghostRef.current?.setAttribute("d", blobPath(f, s, d, t + 0.55, 0.4));
-      if (!reduce) frame = requestAnimationFrame(tick);
+      if (!reduce) loop.frame = requestAnimationFrame(tick);
     };
 
     if (reduce) {
@@ -50,14 +53,14 @@ export function ExamplePreview({
     // Only animate while the blob is on screen; rewriting paths nobody sees still costs frames.
     const target = fillRef.current?.ownerSVGElement;
     const observer = new IntersectionObserver(([entry]) => {
-      cancelAnimationFrame(frame);
-      if (entry?.isIntersecting) frame = requestAnimationFrame(tick);
+      cancelAnimationFrame(loop.frame);
+      if (entry?.isIntersecting) loop.frame = requestAnimationFrame(tick);
     });
     if (target) observer.observe(target);
-    else frame = requestAnimationFrame(tick);
+    else loop.frame = requestAnimationFrame(tick);
     return () => {
       observer.disconnect();
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(loop.frame);
     };
   }, []);
 

@@ -52,6 +52,14 @@ export function glidePath(from: number, velocity: number, to: number, ms: number
   };
 }
 
+/** Where a `PageScroll` writes the column's scroll, and what runs once it rests. */
+export type PageScrollOutput = {
+  write: (top: number) => void;
+  onSettle: () => void;
+};
+
+const DETACHED: PageScrollOutput = { write: () => {}, onSettle: () => {} };
+
 /**
  * Scrolls the page column. A pull follows input through a critically damped
  * spring; a glide runs a `glidePath` from wherever the page is and however
@@ -66,10 +74,16 @@ export class PageScroll {
   private running = false;
   private last = 0;
 
-  constructor(
-    private readonly write: (top: number) => void,
-    private readonly onSettle: () => void,
-  ) {}
+  private output: PageScrollOutput = DETACHED;
+
+  /** Sends the column's scroll to `output` until the returned detach runs. */
+  attach(output: PageScrollOutput): () => void {
+    this.output = output;
+    return () => {
+      this.stop();
+      if (this.output === output) this.output = DETACHED;
+    };
+  }
 
   get moving(): boolean {
     return this.running;
@@ -137,9 +151,9 @@ export class PageScroll {
         this.velocity = 0;
       }
     }
-    this.write(this.position);
+    this.output.write(this.position);
     this.running = Boolean(this.path) || this.position !== this.target || this.velocity !== 0;
     if (this.running) frame.update(this.tick);
-    if (settled) this.onSettle();
+    if (settled) this.output.onSettle();
   };
 }

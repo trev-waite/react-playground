@@ -42,37 +42,6 @@
     {
       "files": ["apps/api/**", "apps/web/scripts/**", "apps/web/vite/**"],
       "rules": { "eslint/no-console": "off" }
-    },
-    {
-      "files": [
-        "apps/web/src/app/deck/CardDeck.tsx",
-        "apps/web/src/experimental/DockSlider.tsx",
-        "apps/web/src/experimental/ExperimentalPage.tsx",
-        "apps/web/src/experimental/IdeaProjects.tsx",
-        "apps/web/src/experimental/IdeaWorkbench.tsx",
-        "apps/web/src/experimental/useIdeaSync.ts",
-        "apps/web/src/experimental/ideas/BlobPet/source.tsx",
-        "apps/web/src/experimental/ideas/LightDispersion/source.tsx",
-        "apps/web/src/experimental/ideas/SpacingTidy/source.tsx",
-        "apps/web/src/experimental/ideas/TreeFlipbook/source.tsx",
-        "apps/web/src/gpu/useGpu.ts",
-        "apps/web/src/live/buttons/PrimaryButton/PrimaryButton.tsx",
-        "apps/web/src/live/shaders/LightDispersion/LightDispersion.tsx",
-        "apps/web/src/live/shells/ConfigurableShell/ExamplePreview.tsx",
-        "apps/web/src/live/svgs/BlobPet/BlobPet.tsx",
-        "apps/web/src/live/tools/SpacingTidy/SpacingTidy.tsx",
-        "apps/web/src/studio/ViewController.tsx"
-      ],
-      "rules": {
-        "react/refs": "off",
-        "react/immutability": "off",
-        "react/set-state-in-effect": "off",
-        "react/static-components": "off",
-        "react-hooks/exhaustive-deps": "off",
-        "jsx-a11y/label-has-associated-control": "off",
-        "jsx-a11y/no-noninteractive-element-to-interactive-role": "off",
-        "jsx-a11y/role-supports-aria-props": "off"
-      }
     }
   ],
   "ignorePatterns": ["**/dist/**", "**/node_modules/**"]
