@@ -68,7 +68,7 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 
 Merging to `main` deploys Live to Cloudflare; see [Deployment](DEPLOYMENT.md). Make Live writes source files, so commit them to publish.
 
-Builds use `SITE_URL` for absolute `og:image` and `og:video` URLs; CI sets it to the production origin. The preview assets are `apps/web/public/og.png` (1200×630) and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
+Builds use `SITE_URL` for absolute `og:image` and `og:video` URLs; CI sets it to the production origin. The preview assets are `apps/web/public/og.png` (1200×630), the Trev’s Studio card beside the Live grid, and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
 
 ## Stack
 
