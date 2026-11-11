@@ -181,6 +181,13 @@ describe("cardFromPlan", () => {
     ).toThrow("buttons/Plain");
   });
 
+  test("treats an empty surface as a missing one, with the same message", () => {
+    const meta = { surface: null } as unknown as PreviewMeta;
+    expect(() => cardFromPlan({ slug: "buttons/Plain", entries: [entry("buttons/Plain", meta)] }, moduleFor)).toThrow(
+      "buttons/Plain: a card's meta must declare `surface`",
+    );
+  });
+
   test("names a swatch the site theme does not have, since meta is read without type checks", () => {
     const surface = { light: { swatch: "paper" }, dark: { swatch: "paper" } } as unknown as CardSurfaces;
     expect(() =>

@@ -9,6 +9,7 @@ import { liveRoutesPlugin } from "./vite/liveRoutesPlugin.ts";
 import { previewMetaPlugin } from "./vite/previewMetaPlugin.ts";
 import { previewPreloadPlugin } from "./vite/previewPreloadPlugin.ts";
 import { siteUrlPlugin } from "./vite/siteUrlPlugin.ts";
+import { themeTogglePlugin } from "./vite/themeTogglePlugin.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
       previewMetaPlugin(),
       previewPreloadPlugin(),
       siteUrlPlugin(env),
+      themeTogglePlugin(env),
       liveRoutesPlugin(),
       assetHeadersPlugin(),
     ],

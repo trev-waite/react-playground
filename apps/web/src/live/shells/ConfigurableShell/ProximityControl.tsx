@@ -82,7 +82,7 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
    * scrolls the page.
    */
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (control.disabled || event.button !== 0) return;
+    if (control.disabled || event.button !== 0 || press.current?.sliding) return;
     const touch = event.pointerType === "touch";
     if (!touch && !trackRef.current?.contains(event.target as Node)) return;
     press.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, sliding: !touch };
@@ -159,8 +159,8 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={() => {
-        press.current = null;
+      onPointerCancel={event => {
+        if (press.current?.pointerId === event.pointerId) press.current = null;
       }}
     >
       <div className={styles.label} id={labelId}>

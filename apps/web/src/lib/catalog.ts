@@ -137,7 +137,7 @@ function cardMeta(plan: CardPlan): CardMeta {
 }
 
 function isCardMeta(meta: PreviewMeta): meta is CardMeta {
-  return "surface" in meta;
+  return "surface" in meta && typeof meta.surface === "object" && meta.surface !== null;
 }
 
 /** Meta is read from source without type checks, so a mistyped swatch is caught here, by name. */

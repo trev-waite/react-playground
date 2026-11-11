@@ -125,7 +125,10 @@ function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; in
     const footer = ref.current;
     const card = footer?.parentElement;
     if (!footer || !card) return;
-    const measure = () => card.style.setProperty("--footer-height", px(footer.offsetHeight));
+    const measure = () => {
+      const height = px(footer.offsetHeight);
+      if (card.style.getPropertyValue("--footer-height") !== height) card.style.setProperty("--footer-height", height);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(footer);
