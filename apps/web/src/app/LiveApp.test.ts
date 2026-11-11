@@ -57,3 +57,12 @@ describe("Top bar", () => {
     expect(await read("studio/StudioApp.tsx")).toMatch(/<ChromeBar>\s*<BackPill>\s*<DeckSlot/);
   });
 });
+
+describe("the way home", () => {
+  test("goes back to trevorwaite.com in the same tab, so the studio feels like part of the site", async () => {
+    const chrome = await Bun.file(path.join(src, "app/deck/DeckChrome.tsx")).text();
+    const homeLink = chrome.match(/<a\s[^>]*href=\{HOME_URL\}[^>]*>/)?.[0];
+    expect(homeLink).toBeDefined();
+    expect(homeLink).not.toMatch(/target=/);
+  });
+});

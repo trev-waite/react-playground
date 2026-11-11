@@ -13,6 +13,7 @@ export const PUBLIC_FILES = [
   "logo.svg",
   "og.mp4",
   "og.png",
+  "theme.js",
 ];
 
 /** Vite's content-hashed scripts and styles. */

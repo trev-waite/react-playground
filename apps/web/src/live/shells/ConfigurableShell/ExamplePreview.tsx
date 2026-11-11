@@ -86,6 +86,7 @@ export function ExamplePreview({
   return (
     <div
       className={styles.stage}
+      data-panning={panEnabled || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#e8eaee" />
+    <script src="/theme.js"></script>
     <title>Page not found · Trev’s Studio</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <style>
@@ -12,6 +13,14 @@
         --ink: #1c2430;
         --muted: #5c6678;
         --accent: #2a5cff;
+        --canvas: #e8eaee;
+        --glow: #f0f2f6;
+        --shade: #dce1ea;
+        --grid-dot: rgba(40, 48, 64, 0.14);
+        --off-dot: rgba(40, 48, 64, 0.2);
+        --button: #111113;
+        --button-hover: #2a2c33;
+        --button-ink: #ffffff;
         --pitch: clamp(13px, 3.9vw, 22px);
         --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
         /* The deck's pill spring, sampled for CSS. */
@@ -20,11 +29,27 @@
         font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
         color: var(--ink);
         background:
-          radial-gradient(rgba(40, 48, 64, 0.14) 1px, transparent 1px) 0 0 / 16px 16px,
-          radial-gradient(120% 80% at 10% 0%, #f0f2f6 0%, transparent 55%),
-          radial-gradient(90% 70% at 100% 100%, #dce1ea 0%, transparent 50%),
-          #e8eaee;
+          radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0 / 16px 16px,
+          radial-gradient(120% 80% at 10% 0%, var(--glow) 0%, transparent 55%),
+          radial-gradient(90% 70% at 100% 100%, var(--shade) 0%, transparent 50%),
+          var(--canvas);
         -webkit-font-smoothing: antialiased;
+      }
+
+      /* The site's dark theme, from app.css; /theme.js picks it before first paint. */
+      :root[data-theme="dark"] {
+        --ink: #f5f7fa;
+        --muted: #a2abbb;
+        --accent: #7d99ff;
+        --canvas: #1d2026;
+        --glow: #262a31;
+        --shade: #16181d;
+        --grid-dot: rgba(214, 222, 236, 0.12);
+        --off-dot: rgba(214, 222, 236, 0.2);
+        --button: #ffffff;
+        --button-hover: #e3e6ec;
+        --button-ink: #111113;
+        color-scheme: dark;
       }
 
       body {
@@ -88,7 +113,7 @@
       }
 
       .off::before {
-        --dot: rgba(40, 48, 64, 0.2);
+        --dot: var(--off-dot);
         --swell: 2.2;
         width: 3px;
         height: 3px;
@@ -123,8 +148,8 @@
         height: 44px;
         padding: 0 20px 0 16px;
         border-radius: 999px;
-        background: #111113;
-        color: #fff;
+        background: var(--button);
+        color: var(--button-ink);
         font-size: 0.875rem;
         font-weight: 600;
         text-decoration: none;
@@ -156,14 +181,14 @@
 
       @media (hover: hover) and (pointer: fine) {
         a:hover {
-          background: #2a2c33;
+          background: var(--button-hover);
         }
       }
 
       @keyframes dot-in {
         from {
           scale: 0.2;
-          background: rgba(40, 48, 64, 0.3);
+          background: var(--off-dot);
         }
       }
 

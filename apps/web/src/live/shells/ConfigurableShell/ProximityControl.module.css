@@ -1,4 +1,6 @@
+/* The whole block takes a finger (sideways slides and taps); vertical swipes still scroll the page. */
 .block {
+  touch-action: pan-y;
   display: flex;
   flex-direction: column;
   gap: 0.05rem;
@@ -71,7 +73,6 @@
   justify-content: space-between;
   gap: 0.14rem;
   height: 1.15rem;
-  touch-action: none;
   cursor: pointer;
   user-select: none;
   outline: none;

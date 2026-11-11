@@ -12,24 +12,28 @@ Persistence: [Experimental Projects](IDEA_PERSISTENCE.md). Conventions: [BEST_PR
 
 ### Cards
 
-Each card is unopinionated apart from its size. `preview.tsx` exports `meta` to style it:
+`preview.tsx` exports a typed `meta` to present its card:
 
 ```tsx
 export const meta: CardMeta = {
   title: "Primary Button",
   size: "tall", // small 1×1 (default), wide 2×1, tall 1×2, large 2×2
-  background: "#ff9f1c", // any CSS background; white by default
-  theme: "dark", // which ink reads on that background
   description: "Digits roll to the new count on every press.",
+  surface: {
+    light: { swatch: "paper", content: ["#171c25"] },
+    dark: { swatch: "orange", content: ["#171c25"] },
+  },
   reset: "reset", // or "replay": a footer button that remounts the card
 };
 ```
 
 With neither `description` nor `reset`, the card has no footer.
 
+The site has a light and a dark theme and follows the system's. A sun/moon button beside the back pill lets a visitor override it; it is built but stays hidden until `VITE_THEME_TOGGLE=on`. `surface` is required: for each site theme, a `swatch` from the shared palette in `src/lib/cardSwatches.ts` (paper, orange, blue, and green on the light site; night, orange, blue, green, and mist on the dark one) and `content`, the component's main colors on it, which must stand 3:1 apart from the swatch. Each swatch already stands apart from the site canvas and sets the footer ink. `src/live/surfaces.test.ts` checks every card. Make Live writes a starting pair to tune; the `new-component` skill walks through choosing one.
+
 Keep `meta` a plain literal, with no variables, spreads, or calls. The build reads it without running the preview, so every card lays out at once and shows a loading shimmer until its own component arrives; a slow one, such as a shader, never holds up the rest.
 
-**Families.** Add `apps/web/src/live/<group>/family.ts` exporting a `FamilyMeta` (`title` plus the same fields) to show every component in that folder together on one card, as in `apps/web/src/live/controls/`. Member slugs such as `/controls/Switch` open the family card.
+**Families.** Add `apps/web/src/live/<group>/family.ts` exporting a `FamilyMeta` (`title` plus the same fields) to show every component in that folder together on one card, as in `apps/web/src/live/controls/`. The family owns the card's look, so its members export a `FamilyMemberMeta` with just a `title`. Member slugs such as `/controls/Switch` open the family card.
 
 **Order.** Cards appear in the order listed in `apps/web/src/live/order.ts`, then any unlisted cards alphabetically. The grid packs each card into the first cell it fits, so list wide cards before narrow ones and start a tall card at the beginning of a row to avoid holes.
 

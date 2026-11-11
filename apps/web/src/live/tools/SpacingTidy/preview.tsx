@@ -5,7 +5,10 @@ export const meta: CardMeta = {
   title: "Spacing Tidy",
   description: "A drop-in layout sheet: drag anything, then snap every gap onto the spacing scale.",
   size: "wide",
-  background: "#e9edf3",
+  surface: {
+    light: { swatch: "green", content: ["#ffffff", "#1c2430"] },
+    dark: { swatch: "blue", content: ["#ffffff", "#1c2430"] },
+  },
   reset: "reset",
 };
 

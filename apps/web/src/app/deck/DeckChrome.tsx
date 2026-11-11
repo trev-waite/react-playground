@@ -1,6 +1,8 @@
 import { createContext, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useAnimatedValues, useMotionRender, useReducedMotion } from "../motion/hooks";
 import { REDUCED_MOTION, SPRING, type Transition } from "../motion/transitions";
+import { ThemeIcon } from "../theme/ThemeIcon";
+import { THEME_TOGGLE, toggleTheme, useTheme } from "../theme/theme";
 import { backPillPath } from "./backPillShape";
 import type { DeckView } from "./CardDeck";
 import styles from "./DeckChrome.module.css";
@@ -128,6 +130,35 @@ function HomeLink() {
           />
         </svg>
       </a>
+      <span id={hintId} role="tooltip" className={styles.hint}>
+        {hint}
+      </span>
+    </span>
+  );
+}
+
+/** The light/dark button, while `VITE_THEME_TOGGLE` puts it live. */
+export function ThemeButton() {
+  return THEME_TOGGLE ? <ThemeToggle /> : null;
+}
+
+/** Flips the site between light and dark. Until it is pressed, the site follows the system. */
+function ThemeToggle() {
+  const dark = useTheme() === "dark";
+  const hint = dark ? "Switch to light theme" : "Switch to dark theme";
+  const hintId = useId();
+
+  return (
+    <span className={`${styles.hintHost} ${styles.glassCircle}`}>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label={hint}
+        aria-describedby={hintId}
+        onClick={toggleTheme}
+      >
+        <ThemeIcon dark={dark} />
+      </button>
       <span id={hintId} role="tooltip" className={styles.hint}>
         {hint}
       </span>

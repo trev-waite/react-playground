@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router";
-import { BackPill, ChromeBar, DeckChromeSlot } from "../app/deck/DeckChrome";
+import { BackPill, ChromeBar, DeckChromeSlot, ThemeButton } from "../app/deck/DeckChrome";
 import { LivePage } from "../app/LivePage";
 import { opacity, px, transform, useAnimatedValues, useMotionStyle } from "../app/motion/hooks";
 import { REDUCED_MOTION, SPRING } from "../app/motion/transitions";
@@ -55,6 +55,8 @@ function ViewStack() {
             ref={experimentalRef}
             className={styles.layer}
             data-layer="experimental"
+            data-theme="light"
+            data-chrome={mode === "experimental" ? "light" : undefined}
             aria-hidden={mode !== "experimental"}
             inert={mode !== "experimental" ? true : undefined}
             style={{
@@ -92,6 +94,7 @@ function ViewStack() {
             <DeckSlot ref={setDeckSlot} live={live} reducedMotion={reducedMotion} />
           </BackPill>
           <ViewToggle />
+          <ThemeButton />
         </ChromeBar>
 
         <span className={styles.srOnly} aria-live="polite">

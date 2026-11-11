@@ -1,10 +1,14 @@
+import { cardSwatch } from "./cardSwatches";
 import type {
+  CardColors,
   CardMeta,
   CardSize,
-  CardTheme,
+  CardSurfaces,
+  SiteTheme,
   FamilyMeta,
   LiveCatalog,
   PlaygroundEntry,
+  PreviewMeta,
   PreviewModule,
 } from "./types";
 
@@ -29,7 +33,7 @@ export function titleFromSlug(slug: string): string {
 
 export function catalogEntriesFromLoaders(
   loaders: Record<string, PlaygroundEntry["load"]>,
-  metas: Record<string, CardMeta | undefined> = {},
+  metas: Record<string, PreviewMeta | undefined> = {},
 ): PlaygroundEntry[] {
   return Object.entries(loaders)
     .flatMap(([filePath, load]) => {
@@ -98,8 +102,7 @@ export type LiveCard = {
   title: string;
   description?: string;
   size: CardSize;
-  background?: string;
-  theme: CardTheme;
+  surface: CardColors;
   reset?: CardMeta["reset"];
   members: LiveCardMember[];
 };
@@ -111,18 +114,41 @@ export function cardFromPlan(
   const members = plan.entries.map(
     (entry): LiveCardMember => ({ slug: entry.slug, title: entry.title, module: moduleFor(entry) }),
   );
-  const meta: CardMeta = plan.family ?? plan.entries[0]?.meta ?? {};
+  const meta = cardMeta(plan);
 
   return {
     slug: plan.slug,
     title: meta.title ?? members[0]?.title ?? titleFromSlug(plan.slug),
     description: meta.description,
     size: meta.size ?? "small",
-    background: meta.background,
-    theme: meta.theme ?? "light",
+    surface: cardColors(plan.slug, meta.surface),
     reset: meta.reset,
     members,
   };
+}
+
+/** The family's meta, or a lone component's, which must then present a whole card. */
+function cardMeta(plan: CardPlan): CardMeta {
+  const meta = plan.family ?? plan.entries[0]?.meta;
+  if (meta && isCardMeta(meta)) return meta;
+  throw new Error(
+    `${plan.slug}: a card's meta must declare \`surface\`, with a background for both the light and the dark site.`,
+  );
+}
+
+function isCardMeta(meta: PreviewMeta): meta is CardMeta {
+  return "surface" in meta;
+}
+
+/** Meta is read from source without type checks, so a mistyped swatch is caught here, by name. */
+function cardColors(slug: string, surface: CardSurfaces): CardColors {
+  const resolve = (theme: SiteTheme) => {
+    const name = String(surface[theme]?.swatch);
+    const swatch = cardSwatch(theme, name);
+    if (!swatch) throw new Error(`${slug}: the ${theme} site has no card swatch "${name}".`);
+    return swatch;
+  };
+  return { light: resolve("light"), dark: resolve("dark") };
 }
 
 /** The card that shows `slug`, whether it is the card itself or a family member. */

@@ -7,6 +7,7 @@ import {
   resolveValue,
   type ValueScale,
 } from "./scales";
+import { isSlide } from "./touchSlide";
 import styles from "./ProximityControl.module.css";
 
 const DEFAULT_MIN = 0;
@@ -48,6 +49,7 @@ function scaleFromControl(control: ShellControl): ValueScale {
 export function ProximityControl({ control, barCount }: ProximityControlProps) {
   const labelId = useId();
   const trackRef = useRef<HTMLDivElement>(null);
+  const press = useRef<{ pointerId: number; x: number; y: number; sliding: boolean } | null>(null);
   const scale = scaleFromControl(control);
   const count = Math.max(3, control.barCount ?? barCount);
   const t = resolvePosition(control.value, scale);
@@ -74,15 +76,37 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
     [control, scale],
   );
 
+  /**
+   * A mouse or pen sets the value on the bars at once. A finger may land
+   * anywhere on the block, and waits to see whether it slides, taps, or
+   * scrolls the page.
+   */
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (control.disabled || event.button !== 0) return;
+    const touch = event.pointerType === "touch";
+    if (!touch && !trackRef.current?.contains(event.target as Node)) return;
+    press.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, sliding: !touch };
+    if (touch) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     setFromClientX(event.clientX);
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const current = press.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current.sliding) {
+      if (!isSlide(event.clientX - current.x, event.clientY - current.y)) return;
+      current.sliding = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     setFromClientX(event.clientX);
+  }
+
+  function onPointerUp(event: PointerEvent<HTMLDivElement>) {
+    const current = press.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    press.current = null;
+    if (!current.sliding) setFromClientX(event.clientX);
   }
 
   function nudge(direction: -1 | 1, multiplier = 1) {
@@ -129,7 +153,16 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
   }
 
   return (
-    <div className={styles.block} data-disabled={control.disabled ? "true" : undefined}>
+    <div
+      className={styles.block}
+      data-disabled={control.disabled ? "true" : undefined}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        press.current = null;
+      }}
+    >
       <div className={styles.label} id={labelId}>
         {control.label}
       </div>
@@ -152,8 +185,6 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
           aria-valuenow={control.value}
           aria-valuetext={display}
           aria-disabled={control.disabled || undefined}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
           onKeyDown={onKeyDown}
         >
           {bars.map((scaleY, i) => (

@@ -15,14 +15,24 @@ export function buildComponentModule(
   return body;
 }
 
+/**
+ * A new card starts on paper on the light site and blue on the dark one, set
+ * for a near-black component. Its swatches are then picked against the
+ * component's real colors (the new-component skill).
+ */
 export function buildPreviewModule(
   componentName: string,
   title: string,
 ): string {
-  return `import { ${componentName} } from "./${componentName}";
+  return `import type { CardMeta } from "@/lib/types";
+import { ${componentName} } from "./${componentName}";
 
-export const meta = {
+export const meta: CardMeta = {
   title: ${JSON.stringify(title)},
+  surface: {
+    light: { swatch: "paper", content: ["#111113"] },
+    dark: { swatch: "blue", content: ["#111113"] },
+  },
 };
 
 export default function ${componentName}Preview() {

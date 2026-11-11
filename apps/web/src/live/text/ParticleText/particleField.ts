@@ -122,6 +122,7 @@ export class ParticleField {
     text.addEventListener("pointerleave", this.onPointerLeave);
     text.addEventListener("pointerup", this.onPointerEnd);
     text.addEventListener("pointercancel", this.onPointerEnd);
+    elements.root.addEventListener("transitionend", this.onInkChange);
     this.resizeObserver.observe(elements.root);
     this.intersectionObserver.observe(elements.root);
     void document.fonts?.ready.then(() => this.refresh());
@@ -140,9 +141,16 @@ export class ParticleField {
     text.removeEventListener("pointerleave", this.onPointerLeave);
     text.removeEventListener("pointerup", this.onPointerEnd);
     text.removeEventListener("pointercancel", this.onPointerEnd);
+    this.elements.root.removeEventListener("transitionend", this.onInkChange);
     this.setDissolving(false);
     this.clear();
   }
+
+  private readonly onInkChange = (event: TransitionEvent) => {
+    if (event.target !== this.elements.root || event.propertyName !== "color") return;
+    this.syncFill();
+    this.animate();
+  };
 
   private readonly onPointerEnter = (event: PointerEvent) => {
     if (event.pointerType === "touch") return;
@@ -228,7 +236,7 @@ export class ParticleField {
     this.animate();
   }
 
-  /** All layout and style reads happen here, on resize, font load, or a display change, never per frame. */
+  /** All layout and style reads happen here, on resize, font load, or a display change, never per frame. A new ink alone only re-reads the fill. */
   private relayout(force: boolean) {
     this.syncFill();
     this.syncCanvasSize();
