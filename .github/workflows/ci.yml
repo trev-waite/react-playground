@@ -73,6 +73,9 @@ jobs:
         env:
           SITE_URL: ${{ steps.site.outputs.url }}
 
+      - name: Check the build ships only allowlisted files
+        run: bun run --cwd apps/web check:deploy
+
       - name: Package the Worker without deploying
         working-directory: apps/web
         run: bunx wrangler deploy --dry-run
@@ -146,6 +149,10 @@ jobs:
         with:
           name: live-build
           path: apps/web/dist
+
+      - name: Check the build ships only allowlisted files
+        if: steps.fresh.outputs.current == 'true'
+        run: bun run check:deploy
 
       - name: Record the live version for rollback
         if: steps.fresh.outputs.current == 'true'

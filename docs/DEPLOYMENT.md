@@ -6,16 +6,19 @@ Live deploys to [studio.trevorwaite.com](https://studio.trevorwaite.com) as a Cl
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`:
 
-1. **Verify** lints the workflows, typechecks, tests, builds Live with `SITE_URL` set to the production origin, and packages the Worker with `wrangler deploy --dry-run`.
+1. **Verify** lints the workflows, typechecks, tests, builds Live with `SITE_URL` set to the production origin, checks the build against the deploy allowlist, and packages the Worker with `wrangler deploy --dry-run`.
 2. **Deploy** (on `main` only) publishes the exact build that passed, if the commit is still the tip of `main`, then runs `bun run --cwd apps/web smoke <origin>`. A failed smoke test rolls the Worker back to the version that was live before.
 
 | File | Owns |
 | --- | --- |
-| `apps/web/wrangler.json` | Worker name, custom domain, SPA fallback. The CI origin is read from its `custom_domain` route. |
+| `apps/web/wrangler.json` | Worker name, custom domain, and 404 handling. The CI origin is read from its `custom_domain` route. |
 | `apps/web/public/_headers` | Security headers and immutable caching for hashed `/assets/*`. |
+| `apps/web/public/404.html` | The page, with a 404 status, for any path that isn't a component. |
+| `apps/web/vite/liveRoutesPlugin.ts` | Writes the app page at `<slug>.html` for every component and family, so those are the only paths that serve the app. |
+| `apps/web/scripts/checkDeploy.ts` | The deploy allowlist (`bun run --cwd apps/web check:deploy`). It refuses anything in `public/` or `dist/` it doesn't expect: hidden files such as `.env`, source maps, unhashed scripts, pages that aren't the app, files over 3 MB, and bundles that contain local paths or the studio's API. CI runs it after the build and again before deploying. |
 | `apps/web/scripts/smoke.ts` | Post-deploy checks against a live origin. |
 
-`bun run build && bun run start` serves the build through `wrangler dev`, with the same headers and fallback as production.
+`bun run build && bun run start` serves the build through `wrangler dev`, with the same headers and 404 handling as production. A new file in `public/` must be added to `PUBLIC_FILES` in `checkDeploy.ts`, or the deploy stops.
 
 ## Changing the domain
 

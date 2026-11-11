@@ -1,3 +1,6 @@
+import path from "node:path";
+import { Glob } from "bun";
+
 const ATTEMPTS = 6;
 const RETRY_MS = 5000;
 const REQUEST_TIMEOUT_MS = 5_000;
@@ -33,10 +36,32 @@ const checks: Check[] = [
     },
   },
   {
-    name: "component slugs fall back to the app",
+    name: "a component route serves the app",
     async run(origin) {
-      const response = await get(`${origin}/smoke-test-unknown-slug`);
-      expect(response.status === 200 && isHtml(response), `status ${response.status}`);
+      const route = await componentRoute();
+      if (!route) return;
+      const response = await get(`${origin}/${route}`);
+      expect(response.status === 200 && isHtml(response), `/${route} status ${response.status}`);
+      expect((await response.text()).includes('<div id="root">'), `/${route} is not the app`);
+    },
+  },
+  {
+    name: "unknown paths and probes get the 404 page",
+    async run(origin) {
+      for (const probe of ["/smoke-test-unknown-slug", "/.env", "/.git/config"]) {
+        const response = await get(`${origin}${probe}`);
+        expect(response.status === 404, `${probe} status ${response.status}`);
+        expect(response.headers.has("content-security-policy"), `${probe} has no Content-Security-Policy header`);
+        expect((await response.text()).includes("No component here"), `${probe} is not the 404 page`);
+      }
+    },
+  },
+  {
+    name: "a missing script is a 404, never the app",
+    async run(origin) {
+      const response = await get(`${origin}/assets/smoke-missing-AbCd1234.js`);
+      expect(response.status === 404, `status ${response.status}`);
+      expect(!(await response.text()).includes('<div id="root">'), "served the app in place of a script");
     },
   },
   {
@@ -58,6 +83,15 @@ const checks: Check[] = [
     },
   },
 ];
+
+/** A route from the build being smoke tested, when it is on disk (as it is in CI). */
+async function componentRoute(): Promise<string | null> {
+  const dist = path.join(import.meta.dir, "../dist");
+  for await (const file of new Glob("**/*.html").scan({ cwd: dist })) {
+    if (file !== "index.html" && file !== "404.html") return file.replace(/\.html$/, "");
+  }
+  return null;
+}
 
 function get(url: string): Promise<Response> {
   return fetch(url, {
