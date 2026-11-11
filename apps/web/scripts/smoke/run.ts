@@ -11,6 +11,7 @@ const outcomes = await smoke({
   origin,
   siteUrl: origin,
   dist: path.join(import.meta.dir, "../../dist"),
+  skipChallenges: true,
   attempts: 6,
   retryMs: 5000,
 });

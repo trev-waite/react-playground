@@ -14,6 +14,7 @@ let dist = "";
 beforeAll(async () => {
   dist = await mkdtemp(path.join(tmpdir(), "smoke-"));
   await mkdir(path.join(dist, "controls"));
+  await writeFile(path.join(dist, "index.html"), APP(ORIGIN));
   await writeFile(path.join(dist, "controls/Switch.html"), APP(ORIGIN));
 });
 
@@ -53,12 +54,16 @@ function fake(handle: (url: URL) => Response): { fetch: Fetch; requests: string[
   };
 }
 
-async function run(handle: (url: URL) => Response, options: { origin?: string; siteUrl?: string } = {}) {
+async function run(
+  handle: (url: URL) => Response,
+  options: { origin?: string; siteUrl?: string; skipChallenges?: boolean } = {},
+) {
   const { fetch, requests } = fake(handle);
   const outcomes = await smoke({
     origin: options.origin ?? ORIGIN,
     siteUrl: options.siteUrl ?? ORIGIN,
     dist,
+    skipChallenges: options.skipChallenges ?? true,
     attempts: 3,
     retryMs: 0,
     fetch,
@@ -85,7 +90,7 @@ describe("smoke checks", () => {
     const { outcomes, requests, statuses } = await run(challengePages(site()));
     expect(statuses).toEqual({
       "home page serves the Live app with its security headers": "skip",
-      "hashed scripts load and are cached as immutable": "skip",
+      "hashed scripts load and are cached as immutable": "ok",
       "a component route serves the app": "skip",
       "/smoke-test-unknown-slug gets the 404 page": "skip",
       "/.env gets the 404 page": "skip",
@@ -94,7 +99,7 @@ describe("smoke checks", () => {
       "link preview image is public": "ok",
       "plain HTTP redirects to HTTPS": "ok",
     });
-    expect(requests.filter(url => url === `${ORIGIN}/`)).toHaveLength(2);
+    expect(requests.filter(url => url === `${ORIGIN}/`)).toHaveLength(1);
     expect(outcomes.find(outcome => outcome.status === "skip")?.reason).toBe("Cloudflare answered / with a bot challenge");
     expect(quietly(() => report(outcomes))).toBe(0);
   });
@@ -118,6 +123,30 @@ describe("smoke checks", () => {
     const { outcomes, statuses } = await run(broken);
     expect(statuses["link preview image is public"]).toBe("fail");
     expect(quietly(() => report(outcomes))).toBe(1);
+  });
+
+  test("the build's scripts are checked even when the page is challenged", async () => {
+    const brokenScripts = challengePages(url =>
+      url.pathname.startsWith("/assets/index-") ? new Response("", { status: 500 }) : site()(url),
+    );
+    const { outcomes, statuses } = await run(brokenScripts);
+    expect(statuses["hashed scripts load and are cached as immutable"]).toBe("fail");
+    expect(quietly(() => report(outcomes))).toBe(1);
+  });
+
+  test("the challenge header on anything but a 403 page fails", async () => {
+    const spoofed = (url: URL) =>
+      url.pathname === "/"
+        ? new Response("", { status: 503, headers: { "content-type": "text/html", "cf-mitigated": "challenge" } })
+        : site()(url);
+    const { statuses } = await run(spoofed);
+    expect(statuses["home page serves the Live app with its security headers"]).toBe("fail");
+  });
+
+  test("a challenge fails where no Cloudflare sits in front, as with wrangler dev", async () => {
+    const { outcomes, statuses } = await run(challengePages(site()), { skipChallenges: false });
+    expect(statuses["home page serves the Live app with its security headers"]).toBe("fail");
+    expect(outcomes.some(outcome => outcome.status === "skip" && outcome.reason?.includes("challenge"))).toBe(false);
   });
 
   test("og:url must name the site the build was made for, wherever it is served", async () => {

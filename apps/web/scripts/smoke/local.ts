@@ -73,7 +73,7 @@ let exitCode = 1;
 try {
   await waitUntilReady(origin, server);
   console.log(`Smoke testing ${origin} (wrangler dev) as ${site}`);
-  exitCode = report(await smoke({ origin, siteUrl: site, dist, attempts: 1, retryMs: 0 }));
+  exitCode = report(await smoke({ origin, siteUrl: site, dist, skipChallenges: false, attempts: 1, retryMs: 0 }));
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
 } finally {

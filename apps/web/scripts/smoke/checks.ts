@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Glob } from "bun";
 
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -7,8 +8,10 @@ export type SmokeOptions = {
   origin: string;
   /** The origin the build was made for, which its og:url names. */
   siteUrl: string;
-  /** The build being served, for a component route to request. */
+  /** The build being served, for the scripts and component route to request. */
   dist: string;
+  /** Skip a check that Cloudflare answers with a bot challenge. Only production sits behind Cloudflare. */
+  skipChallenges: boolean;
   attempts: number;
   retryMs: number;
   fetch?: Fetch;
@@ -40,17 +43,19 @@ const checks: Check[] = [
   },
   {
     name: "hashed scripts load and are cached as immutable",
-    async run({ origin, get }) {
-      const html = await (await get(`${origin}/`)).text();
-      const script = html.match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
-      expect(script !== undefined, "no /assets script in index.html");
-      const response = await get(`${origin}${script}`);
-      expect(response.status === 200, `${script} status ${response.status}`);
-      expect(
-        response.headers.get("content-type")?.includes("javascript") === true,
-        `${script} content-type ${response.headers.get("content-type")}`,
-      );
-      expect(response.headers.get("cache-control")?.includes("immutable") === true, `${script} is not immutable`);
+    async run({ origin, dist, get }) {
+      const html = await Bun.file(path.join(dist, "index.html")).text();
+      const scripts = new Set(html.match(/\/assets\/[A-Za-z0-9_-]+\.js/g));
+      expect(scripts.size > 0, "no /assets script in dist/index.html");
+      for (const script of scripts) {
+        const response = await get(`${origin}${script}`);
+        expect(response.status === 200, `${script} status ${response.status}`);
+        expect(
+          response.headers.get("content-type")?.includes("javascript") === true,
+          `${script} content-type ${response.headers.get("content-type")}`,
+        );
+        expect(response.headers.get("cache-control")?.includes("immutable") === true, `${script} is not immutable`);
+      }
     },
   },
   {
@@ -119,9 +124,9 @@ function expect(condition: boolean, failure: string): asserts condition {
   if (!condition) throw new Error(failure);
 }
 
-/** Cloudflare's Bot Fight Mode answers datacenter IPs with a challenge page that never reaches the Worker. */
+/** Cloudflare's Bot Fight Mode answers datacenter IPs with a 403 challenge page that never reaches the Worker. */
 function isChallenge(response: Response): boolean {
-  return response.headers.get("cf-mitigated")?.toLowerCase() === "challenge";
+  return response.status === 403 && isHtml(response) && response.headers.get("cf-mitigated")?.toLowerCase() === "challenge";
 }
 
 async function runCheck(check: Check, context: Context, { attempts, retryMs }: SmokeOptions): Promise<Outcome> {
@@ -151,7 +156,10 @@ export async function smoke(options: SmokeOptions): Promise<Outcome[]> {
         headers: { "cache-control": "no-cache" },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      if (isChallenge(response)) throw new Skipped(`Cloudflare answered ${new URL(url).pathname} with a bot challenge`);
+      if (isChallenge(response)) {
+        const challenge = `Cloudflare answered ${new URL(url).pathname} with a bot challenge`;
+        throw options.skipChallenges ? new Skipped(challenge) : new Error(challenge);
+      }
       return response;
     },
   };
