@@ -4,6 +4,9 @@ import { markThemeToggle } from "../../../vite/themeTogglePlugin";
 import type { SiteTheme } from "../../lib/types";
 import { parseTheme, siteTheme, storedThemeAfterToggle, THEME_STORAGE_KEY } from "./theme";
 
+const web = path.join(import.meta.dir, "../../..");
+const PAGES = ["index.html", "public/404.html"];
+
 describe("site theme", () => {
   test("a toggle that lands on the system's theme forgets the choice, so the site follows the system again", () => {
     expect(storedThemeAfterToggle("light", "light")).toBe("dark");
@@ -27,8 +30,7 @@ describe("site theme", () => {
   });
 
   test("the pre-paint script and the page are wired to the same choice", async () => {
-    const web = path.join(import.meta.dir, "../../..");
-    for (const page of ["index.html", "public/404.html"]) {
+    for (const page of PAGES) {
       const html = await Bun.file(path.join(web, page)).text();
       const head = html.slice(0, html.indexOf("</head>"));
       expect(head).toMatch(/<script src="\/theme\.js"><\/script>/);
@@ -36,10 +38,11 @@ describe("site theme", () => {
   });
 });
 
-/** Runs public/theme.js as the browser would, before first paint. */
-async function prePaint(page: { toggle: boolean; stored: string | null; system: SiteTheme }): Promise<SiteTheme> {
-  const script = await Bun.file(path.join(import.meta.dir, "../../../public/theme.js")).text();
-  const dataset: Record<string, string> = page.toggle ? { themeToggle: "" } : {};
+/** Runs public/theme.js as the browser would, before first paint, on a built page. */
+async function prePaint(html: string, page: { stored: string | null; system: SiteTheme }): Promise<SiteTheme> {
+  const script = await Bun.file(path.join(web, "public/theme.js")).text();
+  const marked = /<html\b[^>]*\sdata-theme-toggle[\s>=]/.test(html);
+  const dataset: Record<string, string> = marked ? { themeToggle: "" } : {};
   const document = { documentElement: { dataset }, querySelector: () => null };
   const localStorage = { getItem: (key: string) => (key === THEME_STORAGE_KEY ? page.stored : null) };
   const matchMedia = () => ({ matches: page.system === "dark" });
@@ -48,17 +51,26 @@ async function prePaint(page: { toggle: boolean; stored: string | null; system: 
 }
 
 describe("pre-paint theme", () => {
-  test("paints the theme the app settles on, so the page never flashes", async () => {
-    const cases = [
-      { toggle: false, stored: "dark", system: "light" },
-      { toggle: false, stored: null, system: "dark" },
-      { toggle: true, stored: "dark", system: "light" },
-      { toggle: true, stored: "light", system: "dark" },
-      { toggle: true, stored: "system", system: "dark" },
-      { toggle: true, stored: null, system: "light" },
+  test("every page paints the theme the app settles on, so nothing flashes", async () => {
+    const visits = [
+      { stored: "dark", system: "light" },
+      { stored: "light", system: "dark" },
+      { stored: "system", system: "dark" },
+      { stored: null, system: "light" },
     ] as const;
-    for (const page of cases) {
-      expect(await prePaint(page)).toBe(siteTheme(parseTheme(page.stored), page.system, page.toggle));
+    for (const file of PAGES) {
+      const source = await Bun.file(path.join(web, file)).text();
+      for (const toggle of [false, true]) {
+        const built = markThemeToggle(source, toggle);
+        for (const visit of visits) {
+          expect({ file, toggle, ...visit, theme: await prePaint(built, visit) }).toEqual({
+            file,
+            toggle,
+            ...visit,
+            theme: siteTheme(parseTheme(visit.stored), visit.system, toggle),
+          });
+        }
+      }
     }
   });
 
