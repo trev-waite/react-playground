@@ -6,6 +6,7 @@ import { folderFromFamilyPath, slugFromPreviewPath } from "../src/lib/catalog.ts
 /** Everything public/ may hold. Each one ships as is. */
 export const PUBLIC_FILES = [
   "404.html",
+  "404.js",
   "_headers",
   "apple-touch-icon.png",
   "favicon.svg",

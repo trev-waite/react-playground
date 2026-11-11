@@ -11,8 +11,11 @@
       :root {
         --ink: #1c2430;
         --muted: #5c6678;
-        --shadow: 0 1px 2px rgba(28, 36, 48, 0.06), 0 12px 32px rgba(28, 36, 48, 0.08);
+        --accent: #2a5cff;
+        --pitch: clamp(13px, 3.9vw, 22px);
         --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+        /* The deck's pill spring, sampled for CSS. */
+        --spring: linear(0, 0.145, 0.433, 0.714, 0.921, 1.038, 1.084, 1.084, 1.062, 1.036, 1.014, 1.001, 0.994, 0.992, 0.994, 0.996, 1);
         color-scheme: light;
         font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
         color: var(--ink);
@@ -40,55 +43,72 @@
         text-align: center;
       }
 
-      .tiles {
-        display: flex;
-        gap: 16px;
-      }
-
-      .tile {
-        display: grid;
-        place-items: center;
-        width: clamp(80px, 22vw, 128px);
-        aspect-ratio: 1;
-        border-radius: 24px;
-        box-shadow: var(--shadow);
-        color: #fff;
-        font-size: clamp(48px, 13vw, 80px);
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: -0.04em;
-        animation: tile-in 520ms var(--ease-out) backwards;
-        transition: translate 200ms var(--ease-out);
-      }
-
-      .tile:nth-child(1) {
-        background: #2448d8;
-      }
-
-      /* The Hello There card: white light split into a spectrum at its edges. */
-      .tile:nth-child(2) {
-        background: #000;
-        text-shadow:
-          -2px 0 rgba(255, 70, 70, 0.7),
-          2px 0 rgba(70, 150, 255, 0.7),
-          0 0 18px rgba(255, 255, 255, 0.35);
-        animation-delay: 60ms;
-      }
-
-      .tile:nth-child(3) {
-        background: #ff9f1c;
-        animation-delay: 120ms;
-      }
-
       h1 {
-        margin: 8px 0 0;
+        margin: 0;
         font-size: 1.25rem;
         font-weight: 600;
         line-height: 1.3;
       }
 
+      /* 404 drawn from the canvas's own dots: three 5x7 digits with a column between each. */
+      .matrix {
+        display: grid;
+        grid-template-columns: repeat(17, var(--pitch));
+        grid-auto-rows: var(--pitch);
+        place-items: center;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .matrix i {
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* --heat (0 to 1) is how close the pointer is: 404.js sets it on the dots near the cursor or finger. */
+      .matrix i::before {
+        content: "";
+        border-radius: 50%;
+        scale: calc(1 + var(--heat, 0) * var(--swell));
+        background: color-mix(in oklab, var(--accent) calc(min(1, var(--heat, 0) * 1.8) * 100%), var(--dot));
+        transition:
+          scale 720ms var(--spring),
+          background-color 1100ms ease-in-out;
+      }
+
+      .matrix i[data-lit]::before {
+        transition:
+          scale 160ms var(--ease-out),
+          background-color 90ms linear;
+      }
+
+      .off::before {
+        --dot: rgba(40, 48, 64, 0.2);
+        --swell: 2.2;
+        width: 3px;
+        height: 3px;
+      }
+
+      .on::before {
+        --dot: var(--ink);
+        --swell: 0.45;
+        width: calc(var(--pitch) * 0.72);
+        aspect-ratio: 1;
+        animation: dot-in 640ms var(--spring) calc(80ms + var(--i) * 22ms) backwards;
+      }
+
+      /* A tap or click sends one ripple out through the digits from where it landed. */
+      .matrix[data-ping] .on::before {
+        animation: ping 560ms var(--ease-out) calc(var(--ring) * 32ms) backwards;
+      }
+
       p {
-        margin: -16px 0 0;
+        margin: 0;
         max-width: 22rem;
         text-wrap: balance;
         font-size: 0.875rem;
@@ -109,7 +129,10 @@
         font-weight: 600;
         text-decoration: none;
         box-shadow: 0 1px 1px rgba(15, 15, 17, 0.04), 0 6px 18px rgba(15, 15, 17, 0.1);
-        transition: scale 140ms var(--ease-out);
+        -webkit-tap-highlight-color: transparent;
+        transition:
+          scale 140ms var(--ease-out),
+          background-color 140ms var(--ease-out);
       }
 
       a:active {
@@ -132,35 +155,162 @@
       }
 
       @media (hover: hover) and (pointer: fine) {
-        .tile:hover {
-          translate: 0 -4px;
+        a:hover {
+          background: #2a2c33;
         }
       }
 
-      @keyframes tile-in {
+      @keyframes dot-in {
         from {
-          opacity: 0;
-          translate: 0 12px;
+          scale: 0.2;
+          background: rgba(40, 48, 64, 0.3);
+        }
+      }
+
+      @keyframes ping {
+        35% {
+          scale: 1.3;
+          background: var(--accent);
         }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .tile,
+        .matrix i::before,
+        .matrix i[data-lit]::before,
+        .matrix[data-ping] .on::before,
         a {
+          scale: none;
           animation: none;
           transition: none;
         }
       }
     </style>
+    <script src="/404.js" defer></script>
   </head>
   <body>
     <main>
-      <div class="tiles" aria-hidden="true">
-        <span class="tile">4</span>
-        <span class="tile">0</span>
-        <span class="tile">4</span>
+      <h1><span class="sr-only">404: </span>Nothing at this address</h1>
+      <div class="matrix" aria-hidden="true">
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:7"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="on" style="--i:9"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="on" style="--i:4"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:7"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:11"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="on" style="--i:16"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:5"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:12"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:17"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:3"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:6"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:9"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:13"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:18"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:4"></i>
+        <i class="on" style="--i:5"></i>
+        <i class="on" style="--i:6"></i>
+        <i class="on" style="--i:7"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:10"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:14"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:16"></i>
+        <i class="on" style="--i:17"></i>
+        <i class="on" style="--i:18"></i>
+        <i class="on" style="--i:19"></i>
+        <i class="on" style="--i:20"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:8"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:11"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:20"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:9"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:13"></i>
+        <i class="on" style="--i:14"></i>
+        <i class="on" style="--i:15"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="off"></i>
+        <i class="on" style="--i:21"></i>
+        <i class="off"></i>
       </div>
-      <h1><span class="sr-only">404: </span>No component here</h1>
       <p>This page isn’t in the catalog. It may have moved, or it never existed.</p>
       <a href="/">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">

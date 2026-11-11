@@ -52,7 +52,7 @@ const checks: Check[] = [
         const response = await get(`${origin}${probe}`);
         expect(response.status === 404, `${probe} status ${response.status}`);
         expect(response.headers.has("content-security-policy"), `${probe} has no Content-Security-Policy header`);
-        expect((await response.text()).includes("No component here"), `${probe} is not the 404 page`);
+        expect((await response.text()).includes("Nothing at this address"), `${probe} is not the 404 page`);
       }
     },
   },
