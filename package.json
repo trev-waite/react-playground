@@ -14,7 +14,8 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint --deny-warnings",
-    "start": "turbo run start"
+    "start": "turbo run start",
+    "smoke:local": "bun run --cwd apps/web smoke:local"
   },
   "devDependencies": {
     "bun": "1.4.0",
