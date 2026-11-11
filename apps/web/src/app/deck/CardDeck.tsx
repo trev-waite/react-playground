@@ -315,6 +315,8 @@ export function CardDeck({
 
     if (prior && prior.grid === grid && !hostChanged) return;
     // First paint, a resize, or a catalog change: settle where the current view rests.
+    // A glide in progress is aiming at the old layout's offsets, so it stops here.
+    stopGlide();
     flight.current++;
     delete scroller.dataset.flying;
     if (view === "grid") {

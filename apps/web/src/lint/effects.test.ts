@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
+import ts from "typescript";
 import { lineOf, report, sources, SRC } from "./source";
 
 /**
@@ -31,35 +32,98 @@ const REACT_RULES = [
   "react/unsupported-syntax",
 ];
 
-type Effect = { file: string; line: number; body: string; deps: string[] | null };
+type Effect = { file: string; line: number; callback: ts.Node; deps: string[] | null; source: ts.SourceFile };
 
-/** Every `useEffect` and `useLayoutEffect` call: its callback source and its dependency list. */
+/** Every `useEffect` and `useLayoutEffect` call in `text`, parsed, with its callback and dependency list. */
 function effects(file: string, text: string): Effect[] {
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const found: Effect[] = [];
-  for (const match of text.matchAll(/\buse(?:Layout)?Effect\(/g)) {
-    let depth = 1;
-    let end = match.index! + match[0].length;
-    while (depth > 0 && end < text.length) {
-      const char = text[end++];
-      if (char === "(") depth++;
-      else if (char === ")") depth--;
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && /^use(?:Layout)?Effect$/.test(node.expression.text)) {
+      const [callback, deps] = node.arguments;
+      if (callback) {
+        found.push({
+          file,
+          line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+          callback,
+          deps: deps && ts.isArrayLiteralExpression(deps) ? deps.elements.map(element => element.getText(source)) : null,
+          source,
+        });
+      }
     }
-    const call = text.slice(match.index! + match[0].length, end - 1);
-    const deps = call.match(/,\s*\[([^\]]*)\]\s*,?\s*$/);
-    found.push({
-      file,
-      line: lineOf(text, match.index!),
-      body: deps ? call.slice(0, deps.index) : call,
-      deps: deps ? deps[1]!.split(",").map(dep => dep.trim()).filter(Boolean) : null,
-    });
-  }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
   return found;
 }
 
-/** Whether `name` is a function declared in `text`, rather than a value. */
-function declaresFunction(text: string, name: string): boolean {
-  const escaped = name.replace(/[$]/g, "\\$");
-  return new RegExp(`function ${escaped}\\(|const ${escaped} = (?:async )?(?:\\([^)]*\\)|\\w+) =>|const ${escaped} = useCallback\\(`).test(text);
+/** Every node under `root`, depth first. */
+function descendants(root: ts.Node): ts.Node[] {
+  const nodes: ts.Node[] = [];
+  const visit = (node: ts.Node) => {
+    nodes.push(node);
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(root, visit);
+  return nodes;
+}
+
+/** Names declared inside `root`: local functions and variables. */
+function declaredNames(root: ts.Node): Set<string> {
+  const names = new Set<string>();
+  for (const node of descendants(root)) {
+    if ((ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
+      names.add(node.name.text);
+    }
+  }
+  return names;
+}
+
+/** Whether `name` is a function declared in `source`, rather than a value. */
+function declaresFunction(source: ts.SourceFile, name: string): boolean {
+  return descendants(source).some(node => {
+    if (ts.isFunctionDeclaration(node)) return node.name?.text === name;
+    if (!ts.isVariableDeclaration(node) || !ts.isIdentifier(node.name) || node.name.text !== name) return false;
+    const value = node.initializer;
+    return (
+      !!value &&
+      (ts.isArrowFunction(value) ||
+        ts.isFunctionExpression(value) ||
+        (ts.isCallExpression(value) && ts.isIdentifier(value.expression) && value.expression.text === "useCallback"))
+    );
+  });
+}
+
+/** Functions an Effect copies into a ref (`someRef.current = fn`), so another Effect can call the latest one. */
+function latestCallbackRefs(effect: Effect): { ref: string; value: string }[] {
+  return descendants(effect.callback).flatMap(node => {
+    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return [];
+    const { left, right } = node;
+    if (!ts.isPropertyAccessExpression(left) || left.name.text !== "current" || !ts.isIdentifier(right)) return [];
+    const value = right.text;
+    return /^on[A-Z]/.test(value) || declaresFunction(effect.source, value) ? [{ ref: left.expression.getText(effect.source), value }] : [];
+  });
+}
+
+/** Parent callbacks (`onChange(…)`, `onChange?.(…)`, `props.onChange(…)`) an Effect calls while running for other reasons. */
+function relayedCallbacks(effect: Effect): string[] {
+  const local = declaredNames(effect.callback);
+  const called = new Set<string>();
+  for (const node of descendants(effect.callback)) {
+    if (!ts.isCallExpression(node)) continue;
+    const callee = node.expression;
+    if (ts.isIdentifier(callee) && /^on[A-Z]/.test(callee.text) && !local.has(callee.text)) called.add(callee.text);
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === "props" &&
+      /^on[A-Z]/.test(callee.name.text)
+    ) {
+      called.add(callee.getText(effect.source));
+    }
+  }
+  // An Effect that only says "mounted" (its sole dependency is the callback) is synchronization, not a relay.
+  return [...called].filter(callback => effect.deps === null || effect.deps.some(dep => dep !== callback));
 }
 
 describe("standards lint: Effects", () => {
@@ -101,14 +165,11 @@ describe("standards lint: Effects", () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(OWNED_DIRS, "**/*.{ts,tsx}")) {
       for (const effect of effects(file, text)) {
-        for (const match of effect.body.matchAll(/(\w+)\.current = (\w+);/g)) {
-          const [, ref, value] = match;
-          if (/^on[A-Z]/.test(value!) || declaresFunction(text, value!)) {
-            violations.push(
-              `${file}:${effect.line} copies the function "${value}" into ${ref} so another Effect can call its latest version. ` +
-                `Use \`const ${value}Latest = useEffectEvent(${value})\` and call that from the Effect.`,
-            );
-          }
+        for (const { ref, value } of latestCallbackRefs(effect)) {
+          violations.push(
+            `${file}:${effect.line} copies the function "${value}" into ${ref} so another Effect can call its latest version. ` +
+              `Use \`const ${value}Latest = useEffectEvent(${value})\` and call that from the Effect.`,
+          );
         }
       }
     }
@@ -119,17 +180,11 @@ describe("standards lint: Effects", () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(OWNED_DIRS, "**/*.{ts,tsx}")) {
       for (const effect of effects(file, text)) {
-        for (const match of effect.body.matchAll(/(?<![\w.])(on[A-Z]\w*)\??\.?\(/g)) {
-          const callback = match[1]!;
-          if (new RegExp(`(?:function|const|let) ${callback}\\b`).test(effect.body)) continue;
-          // An Effect that only says "mounted" (its sole dependency is the callback) is synchronization, not a relay.
-          const relays = effect.deps === null || effect.deps.some(dep => dep !== callback);
-          if (relays) {
-            violations.push(
-              `${file}:${effect.line} calls ${callback} from an Effect that runs when ${effect.deps?.join(", ") || "anything"} changes. ` +
-                "Call it in the event handler that made the change, so the parent updates in the same render.",
-            );
-          }
+        for (const callback of relayedCallbacks(effect)) {
+          violations.push(
+            `${file}:${effect.line} calls ${callback} from an Effect that runs when ${effect.deps?.join(", ") || "anything"} changes. ` +
+              "Call it in the event handler that made the change, so the parent updates in the same render.",
+          );
         }
       }
     }
@@ -138,11 +193,30 @@ describe("standards lint: Effects", () => {
 });
 
 describe("Effect scanner", () => {
-  test("reads each Effect's body and dependencies", () => {
-    const text = "useEffect(() => { onChange(value); }, [value, onChange]);\nuseLayoutEffect(() => draw());";
-    expect(effects("x.tsx", text)).toEqual([
-      { file: "x.tsx", line: 1, body: "() => { onChange(value); }", deps: ["value", "onChange"] },
-      { file: "x.tsx", line: 2, body: "() => draw()", deps: null },
-    ]);
+  const scan = (text: string) => effects("x.tsx", text);
+
+  test("reads each Effect's dependencies, whatever its callback contains", () => {
+    const [first, second] = scan('useEffect(() => { console.warn(")"); /* ( */ draw(); }, [value, onChange]);\nuseLayoutEffect(() => draw());');
+    expect([first?.line, first?.deps, second?.line, second?.deps]).toEqual([1, ["value", "onChange"], 2, null]);
+  });
+
+  test("finds a relay to the parent, even after a parenthesis in a string", () => {
+    const [effect] = scan('useEffect(() => { console.warn(")"); onChange(value); props.onSave?.(value); }, [value]);');
+    expect(relayedCallbacks(effect!)).toEqual(["onChange", "props.onSave"]);
+  });
+
+  test("allows a mount signal and the Effect's own listeners", () => {
+    const [mounted, listening] = scan(
+      "useEffect(() => { onReady(); }, [onReady]);\n" +
+        'useEffect(() => { function onKeyDown() {} window.addEventListener("keydown", onKeyDown); onKeyDown(); }, [open]);',
+    );
+    expect([relayedCallbacks(mounted!), relayedCallbacks(listening!)]).toEqual([[], []]);
+  });
+
+  test("finds a function copied into a ref, and ignores a value", () => {
+    const [copy, value] = scan(
+      "function handle() {}\nuseLayoutEffect(() => { handleRef.current = handle; });\nuseLayoutEffect(() => { sizeRef.current = size; });",
+    );
+    expect([latestCallbackRefs(copy!), latestCallbackRefs(value!)]).toEqual([[{ ref: "handleRef", value: "handle" }], []]);
   });
 });
