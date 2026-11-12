@@ -6,7 +6,7 @@ Live deploys to [studio.trevorwaite.com](https://studio.trevorwaite.com) as a Cl
 
 `.github/workflows/ci.yml` runs on every pull request and every push to `main`:
 
-1. **Verify** lints the workflows, typechecks, tests, builds Live with `SITE_URL` set to the production origin, checks the build against the deploy allowlist, packages the Worker with `wrangler deploy --dry-run`, then smoke tests the build before anything deploys: `smoke:local --no-build` serves `dist` with `wrangler dev --local` on a free `127.0.0.1` port and runs the smoke checks against it. Last, `check:phone` opens every card's page in headless Chromium on a phone-sized screen and fails if a preview had to shrink to fit.
+1. **Verify** lints the workflows, typechecks, tests, builds Live with `SITE_URL` set to the production origin, checks the build against the deploy allowlist, packages the Worker with `wrangler deploy --dry-run`, then smoke tests the build before anything deploys: `smoke:local --no-build` serves `dist` with `wrangler dev --local` on a free `127.0.0.1` port and runs the smoke checks against it. Last, `check:phone` opens every card's page in headless Chromium on a phone-sized screen, fails if a preview had to shrink to fit, and checks that a finger drags a Spacing Tidy square.
 2. **Deploy** (on `main` only) publishes the exact build that passed, if the commit is still the tip of `main`, then runs `bun run --cwd apps/web smoke <origin>`. A failed smoke test rolls the Worker back to the version that was live before.
 
 The pre-deploy smoke runs locally on the runner with no credentials: the Verify job has no environment or secrets, and Wrangler runs in local mode with no bindings.
