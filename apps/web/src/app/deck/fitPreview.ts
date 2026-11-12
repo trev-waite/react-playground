@@ -48,8 +48,8 @@ type Fit = {
   layout: FitLayout;
   /** The card's morph from tile (0) to page (1). */
   progress: MotionValue | undefined;
-  /** The layouts the preview last rested at as a tile and as a page. */
-  rest: { tile?: FitLayout; page?: FitLayout };
+  /** The layouts the preview last rested at as a tile and as a page, at one viewport width. */
+  rest: { tile?: FitLayout; page?: FitLayout; viewportWidth?: number };
 };
 
 const fits = new Map<Element, Fit>();
@@ -100,6 +100,7 @@ function refit(batch: Fit[]) {
       overflow.scrollHeight / fit.content.clientHeight,
     );
   });
+  const viewportWidth = document.documentElement.clientWidth;
   batch.forEach((fit, index) => {
     const spill = spills[index]!;
     if (spill > 1.01) {
@@ -108,7 +109,10 @@ function refit(batch: Fit[]) {
       place(fit);
     }
     const end = progress[index];
-    if (end === "tile" || end === "page") fit.rest[end] = fit.layout;
+    if (end !== "tile" && end !== "page") return;
+    // A resize changes the end not in view too, so a flight toward it falls back to fitting each frame.
+    if (fit.rest.viewportWidth !== viewportWidth) fit.rest = { viewportWidth };
+    fit.rest[end] = fit.layout;
   });
 }
 
