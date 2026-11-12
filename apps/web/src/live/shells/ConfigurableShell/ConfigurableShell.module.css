@@ -1,4 +1,5 @@
-/* In a container shorter than the shell, the preview gives up height so the controls keep their size. */
+/* In a container shorter than the shell, the preview gives up height so the controls keep their size.
+   Below the preview's minimum the controls overflow, unclipped, so a fitting container sees it and scales down. */
 .host {
   display: flex;
   flex-direction: column;
@@ -13,14 +14,14 @@
   --cs-ease: cubic-bezier(0.23, 1, 0.32, 1);
   --cs-preview-h: 18.75rem;
   --cs-layout: 220ms var(--cs-ease);
+  --cs-radius: 36px;
 
   display: flex;
   flex-direction: column;
   width: 24rem;
   max-width: 100%;
   min-height: 0;
-  overflow: hidden;
-  border-radius: 36px;
+  border-radius: var(--cs-radius);
   background: var(--cs-surface);
   color: var(--cs-ink);
   font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
@@ -41,6 +42,7 @@
   height: var(--cs-preview-h);
   min-height: 9rem;
   overflow: hidden;
+  border-radius: var(--cs-radius) var(--cs-radius) 0 0;
   background: #ececee;
   transition: height var(--cs-layout);
 }
@@ -182,6 +184,7 @@
   margin-top: -2.5rem;
   padding: 0;
   border: 0;
+  border-radius: 0 0 var(--cs-radius) var(--cs-radius);
   background: transparent;
   cursor: grab;
   touch-action: none;
@@ -440,7 +443,7 @@
 
 @media (max-width: 440px) {
   .root {
-    border-radius: 28px;
+    --cs-radius: 28px;
   }
 
   .action {
