@@ -4,3 +4,9 @@
   font: 500 5.5rem/1 system-ui, -apple-system, "Segoe UI", sans-serif;
   letter-spacing: -0.065em;
 }
+
+@media (max-width: 48rem) {
+  .name {
+    font-size: 3.25rem;
+  }
+}

@@ -30,6 +30,7 @@
   pointer-events: auto;
   transition:
     width var(--close-duration) var(--close-ease),
+    height var(--close-duration) var(--close-ease),
     border-radius var(--close-duration) var(--close-ease),
     box-shadow var(--fade-duration) var(--close-ease);
 }
@@ -42,6 +43,7 @@
     0 2px 5px rgb(0 0 0 / 0.12);
   transition:
     width var(--open-duration) var(--open-ease),
+    height var(--open-duration) var(--open-ease),
     border-radius var(--open-duration) var(--open-ease),
     box-shadow var(--fade-duration) var(--close-ease);
 }
@@ -157,6 +159,7 @@
   transform: translate(-50%, -50%);
   transition:
     left var(--close-duration) var(--close-ease),
+    top var(--close-duration) var(--close-ease),
     width var(--close-duration) var(--close-ease),
     height var(--close-duration) var(--close-ease),
     transform var(--feedback-duration) var(--press-ease);
@@ -172,6 +175,7 @@
   height: 40px;
   transition:
     left var(--open-duration) var(--open-ease),
+    top var(--open-duration) var(--open-ease),
     width var(--open-duration) var(--open-ease),
     height var(--open-duration) var(--open-ease),
     transform var(--feedback-duration) var(--press-ease);
@@ -220,6 +224,38 @@
   opacity: 1;
   filter: none;
   transform: none;
+}
+
+/* Phones: one row would crush the words, so the pill opens down into two.
+   The first divider becomes the hairline between them, and the close
+   button moves to the end of the second row. */
+@media (max-width: 48rem) {
+  .root {
+    --pill-open-height: calc(var(--pill-height) * 2 - 4px);
+  }
+
+  .root[data-open] .pill {
+    height: var(--pill-open-height);
+  }
+
+  .links {
+    flex-wrap: wrap;
+    align-content: center;
+    row-gap: 0;
+    height: var(--pill-open-height);
+    padding: 0 1.15rem;
+    clip-path: inset(0 calc(50% - var(--pill-closed-width) / 2) calc(100% - var(--pill-height)) round 40px);
+  }
+
+  .divider:first-of-type {
+    flex-basis: 100%;
+    height: 1px;
+    margin: 1.5px 0;
+  }
+
+  .root[data-open] .trigger {
+    top: calc(var(--pill-open-height) - var(--pill-height) / 2);
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {

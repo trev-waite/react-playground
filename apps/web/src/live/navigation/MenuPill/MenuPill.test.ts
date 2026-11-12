@@ -39,6 +39,14 @@ describe("MenuPill motion contract", () => {
     );
   });
 
+  test("phones open the pill into two rows rather than crushing one, and grow it with the clip", () => {
+    const phone = /@media \(max-width: 48rem\) \{([\s\S]*?)\n\}/.exec(stripCssComments(css))?.[1] ?? "";
+    expect(declarations(ruleFor(phone, ".links").body, "flex-wrap")).toEqual(["wrap"]);
+    expect(declarations(ruleFor(phone, ".divider:first-of-type").body, "flex-basis")).toEqual(["100%"]);
+    expect(timingOf(".root[data-open] .pill", "height")).toBe(timingOf(".root[data-open] .pill", "width"));
+    expect(timingOf(".pill", "height")).toBe(timingOf(".pill", "width"));
+  });
+
   test("reduced motion stops the pill, the clip and every word", () => {
     const reduced = cssRules(css).filter(rule => declarations(rule.body, "transition").includes("none"));
     const selectors = reduced.flatMap(rule => rule.selector.split(",").map(part => part.trim()));

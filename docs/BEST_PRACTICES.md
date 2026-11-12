@@ -34,11 +34,17 @@ Hold 60 fps on integrated GPUs. Measure transitions in real Chrome (frame gaps, 
 - Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), so a transition never pays for first renders.
 - Pause offscreen loops (`IntersectionObserver`) and defer expensive resize work until the size settles.
 
+iOS Safari, where the deck scrolls and snaps the document itself (`apps/web/src/app/safari.test.ts` pins each fix):
+
+- A programmatic scroll under `scroll-snap-type: mandatory` snaps back to the page a finger last left at the next layout. Turn snapping off, scroll, and turn it back on a frame after that scroll has painted (`CardDeck`'s `resumeSnap`).
+- A `touch-action: none` region can outlive the style that made it, and swipes over it never scroll. Hold a page still with a cancelled `touchmove` instead.
+- `touch-action: pan-y` still pans a diagonal swipe. A sideways control must cancel `touchmove` itself, before the finger passes Safari's pan slop.
+
 `apps/web/src/lint/performance.test.ts` enforces these rules in `bun run test`. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code.
 
 ## Checks
 
 `bun run lint` (oxlint, configured in `.oxlintrc.json`), `bun run typecheck`, and `bun run test` must pass before work is done; CI runs all three. The lint covers React's rules (hooks, refs, no state set in Effects), accessibility, and leftovers such as unused code and `console.log`.
 
-`apps/web/src/lint/standards.test.ts` enforces the house rules no off-the-shelf linter knows: Live components stay portable, honor `prefers-reduced-motion`, and gate hover styles behind `@media (hover: hover)`; filters settle on `filter: none` rather than `blur(0)`, which Safari leaves blurred; and no commented-out code. A component's own motion contract (shared timing, compositor-only properties) lives in a test beside it, such as `MenuPill.test.ts`.
+`apps/web/src/lint/standards.test.ts` enforces the house rules no off-the-shelf linter knows: Live components stay portable, honor `prefers-reduced-motion`, gate hover styles behind `@media (hover: hover)`, and leave a swipe free to page the deck (`touch-action: none` only mid-gesture); filters settle on `filter: none` rather than `blur(0)`, which Safari leaves blurred; and no commented-out code. A component's own motion contract (shared timing, compositor-only properties) lives in a test beside it, such as `MenuPill.test.ts`. Live previews must fit a phone's page unscaled, with a `@media (max-width: 48rem)` layout where they are wider; CI checks it with `check:phone`.
 

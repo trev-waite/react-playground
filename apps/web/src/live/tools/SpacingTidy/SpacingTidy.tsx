@@ -1,4 +1,13 @@
-import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
 import { flushSync } from "react-dom";
 import { snapLineHeight, tidy, type SheetPlanner } from "@react-playground/layout-sheet";
 import { SheetGuides, useSheet, useSheetState } from "@react-playground/layout-sheet/react";
@@ -7,6 +16,9 @@ import { Switch } from "@/live/controls/Switch/Switch";
 const SLIDERS = {"squareSize":64,"fontSize":22,"columns":3};
 
 const QUOTE_WIDTH = 248;
+/** Phones stack the quote under the squares, narrower, so the screen fits without shrinking. */
+const COMPACT_QUERY = "(max-width: 48rem)";
+const COMPACT_QUOTE_WIDTH = 232;
 const QUOTE = "Whitespace is to be regarded as an active element, not a passive background.";
 const CREDIT = "Jan Tschichold";
 const COLORS = ["#2448d8", "#ff9f1c", "#5a9a4a", "#1c2430", "#e85d75", "#7c5cff", "#16a3a3", "#c2410c"];
@@ -21,15 +33,30 @@ const ceilTo8 = (value: number) => Math.ceil(value / 8) * 8;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 /** Sized from the sliders, never from what the user drags, so the sheet does not shift mid-edit. */
-function boardSize(columns: number, size: number, fontSize: number) {
+function boardSize(columns: number, size: number, fontSize: number, compact: boolean) {
   const grid = { width: columns * size + (columns - 1) * 24, height: ROWS * size + (ROWS - 1) * 24 };
-  const lines = Math.ceil((QUOTE.length * fontSize * 0.5) / QUOTE_WIDTH);
+  const quoteWidth = compact ? COMPACT_QUOTE_WIDTH : QUOTE_WIDTH;
+  const lines = Math.ceil((QUOTE.length * fontSize * 0.5) / quoteWidth);
   const text = lines * fontSize * 1.5 + 40;
+  if (compact) {
+    return {
+      width: ceilTo8(48 + Math.max(grid.width, quoteWidth)),
+      height: ceilTo8(48 + grid.height + 32 + text),
+    };
+  }
   return {
-    width: ceilTo8(48 + grid.width + 32 + QUOTE_WIDTH),
+    width: ceilTo8(48 + grid.width + 32 + quoteWidth),
     height: ceilTo8(48 + Math.max(grid.height, text)),
   };
 }
+
+function subscribeCompact(onChange: () => void) {
+  const query = window.matchMedia(COMPACT_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const isCompact = () => window.matchMedia(COMPACT_QUERY).matches;
 
 function seeded(seed: number) {
   let state = seed >>> 0;
@@ -74,7 +101,8 @@ export function SpacingTidy({
   const size = clamp(sliders.squareSize ?? SLIDERS.squareSize, 32, 96);
   const fontSize = clamp(sliders.fontSize ?? SLIDERS.fontSize, 14, 36);
   const columns = Math.round(clamp(sliders.columns ?? SLIDERS.columns, 2, 4));
-  const board = boardSize(columns, size, fontSize);
+  const compact = useSyncExternalStore(subscribeCompact, isCompact);
+  const board = boardSize(columns, size, fontSize, compact);
   const squareIds = Array.from({ length: columns * ROWS }, (_, index) => `square-${index}`);
   const quoteHintId = useId();
   const guidesId = useId();
@@ -179,6 +207,7 @@ export function SpacingTidy({
       <div
         ref={sheetRoot}
         className="st-board"
+        data-compact={compact || undefined}
         style={{ width: board.width, height: board.height }}
       >
         <div className="st-grid" style={{ gridTemplateColumns: `repeat(${columns}, ${size}px)` }}>
@@ -298,12 +327,14 @@ const CSS = `
 .st-grid { display: grid; gap: 20px; flex-shrink: 0; }
 .st-square svg { display: block; }
 .st-text { width: ${QUOTE_WIDTH}px; margin: 0 0 0 36px; flex-shrink: 0; }
+.st-board[data-compact] { flex-direction: column; }
+.st-board[data-compact] .st-text { width: ${COMPACT_QUOTE_WIDTH}px; margin: 36px 0 0; }
 .st-quote { margin: 0; font-weight: 600; letter-spacing: -0.015em; }
 .st-credit { margin: 12px 0 0; font-size: 14px; line-height: 1.4; color: #5c6678; }
 .st-board [data-sheet-item] { outline: none; }
 .st-board [data-sheet-item]:focus-visible { outline: 2px solid #2448d8; outline-offset: 4px; }
 .st-quote:focus-visible, .st-credit:focus-visible { border-radius: 4px; }
-.st-toolbar { display: flex; align-items: center; gap: 8px; }
+.st-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 .st-primary, .st-secondary, .st-modeOption {
   appearance: none;
   display: inline-flex;
