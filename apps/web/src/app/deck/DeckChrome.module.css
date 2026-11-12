@@ -50,6 +50,7 @@
   padding: 0;
   border-radius: 50%;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pager .iconButton {
@@ -190,21 +191,17 @@
 }
 
 /* Hover waits a beat so a passing pointer does not flash the hint. */
-.hintHost:hover .hint {
-  opacity: 1;
-  translate: -50% 0;
-  transition-delay: 350ms;
+@media (hover: hover) and (pointer: fine) {
+  .hintHost:hover .hint {
+    opacity: 1;
+    translate: -50% 0;
+    transition-delay: 350ms;
+  }
 }
 
 .hintHost:has(:focus-visible) .hint {
   opacity: 1;
   translate: -50% 0;
-}
-
-@media (hover: none) {
-  .hintHost:hover .hint {
-    opacity: 0;
-  }
 }
 
 .pager {

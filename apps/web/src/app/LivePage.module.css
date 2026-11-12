@@ -55,6 +55,10 @@
   cursor: pointer;
 }
 
+.action:active:not(:disabled) {
+  background: var(--shell-surface-solid);
+}
+
 .action:disabled {
   opacity: 0.45;
   cursor: default;

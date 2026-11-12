@@ -53,8 +53,10 @@
 .frame {
   /* Fill the stage. GPU ideas size from clientWidth/clientHeight;
      a centered auto-height frame collapses them to 0 and useGpu never starts.
-     `safe` keeps overflow to the end edge, where FitStage can measure it. */
+     `safe` keeps overflow to the end edge, where FitStage can measure it.
+     One stage-sized cell, so a preview's percentage height means the stage. */
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: safe center;
   width: 100%;
   height: 100%;
@@ -69,8 +71,8 @@
   align-items: center;
   justify-content: safe center;
   gap: var(--space-3);
-  width: 100%;
   height: 100%;
+  margin-inline: auto;
   padding: var(--space-3);
 }
 
@@ -310,8 +312,15 @@
   }
 
   .openLabel,
-  .open:hover .openLabel,
   .open:focus-visible .openLabel {
+    translate: none;
+    scale: none;
+    transition: opacity var(--reduced-motion-duration) var(--reduced-motion-easing);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (hover: hover) and (pointer: fine) {
+  .open:hover .openLabel {
     translate: none;
     scale: none;
     transition: opacity var(--reduced-motion-duration) var(--reduced-motion-easing);

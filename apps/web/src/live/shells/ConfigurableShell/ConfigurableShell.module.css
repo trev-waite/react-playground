@@ -1,7 +1,11 @@
+/* In a container shorter than the shell, the preview gives up height so the controls keep their size.
+   Below the preview's minimum the controls overflow, unclipped, so a fitting container sees it and scales down. */
 .host {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   width: min(50rem, 100%);
+  max-height: 100%;
 }
 
 .root {
@@ -10,11 +14,14 @@
   --cs-ease: cubic-bezier(0.23, 1, 0.32, 1);
   --cs-preview-h: 18.75rem;
   --cs-layout: 220ms var(--cs-ease);
+  --cs-radius: 36px;
 
+  display: flex;
+  flex-direction: column;
   width: 24rem;
   max-width: 100%;
-  overflow: hidden;
-  border-radius: 36px;
+  min-height: 0;
+  border-radius: var(--cs-radius);
   background: var(--cs-surface);
   color: var(--cs-ink);
   font-family: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
@@ -33,7 +40,9 @@
 .preview {
   position: relative;
   height: var(--cs-preview-h);
+  min-height: 9rem;
   overflow: hidden;
+  border-radius: var(--cs-radius) var(--cs-radius) 0 0;
   background: #ececee;
   transition: height var(--cs-layout);
 }
@@ -138,6 +147,7 @@
 .body {
   position: relative;
   z-index: 2;
+  flex-shrink: 0;
   display: grid;
   grid-template-rows: 1fr;
   margin-top: 0;
@@ -168,11 +178,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 100%;
   height: 2.5rem;
   margin-top: -2.5rem;
   padding: 0;
   border: 0;
+  border-radius: 0 0 var(--cs-radius) var(--cs-radius);
   background: transparent;
   cursor: grab;
   touch-action: none;
@@ -326,6 +338,8 @@
 .tool,
 .action,
 .copy {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition:
     transform 140ms var(--cs-ease),
     background 140ms ease,
@@ -429,7 +443,7 @@
 
 @media (max-width: 440px) {
   .root {
-    border-radius: 28px;
+    --cs-radius: 28px;
   }
 
   .action {

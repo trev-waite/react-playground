@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PREVIEW_MIN_SIZE, previewScale } from "./fitPreview";
+import { familyLayoutWidth, PREVIEW_MIN_SIZE, previewScale } from "./fitPreview";
 
 describe("previewScale", () => {
   test("keeps previews at full size on a page", () => {
@@ -12,6 +12,16 @@ describe("previewScale", () => {
 
   test("never collapses to zero for an unlaid-out box", () => {
     expect(previewScale(0, 0)).toBeGreaterThan(0);
+  });
+});
+
+describe("familyLayoutWidth", () => {
+  test("lays a family out at the page's width when the tile has more room, as a wide phone tile does", () => {
+    expect(familyLayoutWidth({ width: 326, height: 139 }, 310)).toBe(310);
+  });
+
+  test("lays a family out at the tile's width when the page has more room", () => {
+    expect(familyLayoutWidth({ width: 520, height: 220 }, 1360)).toBeCloseTo(520 * (PREVIEW_MIN_SIZE / 220));
   });
 });
 
