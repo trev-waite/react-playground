@@ -16,7 +16,8 @@ import type { MotionValue } from "../motion/motionValue";
 import type { PreviewModule } from "../../lib/types";
 import { useTheme } from "../theme/theme";
 import type { CardMotion } from "./cardMotion";
-import { observeFit, refitArea } from "./fitPreview";
+import type { Size } from "./deckLayout";
+import { familyLayoutWidth, observeFit, refitArea } from "./fitPreview";
 import styles from "./DeckCard.module.css";
 
 /** Padding as a tile (chrome 0) and as a page (chrome 1). The page top clears the floating chrome. */
@@ -38,6 +39,10 @@ function footerPadding(chrome: number) {
 type DeckCardProps = {
   card: LiveCard;
   motion: CardMotion;
+  /** The card's size as a grid tile. */
+  tile: Size;
+  /** The card's width as a full page. */
+  pageWidth: number;
   /** Render the previews. Off for pages far from view. */
   mounted: boolean;
   /** Previews take input; off while the card is a tile or in flight. */
@@ -47,13 +52,17 @@ type DeckCardProps = {
   raised?: boolean;
 };
 
-export function DeckCard({ card, motion: values, mounted, interactive, onOpen, raised }: DeckCardProps) {
+export function DeckCard({ card, motion: values, tile, pageWidth, mounted, interactive, onOpen, raised }: DeckCardProps) {
   const [resetKey, setResetKey] = useState(0);
   const cardRef = useRef<HTMLElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const { left, top, width, height, x, y, scale, radius, chrome } = values;
   const theme = useTheme();
   const surface = card.surface[theme];
+  const membersWidth = familyLayoutWidth(
+    { width: tile.width - TILE_PADDING * 2, height: tile.height - TILE_PADDING * 2 },
+    pageWidth - PAGE_PADDING.inline * 2,
+  );
 
   const cardStyle = useMotionStyle(cardRef, [left, top, width, height, x, y, scale, radius], style => {
     style("left", px(left.get()));
@@ -83,7 +92,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
     >
       <div ref={previewRef} className={styles.preview} style={previewStyle} inert={interactive ? undefined : true}>
         <FitStage contentKey={`${mounted}-${resetKey}`}>
-          {mounted ? <Members key={resetKey} members={card.members} /> : null}
+          {mounted ? <Members key={resetKey} members={card.members} familyWidth={membersWidth} /> : null}
         </FitStage>
       </div>
 
@@ -181,7 +190,7 @@ function Revealed({ onReveal }: { onReveal: () => void }) {
  * Memoized: the deck re-renders cards when the view changes, and previews
  * (whole components) must not re-render with them at the start of a flight.
  */
-const Members = memo(function Members({ members }: { members: LiveCardMember[] }) {
+const Members = memo(function Members({ members, familyWidth }: { members: LiveCardMember[]; familyWidth: number }) {
   if (members.length === 1 && members[0]) {
     return (
       // `.frame` must stretch: `useGpu` waits for a real canvas layout.
@@ -191,7 +200,7 @@ const Members = memo(function Members({ members }: { members: LiveCardMember[] }
     );
   }
   return (
-    <div className={styles.family}>
+    <div className={styles.family} style={{ width: familyWidth }}>
       {members.map(member => (
         <div key={member.slug} className={styles.member}>
           <Member member={member} />

@@ -170,11 +170,40 @@ a {
   color: inherit;
 }
 
+/* Controls answer touch at once: no double-tap zoom wait, no system tap flash
+   (each draws its own pressed and focus states), and a long press never selects
+   a label. Zero specificity, so a control that owns its gestures still wins. */
+:where(
+  button,
+  [role="button"],
+  [role="switch"],
+  [role="slider"],
+  label:has(> input:is([type="radio"], [type="checkbox"])),
+  input:is([type="radio"], [type="checkbox"], [type="range"])
+) {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+:where(a[href]) {
+  touch-action: manipulation;
+}
+
 input,
 textarea,
 select {
   appearance: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Safari zooms the page into any field under 16px. */
+@media (pointer: coarse) {
+  :root :is(input:not([type="radio"], [type="checkbox"], [type="range"]), textarea, select) {
+    font-size: max(16px, 1em);
+  }
 }
 
 input:focus,
@@ -185,8 +214,6 @@ select:focus {
 }
 
 input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
 textarea:-webkit-autofill,
 select:-webkit-autofill {
   -webkit-text-fill-color: inherit;

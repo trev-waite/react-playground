@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
 import { CheckIcon, CollapseIcon, CopyIcon, ExpandIcon, MoveIcon } from "./icons";
 import { exportControlValues } from "./exportControlValues";
 import { ProximityControl, type ShellControl } from "./ProximityControl";
@@ -9,6 +9,8 @@ const COPIED_MS = 1600;
 const SWIPE_DISTANCE = 28;
 const SWIPE_VELOCITY = 0.32;
 const TAP_DISTANCE = 10;
+/** A click this soon after the handle's pointer-up is that same press, already handled. */
+const CLICK_AFTER_POINTER_MS = 500;
 
 export type ShellAction = {
   id: string;
@@ -113,7 +115,7 @@ export function ConfigurableShell({
   const rootClass = className ? `${styles.root} ${className}` : styles.root;
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const skipHandleClick = useRef(false);
+  const handledPointerAt = useRef(-Infinity);
   const swipe = useRef<{
     pointerId: number;
     startX: number;
@@ -160,17 +162,12 @@ export function ConfigurableShell({
     const expandSwipe = !expanded && vertical && (dy <= -SWIPE_DISTANCE || vy <= -SWIPE_VELOCITY);
     const collapseSwipe = expanded && vertical && (dy >= SWIPE_DISTANCE || vy >= SWIPE_VELOCITY);
 
-    if (tap || expandSwipe || collapseSwipe) {
-      skipHandleClick.current = true;
-      onExpand?.();
-    }
+    handledPointerAt.current = event.timeStamp;
+    if (tap || expandSwipe || collapseSwipe) onExpand?.();
   }
 
-  function onHandleClick() {
-    if (skipHandleClick.current) {
-      skipHandleClick.current = false;
-      return;
-    }
+  function onHandleClick(event: MouseEvent<HTMLButtonElement>) {
+    if (event.timeStamp - handledPointerAt.current < CLICK_AFTER_POINTER_MS) return;
     onExpand?.();
   }
 

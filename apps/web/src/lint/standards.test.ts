@@ -66,10 +66,12 @@ describe("standards lint: Live components", () => {
     }
     report(violations);
   });
+});
 
-  test("Live hover styles only apply on devices that can hover, so taps never stick", async () => {
+describe("standards lint: CSS", () => {
+  test("hover styles only apply on devices that can hover, so taps never stick", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(["live"], "**/*.css")) {
+    for (const { file, text } of await sources(STYLED_DIRS, "**/*.css")) {
       for (const { selector, line } of ungatedHoverRules(text)) {
         violations.push(
           `${file}:${line} styles "${selector}" outside \`@media (hover: hover)\`; on touch screens the hover state sticks after a tap.`,
@@ -78,9 +80,7 @@ describe("standards lint: Live components", () => {
     }
     report(violations);
   });
-});
 
-describe("standards lint: CSS", () => {
   test("animated filters settle on `filter: none`, never `blur(0)`", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(STYLED_DIRS, "**/*.css")) {

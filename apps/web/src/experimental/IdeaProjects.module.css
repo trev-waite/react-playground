@@ -12,6 +12,7 @@
   z-index: 4;
   inset: 0;
   width: 100vw;
+  height: 100vh;
   height: 100dvh;
   margin: 0;
   padding: 0;
@@ -90,6 +91,7 @@
 .surface[data-open] {
   /* perf-allow: see .surface. */
   width: var(--menu-width);
+  height: min(var(--menu-height), calc(100vh - 5.5rem));
   height: min(var(--menu-height), calc(100dvh - 5.5rem));
   border-radius: var(--space-2);
   box-shadow:
@@ -130,8 +132,10 @@
   stroke-linecap: round;
 }
 
-.trigger:hover {
-  background: rgba(17, 17, 19, 0.06);
+@media (hover: hover) and (pointer: fine) {
+  .trigger:hover {
+    background: rgba(17, 17, 19, 0.06);
+  }
 }
 
 .trigger:active {
@@ -289,8 +293,10 @@
   font-weight: 550;
 }
 
-.newIdeaInput:hover {
-  background: rgba(255, 255, 255, 0.14);
+@media (hover: hover) and (pointer: fine) {
+  .newIdeaInput:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
 }
 
 .newIdeaInput:focus {
@@ -373,7 +379,13 @@
   white-space: nowrap;
 }
 
-.newIdeaAction:hover {
+@media (hover: hover) and (pointer: fine) {
+  .newIdeaAction:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+}
+
+.newIdeaAction:active {
   background: rgba(255, 255, 255, 0.18);
 }
 
@@ -400,6 +412,7 @@
 .list {
   flex: 0 1 auto;
   min-height: 0;
+  max-height: min(16rem, calc(100vh - 14rem));
   max-height: min(16rem, calc(100dvh - 14rem));
   list-style: none;
   margin: 0;
@@ -436,9 +449,14 @@
   background: rgba(17, 17, 19, 0.08);
 }
 
-.ideaRowMain:hover,
 .ideaRowMain:focus-within {
   background: rgba(17, 17, 19, 0.08);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ideaRowMain:hover {
+    background: rgba(17, 17, 19, 0.08);
+  }
 }
 
 .empty {
@@ -515,12 +533,21 @@
     background 140ms var(--exp-ease);
 }
 
-.ideaRowMain:hover .rowDelete,
 .ideaRowMain:focus-within .rowDelete {
   opacity: 1;
 }
 
-.rowDelete:hover {
+@media (hover: hover) and (pointer: fine) {
+  .ideaRowMain:hover .rowDelete {
+    opacity: 1;
+  }
+
+  .rowDelete:hover {
+    background: rgba(138, 31, 31, 0.08);
+  }
+}
+
+.rowDelete:active {
   background: rgba(138, 31, 31, 0.08);
 }
 

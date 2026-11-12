@@ -1,9 +1,19 @@
+import type { Size } from "./deckLayout";
+
 /** Previews lay out in at least this square, then scale down to fit a small tile. */
 export const PREVIEW_MIN_SIZE = 320;
 
 /** Scale for a preview area before any overflow correction. Never enlarges. */
 export function previewScale(width: number, height: number): number {
   return Math.min(1, Math.max(width, 1) / PREVIEW_MIN_SIZE, Math.max(height, 1) / PREVIEW_MIN_SIZE);
+}
+
+/**
+ * The one width a family lays out at, as a tile and as a page, so its members
+ * never rewrap in the flight between. A narrower stage in flight scales it down.
+ */
+export function familyLayoutWidth(tileArea: Size, pageAreaWidth: number): number {
+  return Math.min(pageAreaWidth, Math.max(tileArea.width, 1) / previewScale(tileArea.width, tileArea.height));
 }
 
 type Fit = { area: HTMLElement; content: HTMLElement; width: number; height: number; scale: number };
