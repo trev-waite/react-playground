@@ -6,7 +6,10 @@ export const meta: CardMeta = {
   title: "Particle Text",
   description: "Sweep across the name to blow its ink away as drifting dots, or press to burst it; the letters swirl back together.",
   size: "wide",
-  background: "#f2f2f2",
+  surface: {
+    light: { swatch: "paper", content: ["#1c2430"] },
+    dark: { swatch: "night", content: ["#f5f7fa"] },
+  },
 };
 
 export default function ParticleTextPreview() {

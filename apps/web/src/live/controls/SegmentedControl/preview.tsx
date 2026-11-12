@@ -1,6 +1,7 @@
 import { SegmentedControl } from "./SegmentedControl";
+import type { FamilyMemberMeta } from "@/lib/types";
 
-export const meta = {
+export const meta: FamilyMemberMeta = {
   title: "Segmented Control",
 };
 

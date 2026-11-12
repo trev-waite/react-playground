@@ -11,14 +11,31 @@ A thin checklist. The detail lives in the skills and docs it links.
 ```text
 - [ ] Build it as an idea in Experimental: follow the `new-experiment` skill (and `gpu-idea` for shaders)
 - [ ] Make Live into a folder under apps/web/src/live/<folder>/<Name>/ (never `shells`)
-- [ ] preview.tsx renders only <Name />; its `meta` sets the card's size, background, theme, description, and reset
+- [ ] preview.tsx renders only <Name />; its `meta` sets the card's size, description, reset, and `surface` (below)
 - [ ] Grouping several components into one card? Add or update live/<folder>/family.ts
-- [ ] Check it in Live: `bun run dev`, page to the card, then open the grid and click back in
+- [ ] Check it in Live, on the light and the dark site: `bun run dev`, page to the card, open the grid, and click back in; switch the system appearance (or run with `VITE_THEME_TOGGLE=on` for the theme button) to see both
 - [ ] Refresh the link-preview images (below)
 - [ ] `bun run typecheck` and `bun run test`
 ```
 
 Card `meta` and `family.ts`: [Using the playground](../../../docs/USING_THE_PLAYGROUND.md).
+
+## Card surfaces
+
+A card picks one swatch per site theme from the shared palette in `apps/web/src/lib/cardSwatches.ts`, so the deck stays one set of colors. Both sites offer the same five: `paper` (white), `night` (black), `orange`, `blue`, and `green`.
+
+```tsx
+surface: {
+  light: { swatch: "paper", content: ["#171c25"] },
+  dark: { swatch: "orange", content: ["#171c25"] },
+},
+```
+
+1. List `content`: the component's main colors on the card, the ones that show its shape (a button's fill, a panel, the text). Read them from its CSS. If its color follows the card's ink, list that ink.
+2. Pick the swatch for each theme where every `content` color is at least 3:1 (WCAG non-text contrast). `paper` and `night` suit a component that brings its own color or wants a stark ground, such as white letters on black, and either works on either site when it suits the component. Orange, blue, and green give the rest a backdrop; on the dark site they are mid-tones, so they hold both white and near-black components. Vary the tone from the cards beside it in `live/order.ts`.
+3. Run `bun test apps/web/src/live/surfaces.test.ts`. It names any card, color, and ratio that falls short. Pick another swatch; never lower the bar or add a one-off color.
+
+Each swatch already stands 1.2:1 apart from the site canvas and carries its footer ink at 4.5:1; the same test checks that. Changing the palette itself is a design decision: keep it at most 5 swatches per theme. A family's `family.ts` owns the surface, and its members declare only a `title`.
 
 ## Refresh the link-preview images
 

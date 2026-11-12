@@ -1,6 +1,7 @@
 import { Stepper } from "./Stepper";
+import type { FamilyMemberMeta } from "@/lib/types";
 
-export const meta = {
+export const meta: FamilyMemberMeta = {
   title: "Stepper",
 };
 

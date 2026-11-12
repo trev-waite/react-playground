@@ -395,6 +395,38 @@
   }
 }
 
+/* Fingers get a 44px target even where the shell is drawn smaller, without changing its look. */
+@media (pointer: coarse) {
+  .tool,
+  .action,
+  .copy {
+    position: relative;
+  }
+
+  .tool::after,
+  .action::after,
+  .copy::after {
+    content: "";
+    position: absolute;
+    inset: -0.6rem;
+  }
+
+  /* Neighbors split the gap between them: the buttons beside each other, and the first slider below.
+     The copy button has the row's end to itself. */
+  .action::after {
+    inset: -0.6rem -0.3rem -0.3rem;
+  }
+
+  .copy::after {
+    inset: -0.6rem -0.6rem -0.3rem -0.3rem;
+  }
+
+  .handle {
+    height: 3rem;
+    margin-top: -3rem;
+  }
+}
+
 @media (max-width: 440px) {
   .root {
     border-radius: 28px;

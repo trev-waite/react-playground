@@ -9,6 +9,10 @@ const MODES = ["Morph", "Rest"] as const;
 export const meta: CardMeta = {
   title: "Blob Pet",
   description: "A squishy blob that melts into faces, shapes, and even words. Tap it to skip ahead, or let it rest and watch you.",
+  surface: {
+    light: { swatch: "paper", content: ["#111113"] },
+    dark: { swatch: "blue", content: ["#111113"] },
+  },
   reset: "replay",
 };
 

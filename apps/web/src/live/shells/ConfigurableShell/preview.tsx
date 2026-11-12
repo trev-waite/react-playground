@@ -18,7 +18,10 @@ export const meta: CardMeta = {
   title: "Configurable Shell",
   description: "Tune a component by feel: the sliders swell as your cursor nears them. Copy the code once it looks right.",
   size: "tall",
-  background: "#ff9f1c",
+  surface: {
+    light: { swatch: "orange", content: ["#ffffff"] },
+    dark: { swatch: "orange", content: ["#ffffff"] },
+  },
 };
 
 const DEFAULTS = {

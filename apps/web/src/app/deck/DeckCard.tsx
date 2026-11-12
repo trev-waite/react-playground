@@ -14,17 +14,25 @@ import type { LiveCard, LiveCardMember } from "../../lib/catalog";
 import { opacity, px, transform, useMotionStyle } from "../motion/hooks";
 import type { MotionValue } from "../motion/motionValue";
 import type { PreviewModule } from "../../lib/types";
+import { useTheme } from "../theme/theme";
 import type { CardMotion } from "./cardMotion";
 import { observeFit, refitArea } from "./fitPreview";
 import styles from "./DeckCard.module.css";
 
 /** Padding as a tile (chrome 0) and as a page (chrome 1). The page top clears the floating chrome. */
 const TILE_PADDING = 16;
-const PAGE_PADDING = { top: 80, inline: 24, bottom: 80, footer: 112 };
+const PAGE_PADDING = { top: 80, inline: 24 };
+/** The page bottom clears the footer: its measured height, its 24px inset, and 16px above it. */
+const FOOTER_CLEARANCE = 40;
 
 function padding(page: number, chrome: number, safeArea?: "--safe-top" | "--safe-bottom") {
   const value = px(TILE_PADDING + (page - TILE_PADDING) * chrome);
   return safeArea ? `calc(${value} + ${chrome} * var(${safeArea}))` : value;
+}
+
+function footerPadding(chrome: number) {
+  const page = `var(--footer-height) + ${px(FOOTER_CLEARANCE - TILE_PADDING)}`;
+  return `calc(${px(TILE_PADDING)} + (${page}) * ${chrome} + ${chrome} * var(--safe-bottom))`;
 }
 
 type DeckCardProps = {
@@ -41,10 +49,11 @@ type DeckCardProps = {
 
 export function DeckCard({ card, motion: values, mounted, interactive, onOpen, raised }: DeckCardProps) {
   const [resetKey, setResetKey] = useState(0);
-  const hasFooter = Boolean(card.description || card.reset);
   const cardRef = useRef<HTMLElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
   const { left, top, width, height, x, y, scale, radius, chrome } = values;
+  const theme = useTheme();
+  const surface = card.surface[theme];
 
   const cardStyle = useMotionStyle(cardRef, [left, top, width, height, x, y, scale, radius], style => {
     style("left", px(left.get()));
@@ -58,7 +67,7 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
   const previewStyle = useMotionStyle(previewRef, [chrome], style => {
     const inline = padding(PAGE_PADDING.inline, chrome.get());
     style("paddingTop", padding(PAGE_PADDING.top, chrome.get(), "--safe-top"));
-    style("paddingBottom", padding(hasFooter ? PAGE_PADDING.footer : PAGE_PADDING.bottom, chrome.get(), "--safe-bottom"));
+    style("paddingBottom", footerPadding(chrome.get()));
     style("paddingLeft", inline);
     style("paddingRight", inline);
   });
@@ -67,13 +76,10 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
     <article
       ref={cardRef}
       className={styles.card}
-      data-theme={card.theme}
+      data-theme={surface.theme}
       data-raised={raised || undefined}
       aria-label={card.title}
-      style={{
-        ...cardStyle,
-        ...(card.background ? ({ "--card-background": card.background } as CSSProperties) : null),
-      }}
+      style={{ ...cardStyle, "--card-background": surface.background } as CSSProperties}
     >
       <div ref={previewRef} className={styles.preview} style={previewStyle} inert={interactive ? undefined : true}>
         <FitStage contentKey={`${mounted}-${resetKey}`}>
@@ -81,21 +87,22 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
         </FitStage>
       </div>
 
-      {hasFooter ? (
-        <CardFooter chrome={chrome} interactive={interactive}>
+      <CardFooter chrome={chrome} interactive={interactive}>
+        <div className={styles.caption}>
+          <h2 className={styles.title}>{card.title}</h2>
           {card.description ? <p className={styles.description}>{card.description}</p> : null}
-          {card.reset ? (
-            <button
-              type="button"
-              className={styles.reset}
-              onClick={() => setResetKey(key => key + 1)}
-            >
-              <ResetIcon />
-              {card.reset === "replay" ? "Replay" : "Reset"}
-            </button>
-          ) : null}
-        </CardFooter>
-      ) : null}
+        </div>
+        {card.reset ? (
+          <button
+            type="button"
+            className={styles.reset}
+            onClick={() => setResetKey(key => key + 1)}
+          >
+            <ResetIcon />
+            <span className={styles.resetLabel}>{card.reset === "replay" ? "Replay" : "Reset"}</span>
+          </button>
+        ) : null}
+      </CardFooter>
 
       {onOpen ? (
         <button type="button" className={styles.open} onClick={onOpen}>
@@ -106,12 +113,28 @@ export function DeckCard({ card, motion: values, mounted, interactive, onOpen, r
   );
 }
 
+/** The page's caption bar. It tells the card its height, so the preview above never runs under it. */
 function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; interactive: boolean; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const footerStyle = useMotionStyle(ref, [chrome], style => {
     style("opacity", opacity(chrome.get()));
     style("transform", transform({ y: (1 - chrome.get()) * 16 }));
   });
+
+  useLayoutEffect(() => {
+    const footer = ref.current;
+    const card = footer?.parentElement;
+    if (!footer || !card) return;
+    const measure = () => {
+      const height = px(footer.offsetHeight);
+      if (card.style.getPropertyValue("--footer-height") !== height) card.style.setProperty("--footer-height", height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(footer);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <footer ref={ref} className={styles.footer} style={footerStyle} inert={interactive ? undefined : true}>
       {children}

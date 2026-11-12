@@ -7,6 +7,10 @@ export const meta: CardMeta = {
   title: "Project Rail",
   description: "Skim the dashes to switch projects; the chosen one becomes a pill that opens into details.",
   size: "wide",
+  surface: {
+    light: { swatch: "paper", content: ["#000000", "#666666"] },
+    dark: { swatch: "paper", content: ["#000000", "#666666"] },
+  },
   reset: "reset",
 };
 

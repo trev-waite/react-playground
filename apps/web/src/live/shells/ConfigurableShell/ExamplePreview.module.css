@@ -1,8 +1,12 @@
 .stage {
   width: 100%;
   height: 100%;
-  touch-action: none;
   user-select: none;
+}
+
+/* Only while panning does a drag move the blob; otherwise a swipe scrolls the page. */
+.stage[data-panning] {
+  touch-action: none;
 }
 
 /* Its own layer: the blob is redrawn every frame, and Safari otherwise repaints the scrolling page around it. */

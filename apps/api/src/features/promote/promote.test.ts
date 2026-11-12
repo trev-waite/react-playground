@@ -17,6 +17,9 @@ describe("buildComponentModule / buildPreviewModule", () => {
 
     const preview = buildPreviewModule("MorphBlob", "Morph Blob");
     expect(preview).toContain('title: "Morph Blob"');
+    expect(preview).toContain("export const meta: CardMeta = {");
+    expect(preview).toMatch(/light: \{ swatch: "[a-z]+", content: \["#[0-9a-f]{6}"\] \}/);
+    expect(preview).toMatch(/dark: \{ swatch: "[a-z]+", content: \["#[0-9a-f]{6}"\] \}/);
     expect(preview).toContain("import { MorphBlob }");
     expect(preview).not.toContain("experimental");
   });

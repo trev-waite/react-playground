@@ -4,7 +4,9 @@ export const meta: FamilyMeta = {
   title: "Controls",
   description: "Segmented control, switch, and stepper share one rhythm.",
   size: "wide",
-  background: "#2448d8",
-  theme: "dark",
+  surface: {
+    light: { swatch: "blue", content: ["#ffffff"] },
+    dark: { swatch: "green", content: ["#ffffff"] },
+  },
   reset: "reset",
 };

@@ -34,13 +34,15 @@ describe("Safari on phones", () => {
     expect(await read("src/studio/StudioApp.tsx")).not.toContain("documentScroll");
   });
 
-  test("the fixed bar at the top edge stays transparent; its pill's glass is on a child", async () => {
+  test("the fixed bar at the top edge stays transparent; its glass is on a child or pseudo-element", async () => {
     const chrome = "src/app/deck/DeckChrome.module.css";
     const bar = await rule(chrome, ".bar");
     expect(bar).toContain("position: fixed");
     expect(bar).not.toMatch(/background|backdrop-filter|opacity/);
-    expect(await rule(chrome, ".backPill")).not.toMatch(/background|backdrop-filter/);
-    expect(await rule(chrome, ".pager,\n.glass")).toContain("backdrop-filter");
+    const fill = /^\s*(?:background|backdrop-filter)\s*:/m;
+    expect(await rule(chrome, ".backPill")).not.toMatch(fill);
+    expect(await rule(chrome, ".glassCircle")).not.toMatch(fill);
+    expect(await rule(chrome, ".pager,\n.glass,\n.glassCircle::before")).toContain("backdrop-filter");
   });
 
   test("the chrome and the cards keep clear of the notch and the home indicator", async () => {

@@ -7,7 +7,10 @@ export const meta: CardMeta = {
   title: "Menu Pill",
   description: "A quiet island that stretches open into the whole menu on hover or tap.",
   size: "wide",
-  background: "#f2f2f2",
+  surface: {
+    light: { swatch: "paper", content: ["#000000"] },
+    dark: { swatch: "green", content: ["#000000"] },
+  },
   reset: "reset",
 };
 

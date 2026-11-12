@@ -1,37 +1,61 @@
 import type { ComponentType } from "react";
+import type { CardSwatch, CardSwatchName } from "./cardSwatches";
 
 /** How many grid cells a card covers: 1×1, 2×1, 1×2, or 2×2. */
 export type CardSize = "small" | "wide" | "tall" | "large";
 
-/** Which ink reads on the card background. */
+export type SiteTheme = "light" | "dark";
+
+/** Which ink reads on the card background: dark ink on a light card, light ink on a dark one. */
 export type CardTheme = "light" | "dark";
 
+/** A plain color, so contrast against it can be checked. */
+export type HexColor = `#${string}`;
+
+/** How a card looks on one site theme: a swatch from `CARD_SWATCHES`, picked against the component it shows. */
+type CardSurface = {
+  swatch: CardSwatchName;
+  /** The component's main colors on this swatch, which the swatch must stand apart from. */
+  content: readonly [HexColor, ...HexColor[]];
+};
+
 /**
- * Presentation for a Live card. Everything is optional: a card is a plain
- * white 1×1 tile until it says otherwise.
+ * A card's surface on the light site and on the dark site. Both are required:
+ * only the card knows which swatch keeps its own component readable.
+ * `src/live/surfaces.test.ts` holds every surface to the same contrast bar.
  */
+export type CardSurfaces = Record<SiteTheme, CardSurface>;
+
+export type CardColors = Record<SiteTheme, CardSwatch>;
+
+/** Presentation for a Live card. Apart from its surfaces, a card is a 1×1 tile until it says otherwise. */
 export type CardMeta = {
   title?: string;
   /** Short line in the card footer. */
   description?: string;
   size?: CardSize;
-  /** Any CSS background. The card is otherwise unopinionated. */
-  background?: string;
-  theme?: CardTheme;
+  surface: CardSurfaces;
   /** Footer button that remounts the card: "reset" for state, "replay" for intros. */
   reset?: "reset" | "replay";
 };
 
+/** A component on its folder's family card, which owns the presentation. */
+export type FamilyMemberMeta = {
+  title?: string;
+};
+
+export type PreviewMeta = CardMeta | FamilyMemberMeta;
+
 export type PreviewModule = {
   default: ComponentType;
-  meta?: CardMeta;
+  meta?: PreviewMeta;
 };
 
 export type PlaygroundEntry = {
   slug: string;
   title: string;
   /** Read at build time, so cards show before their component loads. */
-  meta?: CardMeta;
+  meta?: PreviewMeta;
   load: () => Promise<PreviewModule>;
 };
 

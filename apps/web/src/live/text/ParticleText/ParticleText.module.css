@@ -2,6 +2,8 @@
   position: relative;
   display: inline-block;
   color: inherit;
+  /* Not motion: a new ink ends this transition, which tells the canvas to repaint its dots. */
+  transition: color 1ms step-end;
 }
 
 .text {
