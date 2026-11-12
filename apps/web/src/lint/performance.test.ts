@@ -8,6 +8,7 @@ import {
   readSource,
   report,
   sources,
+  splitTopLevel,
   stripCssComments,
   transitionedProperties,
 } from "./source";
@@ -24,6 +25,19 @@ const CHROME_DIRS = ["app", "studio", "experimental"];
 
 const LAYOUT_PROPERTY =
   /^(all|width|height|(min|max)-(width|height)|top|right|bottom|left|inset(-\w+)?|(margin|padding)(-\w+)?|gap|flex(-basis)?|grid-template-\w+)$/;
+
+/** The last compound selector, the element a rule styles: `:root:has(x) .bar` gives `.bar`. */
+function lastCompound(selector: string): string {
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i]!;
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (depth === 0 && /[\s>+~]/.test(ch)) start = i + 1;
+  }
+  return selector.slice(start);
+}
 
 /** Bodies of the functions handed to requestAnimationFrame, by name or inline. */
 function frameCallbacks(text: string): { body: string; index: number }[] {
@@ -90,6 +104,23 @@ describe("performance lint: CSS", () => {
           violations.push(
             `${file}:${rule.line} keeps will-change on "${rule.selector}". Permanent layers cost memory ` +
               "and raster; scope it to [data-flying] or add `perf-allow: <reason>`.",
+          );
+        }
+      }
+    }
+    report(violations);
+  });
+
+  test("custom properties never flip on :root through :has(), which restyles the whole document", async () => {
+    const violations: string[] = [];
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.css")) {
+      for (const rule of cssRules(text)) {
+        if (rule.allowed || !/(^|[;\s])--[\w-]+\s*:/.test(stripCssComments(rule.body))) continue;
+        const subject = splitTopLevel(rule.selector).find(part => /:root\b.*:has\(/.test(lastCompound(part)));
+        if (subject) {
+          violations.push(
+            `${file}:${rule.line} sets custom properties on "${subject}". Every element inherits them, so each flip ` +
+              "restyles the page (15 ms on an iPhone); set them on the elements that read them, under the same :has().",
           );
         }
       }

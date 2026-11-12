@@ -1,3 +1,5 @@
+import { frame } from "../motion/frameLoop";
+import type { MotionValue } from "../motion/motionValue";
 import type { Size } from "./deckLayout";
 
 /** Previews lay out in at least this square, then scale down to fit a small tile. */
@@ -16,15 +18,68 @@ export function familyLayoutWidth(tileArea: Size, pageAreaWidth: number): number
   return Math.min(pageAreaWidth, Math.max(tileArea.width, 1) / previewScale(tileArea.width, tileArea.height));
 }
 
-type Fit = { area: HTMLElement; content: HTMLElement; width: number; height: number; scale: number };
+/** The size a preview lays out at, and the scale that draws that layout in its area. */
+export type FitLayout = Size & { scale: number };
+
+/** A preview at rest: laid out at the area, or at least `PREVIEW_MIN_SIZE`, and scaled down to fit. */
+export function restLayout(area: Size): FitLayout {
+  const scale = previewScale(area.width, area.height);
+  return { width: area.width / scale, height: area.height / scale, scale };
+}
+
+/**
+ * A preview in flight lays out partway between its tile and page layouts, by
+ * the card's own progress, and scales to fit the area it has. Fitting each
+ * frame on its own instead lets content that gives way to a short stage
+ * squeeze in flight, then pop back once its scale drops below 1.
+ */
+export function flightLayout(area: Size, tile: Size, page: Size, progress: number): FitLayout {
+  const t = Math.min(1, Math.max(0, progress));
+  const width = tile.width + (page.width - tile.width) * t;
+  const height = tile.height + (page.height - tile.height) * t;
+  return { width, height, scale: Math.min(area.width / width, area.height / height) };
+}
+
+type Fit = {
+  area: HTMLElement;
+  content: HTMLElement;
+  width: number;
+  height: number;
+  layout: FitLayout;
+  /** The card's morph from tile (0) to page (1). */
+  progress: MotionValue | undefined;
+  /** The layouts the preview last rested at as a tile and as a page. */
+  rest: { tile?: FitLayout; page?: FitLayout };
+};
 
 const fits = new Map<Element, Fit>();
 let observer: ResizeObserver | null = null;
 
 function place(fit: Fit) {
-  fit.content.style.width = `${fit.width / fit.scale}px`;
-  fit.content.style.height = `${fit.height / fit.scale}px`;
-  fit.content.style.transform = fit.scale < 1 ? `scale(${fit.scale})` : "";
+  const { width, height, scale } = fit.layout;
+  fit.content.style.width = `${width}px`;
+  fit.content.style.height = `${height}px`;
+  fit.content.style.transform = scale === 1 ? "" : `scale(${scale})`;
+}
+
+/** Where the card is between tile (0) and page (1), or the end it has landed at. */
+type Progress = number | "tile" | "page" | undefined;
+
+function progressOf(fit: Fit): Progress {
+  const value = fit.progress;
+  if (!value) return undefined;
+  // A flight that has just started still reads its old end, though the card has begun to move.
+  if (value.animation) return value.get();
+  if (value.get() === 0) return "tile";
+  if (value.get() === 1) return "page";
+  return value.get();
+}
+
+function layoutFor(fit: Fit, progress: Progress): FitLayout {
+  const area = { width: fit.width, height: fit.height };
+  const { tile, page } = fit.rest;
+  if (typeof progress !== "number" || !tile || !page) return restLayout(area);
+  return flightLayout(area, tile, page, progress);
 }
 
 /**
@@ -32,10 +87,11 @@ function place(fit: Fit) {
  * correct), so opening the grid costs one forced layout, not one per card.
  */
 function refit(batch: Fit[]) {
-  for (const fit of batch) {
-    fit.scale = previewScale(fit.width, fit.height);
+  const progress = batch.map(progressOf);
+  batch.forEach((fit, index) => {
+    fit.layout = layoutFor(fit, progress[index]);
     place(fit);
-  }
+  });
   const spills = batch.map(fit => {
     const overflow = fit.content.firstElementChild;
     if (!overflow) return 1;
@@ -46,9 +102,13 @@ function refit(batch: Fit[]) {
   });
   batch.forEach((fit, index) => {
     const spill = spills[index]!;
-    if (spill <= 1.01) return;
-    fit.scale /= spill;
-    place(fit);
+    if (spill > 1.01) {
+      const { width, height, scale } = fit.layout;
+      fit.layout = { width: width * spill, height: height * spill, scale: scale / spill };
+      place(fit);
+    }
+    const end = progress[index];
+    if (end === "tile" || end === "page") fit.rest[end] = fit.layout;
   });
 }
 
@@ -76,19 +136,25 @@ export function refitArea(area: Element) {
 /**
  * Keeps `content` laid out at a readable size and scaled into `area`. Sizes come
  * from layout boxes, never transformed rects, because cards zoom in flight.
+ * `progress` is the card's morph from tile (0) to page (1); with it, a preview
+ * in flight blends between the layouts it rests at.
  */
-export function observeFit(area: HTMLElement, content: HTMLElement): () => void {
-  const fit: Fit = {
-    area,
-    content,
-    width: Math.max(area.clientWidth, 1),
-    height: Math.max(area.clientHeight, 1),
-    scale: 1,
-  };
+export function observeFit(area: HTMLElement, content: HTMLElement, progress?: MotionValue): () => void {
+  const width = Math.max(area.clientWidth, 1);
+  const height = Math.max(area.clientHeight, 1);
+  const fit: Fit = { area, content, width, height, layout: restLayout({ width, height }), progress, rest: {} };
   fits.set(area, fit);
   refit([fit]);
   sharedObserver().observe(area);
+  // Landing may leave the area's size as it was a frame before, so no resize reports the rest.
+  const unsubscribe = progress?.on(value => {
+    if (value !== 0 && value !== 1) return;
+    frame.render(() => {
+      if (fits.get(area) === fit) refit([fit]);
+    });
+  });
   return () => {
+    unsubscribe?.();
     fits.delete(area);
     observer?.unobserve(area);
   };

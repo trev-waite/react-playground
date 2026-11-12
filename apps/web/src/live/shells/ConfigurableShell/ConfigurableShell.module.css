@@ -187,6 +187,7 @@
   border-radius: 0 0 var(--cs-radius) var(--cs-radius);
   background: transparent;
   cursor: grab;
+  /* lint-allow: a grip whose vertical swipe expands or collapses the preview. */
   touch-action: none;
   user-select: none;
   transition:

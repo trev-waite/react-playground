@@ -91,7 +91,7 @@ export function DeckCard({ card, motion: values, tile, pageWidth, mounted, inter
       style={{ ...cardStyle, "--card-background": surface.background } as CSSProperties}
     >
       <div ref={previewRef} className={styles.preview} style={previewStyle} inert={interactive ? undefined : true}>
-        <FitStage contentKey={`${mounted}-${resetKey}`}>
+        <FitStage contentKey={`${mounted}-${resetKey}`} progress={chrome}>
           {mounted ? <Members key={resetKey} members={card.members} familyWidth={membersWidth} /> : null}
         </FitStage>
       </div>
@@ -152,7 +152,7 @@ function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; in
 }
 
 /** Shows a preview as it looks on the page, only smaller when the card is a tile. */
-function FitStage({ contentKey, children }: { contentKey: string; children: ReactNode }) {
+function FitStage({ contentKey, progress, children }: { contentKey: string; progress: MotionValue; children: ReactNode }) {
   const areaRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -160,8 +160,8 @@ function FitStage({ contentKey, children }: { contentKey: string; children: Reac
     const area = areaRef.current;
     const content = contentRef.current;
     if (!area || !content) return;
-    return observeFit(area, content);
-  }, [contentKey]);
+    return observeFit(area, content, progress);
+  }, [contentKey, progress]);
 
   // The loaded preview can overflow where the placeholder did not, and the area never resized.
   const refit = useCallback(() => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveCard } from "../../lib/catalog";
+import { frame as frameLoop } from "../motion/frameLoop";
 import { useReducedMotion } from "../motion/hooks";
 import { SPRING } from "../motion/transitions";
 import { CardMotions, jumpCard, moveCard, type CardMotion } from "./cardMotion";
@@ -52,6 +53,15 @@ function whenIdle(callback: () => void): () => void {
   }
   const id = setTimeout(callback, IDLE_FALLBACK_MS);
   return () => clearTimeout(id);
+}
+
+/**
+ * Holds the page still under a flying camera. A cancelled touchmove, not
+ * `touch-action: none`: Safari keeps a touch-action region after the style
+ * goes, and the page that lands would not scroll under it.
+ */
+function holdTouch(event: TouchEvent) {
+  event.preventDefault();
 }
 
 type Viewport = Size & { insets: Insets };
@@ -171,6 +181,8 @@ export function CardDeck({
     anchor: null,
   });
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Bumped by every programmatic scroll, so only the last one to rest turns snapping back on. */
+  const snapRequest = useRef(0);
   const [pages] = useState(() => new PageScroll());
 
   const grid = useMemo(
@@ -199,6 +211,20 @@ export function CardDeck({
   }
 
 
+  /**
+   * Turns scroll-snap back on a frame after a programmatic scroll has painted.
+   * Safari returns a snapping document to the page a finger last left it on,
+   * unless the new offset reached its compositor before snapping resumed.
+   */
+  const resumeSnap = useCallback(() => {
+    const request = ++snapRequest.current;
+    frameLoop.render(() =>
+      frameLoop.render(() => {
+        if (snapRequest.current === request) scrollerRef.current?.removeAttribute("data-gliding");
+      }),
+    );
+  }, []);
+
   useLayoutEffect(
     () =>
       pages.attach({
@@ -206,15 +232,36 @@ export function CardDeck({
           const host = scrollHost(latest.current.scrollsDocument, scrollerRef.current);
           if (host) host.scrollTop = top;
         },
-        onSettle: () => scrollerRef.current?.removeAttribute("data-gliding"),
+        onSettle: () => resumeSnap(),
       }),
-    [pages],
+    [pages, resumeSnap],
   );
+
+  /** Marks the cards in flight: they ride the compositor, and a finger cannot scroll the page under them. */
+  const setFlying = useCallback((flying: boolean) => {
+    const scroller = scrollerRef.current;
+    if (!scroller || scroller.hasAttribute("data-flying") === flying) return;
+    scroller.toggleAttribute("data-flying", flying);
+    if (flying) window.addEventListener("touchmove", holdTouch, { passive: false });
+    else window.removeEventListener("touchmove", holdTouch);
+  }, []);
 
   const stopGlide = useCallback(() => {
     pages.stop();
+    snapRequest.current++;
     scrollerRef.current?.removeAttribute("data-gliding");
   }, [pages]);
+
+  /** Puts the page column at `top` at once, with snapping off until Safari has seen it there. */
+  const jumpPages = useCallback(
+    (host: HTMLElement, top: number) => {
+      stopGlide();
+      scrollerRef.current?.setAttribute("data-gliding", "");
+      host.scrollTop = top;
+      resumeSnap();
+    },
+    [stopGlide, resumeSnap],
+  );
 
   /** Moves the page column in `host` toward `target` from wherever it is, turning snapping off until it rests. */
   const scrollPages = useCallback(
@@ -222,6 +269,7 @@ export function CardDeck({
       const scroller = scrollerRef.current;
       if (!scroller || !host) return;
       pages.sync(host.scrollTop);
+      snapRequest.current++;
       scroller.dataset.gliding = "";
       if (how === "follow") pages.follow(target);
       else pages.glide(target);
@@ -247,18 +295,17 @@ export function CardDeck({
     const focus = grid.rects[activeIndex];
 
     const showPages = () => {
-      host.scrollTop = activeIndex * viewport.height;
+      jumpPages(host, activeIndex * viewport.height);
       scrolled.current = scrollPlace(host);
       each((motion, index) => jumpCard(motion, pagePose(offsetRect(frame, index * viewport.height))));
     };
 
     /** Runs one camera move; true when it finished without being superseded. */
     const fly = async (id: number, move: (card: LiveCard, index: number) => Promise<void>) => {
-      // Cards ride the compositor while they fly so the camera never repaints them.
-      scroller.dataset.flying = "";
+      setFlying(true);
       await Promise.all(cards.map(move));
       if (flight.current !== id) return false;
-      delete scroller.dataset.flying;
+      setFlying(false);
       return true;
     };
 
@@ -318,7 +365,7 @@ export function CardDeck({
     // A glide in progress is aiming at the old layout's offsets, so it stops here.
     stopGlide();
     flight.current++;
-    delete scroller.dataset.flying;
+    setFlying(false);
     if (view === "grid") {
       each((motion, index) => jumpCard(motion, gridPose(grid.rects[index]!)));
       // A resize, or crossing the phone breakpoint (which swaps the scrolling element), keeps the top card in place.
@@ -332,7 +379,7 @@ export function CardDeck({
       // Resized mid-flight to a page: finish the move at the new size.
       flyToPage(flight.current);
     }
-  }, [view, paged, grid, scrollsDocument, motions, stopGlide]);
+  }, [view, paged, grid, scrollsDocument, motions, stopGlide, jumpPages, setFlying]);
 
   // Glide to pages chosen by wheel, keys, the pager, or a link. Scroll-snap
   // stays off in flight so it cannot fight the spring.
@@ -343,12 +390,11 @@ export function CardDeck({
     const target = activeIndex * viewport.height;
     if (!pages.moving && Math.abs(host.scrollTop - target) < 1) return;
     if (reducedMotion || Math.abs(host.scrollTop - target) > viewport.height * 1.5) {
-      stopGlide();
-      host.scrollTop = target;
+      jumpPages(host, target);
       return;
     }
     scrollPages(host, target, "glide");
-  }, [activeIndex, layout, viewport.height, reducedMotion, scrollsDocument, pages, scrollPages, stopGlide]);
+  }, [activeIndex, layout, viewport.height, reducedMotion, scrollsDocument, pages, scrollPages, jumpPages]);
 
   useEffect(() => {
     motions.keep(new Set(cards.map(card => card.slug)));
@@ -359,6 +405,7 @@ export function CardDeck({
       clearTimeout(settleTimer.current);
       pages.stop();
       motions.stopAll();
+      window.removeEventListener("touchmove", holdTouch);
     },
     [pages, motions],
   );

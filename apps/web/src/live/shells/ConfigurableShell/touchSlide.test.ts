@@ -1,15 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { isSlide, TAP_SLOP } from "./touchSlide";
+import { TOUCH_SLOP, touchIntent } from "./touchSlide";
 
 describe("touch on a slider", () => {
-  test("a sideways move past the tap slop slides", () => {
-    expect(isSlide(TAP_SLOP, 0)).toBe(true);
-    expect(isSlide(-20, 6)).toBe(true);
+  test("waits until the finger passes the slop", () => {
+    expect(touchIntent(TOUCH_SLOP - 1, 0)).toBeNull();
+    expect(touchIntent(3, -3)).toBeNull();
   });
 
-  test("a jitter stays a tap, and a mostly vertical move stays a scroll", () => {
-    expect(isSlide(TAP_SLOP - 1, 0)).toBe(false);
-    expect(isSlide(12, 20)).toBe(false);
-    expect(isSlide(10, 10)).toBe(false);
+  test("a mostly sideways move slides, even with some drift down", () => {
+    expect(touchIntent(TOUCH_SLOP, 0)).toBe("slide");
+    expect(touchIntent(-20, 9)).toBe("slide");
+  });
+
+  test("a mostly vertical move, or an even diagonal, scrolls", () => {
+    expect(touchIntent(4, 12)).toBe("scroll");
+    expect(touchIntent(10, 10)).toBe("scroll");
   });
 });

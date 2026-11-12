@@ -369,7 +369,7 @@ export function LightDispersion() {
             display: "block",
             width: "100%",
             height: "100%",
-            touchAction: "none",
+            touchAction: "pan-y",
           }}
         />
       </div>

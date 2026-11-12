@@ -68,6 +68,30 @@ describe("standards lint: Live components", () => {
   });
 });
 
+describe("standards lint: touch", () => {
+  test("a finger on a Live surface can still page the deck; touch-action: none is held only mid-gesture", async () => {
+    const violations: string[] = [];
+    const advice =
+      "On a phone a swipe that starts there never scrolls, and Safari can keep the region after the style goes. " +
+      "Gate it on a gesture state (`[data-panning]`), cancel touchmove instead, or add `lint-allow: <reason>`.";
+    for (const { file, text } of await sources(["app", "live"], "**/*.css")) {
+      for (const rule of cssRules(text)) {
+        if (rule.body.includes("lint-allow:") || rule.selector.includes("[data-")) continue;
+        if (declarations(rule.body, "touch-action").includes("none")) {
+          violations.push(`${file}:${rule.line} sets touch-action: none on "${rule.selector}". ${advice}`);
+        }
+      }
+    }
+    for (const { file, text } of await sources(["app", "live"], "**/*.tsx")) {
+      for (const match of text.matchAll(/\btouchAction\s*:\s*["']none["']/g)) {
+        if (allowedNear(text, match.index!, "lint-allow:")) continue;
+        violations.push(`${file}:${lineOf(text, match.index!)} sets touch-action: none inline. ${advice}`);
+      }
+    }
+    report(violations);
+  });
+});
+
 describe("standards lint: CSS", () => {
   test("hover styles only apply on devices that can hover, so taps never stick", async () => {
     const violations: string[] = [];

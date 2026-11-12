@@ -45,6 +45,27 @@ describe("Safari on phones", () => {
     expect(await rule(chrome, ".pager,\n.glass,\n.glassCircle::before")).toContain("backdrop-filter");
   });
 
+  test("a jump to a page turns snapping off until Safari has painted the page there", async () => {
+    const deck = await read("src/app/deck/CardDeck.tsx");
+    expect(await rule("src/app/deck/CardDeck.module.css", '.scroller[data-layout="pages"][data-gliding]')).toContain(
+      "scroll-snap-type: none",
+    );
+    expect(deck).toMatch(/setAttribute\("data-gliding", ""\);\s*host\.scrollTop = top;\s*resumeSnap\(\);/);
+    expect(deck).toMatch(/frameLoop\.render\(\(\) =>\s*frameLoop\.render\(\(\) => \{[^}]*removeAttribute\("data-gliding"\)/);
+  });
+
+  test("a flight holds the page still with a cancelled touchmove, which Safari never leaves behind", async () => {
+    const deck = await read("src/app/deck/CardDeck.tsx");
+    expect(deck).toContain('window.addEventListener("touchmove", holdTouch, { passive: false })');
+    expect(deck).toContain('window.removeEventListener("touchmove", holdTouch)');
+  });
+
+  test("sideways sliders claim a finger in a cancelable touchmove, since pan-y still pans a diagonal swipe", async () => {
+    const control = await read("src/live/shells/ConfigurableShell/ProximityControl.tsx");
+    expect(control).toContain('addEventListener("touchmove", onTouchMove, { passive: false })');
+    expect(control).toMatch(/touchIntent\([^)]*\)[\s\S]*event\.preventDefault\(\)/);
+  });
+
   test("the chrome and the cards keep clear of the notch and the home indicator", async () => {
     expect(await rule("src/app/deck/DeckChrome.module.css", ".bar")).toContain("var(--safe-top)");
     expect(await rule("src/app/deck/DeckCard.module.css", ".footer")).toContain("var(--safe-bottom)");
@@ -61,6 +82,22 @@ describe("Safari frame rate", () => {
     expect(await rule(deck, ".scroller[data-flying] .content > [data-raised]")).toContain(
       "box-shadow: var(--card-shadow-contact)",
     );
+  });
+
+  test("previews give up their own layers and blurs in flight, which split the shell into dozens repainted per frame", async () => {
+    const flying = await rule(
+      "src/app/deck/CardDeck.module.css",
+      ".scroller[data-flying] .content > * *,\n.scroller[data-flying] .content > * *::before,\n.scroller[data-flying] .content > * *::after",
+    );
+    expect(flying).toContain("will-change: auto !important");
+    expect(flying).toContain("backdrop-filter: none !important");
+    expect(flying).toContain("-webkit-backdrop-filter: none !important");
+  });
+
+  test("previews blend their tile and page layouts as the card flies, so an elastic preview never pops", async () => {
+    const card = await read("src/app/deck/DeckCard.tsx");
+    expect(card).toMatch(/<FitStage[^>]*progress=\{chrome\}/);
+    expect(card).toContain("observeFit(area, content, progress)");
   });
 
   test("paging never moves the raise between page cards, which made Safari repaint both", async () => {
