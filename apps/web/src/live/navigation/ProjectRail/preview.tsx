@@ -9,7 +9,7 @@ export const meta: CardMeta = {
   size: "wide",
   surface: {
     light: { swatch: "paper", content: ["#000000", "#666666"] },
-    dark: { swatch: "mist", content: ["#000000", "#666666"] },
+    dark: { swatch: "paper", content: ["#000000", "#666666"] },
   },
   reset: "reset",
 };

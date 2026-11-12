@@ -6,7 +6,7 @@ export const meta: FamilyMeta = {
   size: "wide",
   surface: {
     light: { swatch: "blue", content: ["#ffffff"] },
-    dark: { swatch: "night", content: ["#ffffff"] },
+    dark: { swatch: "green", content: ["#ffffff"] },
   },
   reset: "reset",
 };

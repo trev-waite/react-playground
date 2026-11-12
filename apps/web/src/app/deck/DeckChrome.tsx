@@ -137,7 +137,6 @@ function HomeLink() {
   );
 }
 
-/** The light/dark button, while `VITE_THEME_TOGGLE` puts it live. */
 export function ThemeButton() {
   return THEME_TOGGLE ? <ThemeToggle /> : null;
 }

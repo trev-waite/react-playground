@@ -75,9 +75,7 @@
   --shell-dot: rgba(40, 48, 64, 0.14);
   --shell-ink: #1c2430;
   --shell-ink-muted: #5c6678;
-  --shell-ink-faint: #8b93a3;
   --shell-accent: #2a5cff;
-  --shell-accent-soft: rgba(42, 92, 255, 0.12);
   --shell-surface: rgba(255, 255, 255, 0.62);
   --shell-surface-solid: #f4f5f7;
   --shell-border: rgba(255, 255, 255, 0.55);
@@ -93,9 +91,7 @@
   --shell-dot: rgba(214, 222, 236, 0.12);
   --shell-ink: #f5f7fa;
   --shell-ink-muted: #a2abbb;
-  --shell-ink-faint: #6c7486;
   --shell-accent: #7d99ff;
-  --shell-accent-soft: rgba(125, 153, 255, 0.16);
   --shell-surface: rgba(28, 30, 36, 0.62);
   --shell-surface-solid: #1c1e24;
   --shell-border: rgba(255, 255, 255, 0.1);

@@ -29,7 +29,7 @@ export function LivePage({ slug, active = true, onNavigate, documentScroll = fal
 function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePageProps>) {
   const cards = useLiveCards();
   const slot = useContext(DeckChromeSlot);
-  const siteTheme = useTheme();
+  const theme = useTheme();
   const [view, setView] = useState<DeckView>("grid");
   const found = cardIndexForSlug(cards, slug);
   const activeIndex = Math.max(0, found);
@@ -83,7 +83,7 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
   return (
     <div
       className={styles.deck}
-      data-chrome={active && view === "page" ? card.surface[siteTheme].theme : undefined}
+      data-chrome={active && view === "page" ? card.surface[theme].theme : undefined}
     >
       {slot ? (
         createPortal(viewButton, slot)

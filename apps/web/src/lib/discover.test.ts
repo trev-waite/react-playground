@@ -189,10 +189,10 @@ describe("cardFromPlan", () => {
   });
 
   test("names a swatch the site theme does not have, since meta is read without type checks", () => {
-    const surface = { light: { swatch: "paper" }, dark: { swatch: "paper" } } as unknown as CardSurfaces;
+    const surface = { light: { swatch: "paper" }, dark: { swatch: "mist" } } as unknown as CardSurfaces;
     expect(() =>
       cardFromPlan({ slug: "buttons/Plain", entries: [entry("buttons/Plain", { surface })] }, moduleFor),
-    ).toThrow('buttons/Plain: the dark site has no card swatch "paper"');
+    ).toThrow('buttons/Plain: the dark site has no card swatch "mist"');
   });
 });
 

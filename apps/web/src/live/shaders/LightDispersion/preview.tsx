@@ -6,8 +6,8 @@ export const meta: CardMeta = {
   description: "White light runs through the letters and splits into a spectrum. Move your pointer across it to push the glow around.",
   size: "wide",
   surface: {
-    light: { swatch: "paper", content: ["#000000"] },
-    dark: { swatch: "green", content: ["#000000"] },
+    light: { swatch: "night", content: ["#ffffff"] },
+    dark: { swatch: "night", content: ["#ffffff"] },
   },
 };
 

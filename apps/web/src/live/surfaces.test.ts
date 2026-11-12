@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Glob } from "bun";
 import path from "node:path";
 import { previewMeta } from "../../vite/previewMetaPlugin";
-import { CARD_SWATCHES, cardSwatch, type CardSwatch } from "../lib/cardSwatches";
+import { CARD_SWATCHES, cardSwatch, type CardSwatch, type CardSwatchName } from "../lib/cardSwatches";
 import type { CardTheme, FamilyMeta, HexColor, SiteTheme } from "../lib/types";
 
 /** WCAG 1.4.11: what identifies a component stands 3:1 apart from what is next to it. */
@@ -13,6 +13,8 @@ const TEXT_CONTRAST = 4.5;
 const CANVAS_CONTRAST = 1.2;
 /** Enough tones to tell cards apart, few enough that the deck reads as one set. */
 const MAX_SWATCHES = 5;
+/** White and black: the same on both sites, for components that set their own color. */
+const NEUTRALS: CardSwatchName[] = ["paper", "night"];
 
 const liveRoot = import.meta.dir;
 const web = path.join(liveRoot, "../..");
@@ -109,7 +111,7 @@ function over(bottom: string, top: string, alpha: number): string {
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /** One card on one site theme: its resolved swatch and the colors its component shows on it. */
-type Surface = { card: string; label: string; site: SiteTheme; swatch: CardSwatch; content: HexColor[] };
+type Surface = { label: string; swatch: CardSwatch; content: HexColor[] };
 
 /** Each card's surface on each site theme, or the reason it has none. */
 async function surfaces(): Promise<{ surfaces: Surface[]; problems: string[] }> {
@@ -124,7 +126,7 @@ async function surfaces(): Promise<{ surfaces: Surface[]; problems: string[] }> 
       if (!swatch) problems.push(`${label}: swatch "${String(declared?.swatch)}" is not in CARD_SWATCHES.${site}`);
       else if (!Array.isArray(content) || content.length === 0 || !content.every(color => HEX.test(String(color)))) {
         problems.push(`${label}: content must list the component's #rrggbb colors`);
-      } else found.push({ card: card.name, label, site, swatch, content: content as HexColor[] });
+      } else found.push({ label, swatch, content: content as HexColor[] });
     }
   }
   return { surfaces: found, problems };
@@ -157,6 +159,16 @@ describe("Card swatches", () => {
     });
     expect(unreadable).toEqual([]);
   });
+  test("white and black stay put across sites; a light tone darkens on the dark one", () => {
+    const names = Object.keys(CARD_SWATCHES.light) as CardSwatchName[];
+    const brighter = names.flatMap(name => {
+      const [light, dark] = [CARD_SWATCHES.light[name], CARD_SWATCHES.dark[name]];
+      if (NEUTRALS.includes(name)) return light.background === dark.background ? [] : [`${name} changes between sites`];
+      if (light.theme === "dark" || luminance(dark.background) < luminance(light.background)) return [];
+      return [`${name}: ${dark.background} is not darker than ${light.background}`];
+    });
+    expect(brighter).toEqual([]);
+  });
 });
 
 describe("Live card surfaces", () => {
@@ -178,15 +190,5 @@ describe("Live card surfaces", () => {
         .map(({ color, ratio }) => `${label}: ${color} on ${swatch.background} is ${ratio.toFixed(2)}:1`),
     );
     expect(faint).toEqual([]);
-  });
-
-  test("a light card on the light site is darker on the dark one", async () => {
-    const byCard = Map.groupBy((await surfaces()).surfaces, surface => surface.card);
-    const lighter = [...byCard].filter(([, both]) => {
-      const light = both.find(surface => surface.site === "light")?.swatch;
-      const dark = both.find(surface => surface.site === "dark")?.swatch;
-      return light?.theme === "light" && dark && luminance(dark.background) >= luminance(light.background);
-    });
-    expect(lighter.map(([name]) => name)).toEqual([]);
   });
 });

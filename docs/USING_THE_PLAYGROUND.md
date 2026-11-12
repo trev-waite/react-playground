@@ -29,7 +29,7 @@ export const meta: CardMeta = {
 
 With neither `description` nor `reset`, the card has no footer.
 
-The site has a light and a dark theme and follows the system's. A sun/moon button beside the back pill lets a visitor override it; it is built but stays hidden until `VITE_THEME_TOGGLE=on`. `surface` is required: for each site theme, a `swatch` from the shared palette in `src/lib/cardSwatches.ts` (paper, orange, blue, and green on the light site; night, orange, blue, green, and mist on the dark one) and `content`, the component's main colors on it, which must stand 3:1 apart from the swatch. Each swatch already stands apart from the site canvas and sets the footer ink. `src/live/surfaces.test.ts` checks every card. Make Live writes a starting pair to tune; the `new-component` skill walks through choosing one.
+The site has a light and a dark theme and follows the system's. A sun/moon button beside the back pill lets a visitor override it; it is built but stays hidden until `VITE_THEME_TOGGLE=on`. `surface` is required: for each site theme, a `swatch` from the shared palette in `src/lib/cardSwatches.ts` (paper, night, orange, blue, and green on both sites) and `content`, the component's main colors on it, which must stand 3:1 apart from the swatch. Each swatch already stands apart from the site canvas and sets the footer ink. `src/live/surfaces.test.ts` checks every card. Make Live writes a starting pair to tune; the `new-component` skill walks through choosing one.
 
 Keep `meta` a plain literal, with no variables, spreads, or calls. The build reads it without running the preview, so every card lays out at once and shows a loading shimmer until its own component arrives; a slow one, such as a shader, never holds up the rest.
 
