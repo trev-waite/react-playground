@@ -55,10 +55,6 @@
   scroll-snap-type: y mandatory;
 }
 
-:global(:root[data-scroll="document"]) .scroller[data-flying] {
-  touch-action: none;
-}
-
 /* The small viewport (toolbars shown) and the safe-area insets, for CardDeck to measure. */
 .probe {
   position: absolute;
@@ -81,6 +77,19 @@
    contact shadow; a soft shadow resized every frame halves Safari's frame rate. */
 .scroller[data-flying] .content > * {
   will-change: transform;
+}
+
+/* Previews give up their own layers in flight. Safari re-rasterizes every
+   layer inside a card at each new scale, and a preview with a backdrop blur
+   or a will-change layer splits everything painted above it into layers of
+   their own: the Configurable Shell became dozens, each repainted per frame.
+   Important, since previews may set will-change inline. */
+.scroller[data-flying] .content > * *,
+.scroller[data-flying] .content > * *::before,
+.scroller[data-flying] .content > * *::after {
+  will-change: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .scroller[data-flying] .content > [data-raised] {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { familyLayoutWidth, PREVIEW_MIN_SIZE, previewScale } from "./fitPreview";
+import { familyLayoutWidth, flightLayout, PREVIEW_MIN_SIZE, previewScale, restLayout } from "./fitPreview";
 
 describe("previewScale", () => {
   test("keeps previews at full size on a page", () => {
@@ -22,6 +22,33 @@ describe("familyLayoutWidth", () => {
 
   test("lays a family out at the tile's width when the page has more room", () => {
     expect(familyLayoutWidth({ width: 520, height: 220 }, 1360)).toBeCloseTo(520 * (PREVIEW_MIN_SIZE / 220));
+  });
+});
+
+describe("flightLayout", () => {
+  const tileArea = { width: 256, height: 560 };
+  const pageArea = { width: 1360, height: 672 };
+  const tile = restLayout(tileArea);
+  const page = restLayout(pageArea);
+
+  test("lands on the layouts a preview rests at", () => {
+    expect(flightLayout(tileArea, tile, page, 0)).toEqual(tile);
+    expect(flightLayout(pageArea, tile, page, 1)).toEqual(page);
+  });
+
+  test("never lays out shorter than both ends, so content that gives way to a short stage keeps its shape", () => {
+    // Mid-flight the stage is shorter than either end, as the page's padding morphs in.
+    const area = { width: 330, height: 566 };
+    const fitted = flightLayout(area, tile, page, 0.06);
+    expect(fitted.height).toBeGreaterThanOrEqual(Math.min(tile.height, page.height));
+    expect(restLayout(area).height).toBeLessThan(Math.min(tile.height, page.height));
+  });
+
+  test("scales the blended layout to fit the area it has", () => {
+    const area = { width: 700, height: 600 };
+    const fitted = flightLayout(area, tile, page, 0.5);
+    expect(fitted.width * fitted.scale).toBeLessThanOrEqual(area.width + 1e-9);
+    expect(fitted.height * fitted.scale).toBeLessThanOrEqual(area.height + 1e-9);
   });
 });
 

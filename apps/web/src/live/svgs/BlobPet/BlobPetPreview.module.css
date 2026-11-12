@@ -1,5 +1,6 @@
 .stage {
   display: flex;
+  width: 100%;
   flex-direction: column;
   align-items: center;
   gap: 24px;
@@ -7,5 +8,6 @@
 
 .pet {
   width: 400px;
+  max-width: 100%;
   aspect-ratio: 460 / 290;
 }

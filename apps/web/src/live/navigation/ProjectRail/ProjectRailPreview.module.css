@@ -27,6 +27,16 @@
   }
 }
 
+@media (max-width: 48rem) {
+  .stage {
+    grid-template-columns: 18.5rem;
+  }
+
+  .shot {
+    order: -1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .shot {
     transition: none;

@@ -111,29 +111,6 @@
     var(--shell-canvas);
 }
 
-/* Glass chrome floats over the canvas or an open Live page, so it follows the
-   site theme, or the page's own while Live sets data-chrome. */
-:root {
-  --chrome-surface: rgba(255, 255, 255, 0.78);
-  --chrome-border: rgba(255, 255, 255, 0.6);
-  --chrome-ink: #1c2430;
-  --chrome-ink-muted: #5c6678;
-  --chrome-hover: rgba(28, 36, 48, 0.06);
-  --chrome-active: #111113;
-  --chrome-active-ink: #ffffff;
-}
-
-:root[data-theme="dark"]:not(:has([data-chrome="light"])),
-:root:has([data-chrome="dark"]) {
-  --chrome-surface: rgba(28, 30, 36, 0.62);
-  --chrome-border: rgba(255, 255, 255, 0.1);
-  --chrome-ink: #f5f7fa;
-  --chrome-ink-muted: rgba(245, 247, 250, 0.72);
-  --chrome-hover: rgba(255, 255, 255, 0.1);
-  --chrome-active: #ffffff;
-  --chrome-active-ink: #111113;
-}
-
 *,
 *::before,
 *::after {
@@ -225,14 +202,5 @@ select:-webkit-autofill {
   :root,
   [data-theme] {
     --shell-surface: var(--shell-surface-solid);
-  }
-
-  :root {
-    --chrome-surface: #f4f5f7;
-  }
-
-  :root[data-theme="dark"]:not(:has([data-chrome="light"])),
-  :root:has([data-chrome="dark"]) {
-    --chrome-surface: #1c1e24;
   }
 }

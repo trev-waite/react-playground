@@ -1,4 +1,13 @@
-import { useCallback, useId, useMemo, useRef, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useMemo,
+  useRef,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import {
   applyStep,
   defaultFormat,
@@ -7,7 +16,7 @@ import {
   resolveValue,
   type ValueScale,
 } from "./scales";
-import { isSlide } from "./touchSlide";
+import { touchIntent } from "./touchSlide";
 import styles from "./ProximityControl.module.css";
 
 const DEFAULT_MIN = 0;
@@ -48,6 +57,7 @@ function scaleFromControl(control: ShellControl): ValueScale {
 
 export function ProximityControl({ control, barCount }: ProximityControlProps) {
   const labelId = useId();
+  const blockRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const press = useRef<{ pointerId: number; x: number; y: number; sliding: boolean } | null>(null);
   const scale = scaleFromControl(control);
@@ -76,6 +86,36 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
     [control, scale],
   );
 
+  const startSlide = useEffectEvent((clientX: number) => setFromClientX(clientX));
+
+  /**
+   * A finger decides here, in a cancelable touchmove: Safari pans the page
+   * for a diagonal swipe even under `touch-action: pan-y`, and cancelling
+   * the move before its pan begins is the only way to keep a slide.
+   */
+  useEffect(() => {
+    const block = blockRef.current;
+    if (!block) return;
+    const onTouchMove = (event: TouchEvent) => {
+      const current = press.current;
+      const touch = event.touches[0];
+      if (!current || !touch || event.touches.length > 1) return;
+      if (!current.sliding) {
+        const intent = touchIntent(touch.clientX - current.x, touch.clientY - current.y);
+        if (!intent) return;
+        if (intent === "scroll") {
+          press.current = null;
+          return;
+        }
+        current.sliding = true;
+        startSlide(touch.clientX);
+      }
+      event.preventDefault();
+    };
+    block.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => block.removeEventListener("touchmove", onTouchMove);
+  }, []);
+
   /**
    * A mouse or pen sets the value on the bars at once. A finger may land
    * anywhere on the block, and waits to see whether it slides, taps, or
@@ -93,12 +133,7 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const current = press.current;
-    if (!current || current.pointerId !== event.pointerId) return;
-    if (!current.sliding) {
-      if (!isSlide(event.clientX - current.x, event.clientY - current.y)) return;
-      current.sliding = true;
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
+    if (!current?.sliding || current.pointerId !== event.pointerId) return;
     setFromClientX(event.clientX);
   }
 
@@ -154,6 +189,7 @@ export function ProximityControl({ control, barCount }: ProximityControlProps) {
 
   return (
     <div
+      ref={blockRef}
       className={styles.block}
       data-disabled={control.disabled ? "true" : undefined}
       onPointerDown={onPointerDown}

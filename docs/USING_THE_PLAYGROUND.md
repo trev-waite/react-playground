@@ -68,6 +68,7 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 | `bun run lint` | oxlint: React, accessibility, and leftover-code rules |
 | `bun run build` / `bun run start` | Build and preview the deployable Live app |
 | `bun run smoke:local` | Build Live, serve it with `wrangler dev`, run the smoke checks, and stop the server |
+| `bun run --cwd apps/web check:phone` | After a build, open every card's page on a phone-sized screen, fail if a preview had to shrink to fit, and drag a Spacing Tidy square by touch |
 
 ## Deploy
 
