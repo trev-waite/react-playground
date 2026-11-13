@@ -33,7 +33,7 @@ describe("Live app boundary", () => {
 });
 
 describe("Live bundle", () => {
-  test("leaves the router to the studio; Live reads and replaces the URL itself", async () => {
+  test("leaves the router to the studio; Live reads and moves the URL path itself", async () => {
     const violations: string[] = [];
     for (const dir of LIVE_APP_DIRS) {
       for await (const relative of new Glob("**/*.{ts,tsx}").scan({ cwd: path.join(src, dir) })) {

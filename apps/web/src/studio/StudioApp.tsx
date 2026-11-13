@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useNavigate } from "react-router";
 import { BackPill, ChromeBar, DeckChromeSlot, ThemeButton } from "../app/deck/DeckChrome";
 import { LivePage } from "../app/LivePage";
+import { livePath } from "../lib/liveRoutes";
 import { opacity, px, transform, useAnimatedValues, useMotionStyle } from "../app/motion/hooks";
 import { REDUCED_MOTION, SPRING } from "../app/motion/transitions";
 import { ExperimentalPage } from "../experimental/ExperimentalPage";
@@ -84,7 +85,7 @@ function ViewStack() {
             <LivePage
               slug={liveSlug}
               active={mode === "live"}
-              onNavigate={path => navigate(path, { replace: true })}
+              onNavigate={(slug, how) => navigate(livePath(slug), { replace: how === "replace" })}
             />
           </div>
         </div>

@@ -51,19 +51,23 @@ export type PreviewModule = {
   meta?: PreviewMeta;
 };
 
-export type PlaygroundEntry = {
+/** A Live component as its source describes it, before anything loads. The build writes each page's link preview from these. */
+export type CatalogEntry = {
   slug: string;
   title: string;
   /** Read at build time, so cards show before their component loads. */
   meta?: PreviewMeta;
+};
+
+export type PlaygroundEntry = CatalogEntry & {
   load: () => Promise<PreviewModule>;
 };
 
 /** `live/<folder>/family.ts` groups every component in that folder into one card. */
 export type FamilyMeta = CardMeta & { title: string };
 
-export type LiveCatalog = {
-  entries: PlaygroundEntry[];
+export type LiveCatalog<Entry extends CatalogEntry = PlaygroundEntry> = {
+  entries: Entry[];
   /** Keyed by Live folder name. */
   families: Record<string, FamilyMeta>;
   /** Card slugs in display order; unlisted cards follow alphabetically. */

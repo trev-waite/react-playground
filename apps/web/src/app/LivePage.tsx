@@ -1,19 +1,27 @@
-import { startTransition, useContext, useEffect, useState, type ReactNode } from "react";
+import { useContext, useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cardIndexForSlug } from "../lib/catalog";
 import { useLiveCards } from "../lib/liveCatalog";
+import { routeTitle } from "../lib/liveRoutes";
 import { CardDeck, type DeckView } from "./deck/CardDeck";
 import { BackPill, ChromeBar, DeckChromeSlot, DeckPager, DeckViewButton, ThemeButton } from "./deck/DeckChrome";
 import { RefreshCatalogButton } from "./RefreshCatalogButton";
 import { useTheme } from "./theme/theme";
 import styles from "./LivePage.module.css";
 
+/**
+ * Moves the URL to a card's page, or to the grid with `null`. Changing view
+ * pushes, so Back returns to where the reader was; paging through cards
+ * replaces, so Back never has to retrace a scroll.
+ */
+export type NavigateLive = (slug: string | null, how: "push" | "replace") => void;
+
 type LivePageProps = {
+  /** The card the URL names. It shows as a page; with none, or one not in the catalog, the grid shows. */
   slug: string | null;
   /** False while another view covers Live (the local studio). */
   active?: boolean;
-  /** Replaces the current URL with `path`. */
-  onNavigate: (path: string) => void;
+  onNavigate: NavigateLive;
   /** Live owns the page (not the studio), so phones may scroll the document itself. */
   documentScroll?: boolean;
 };
@@ -30,20 +38,37 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
   const cards = useLiveCards();
   const slot = useContext(DeckChromeSlot);
   const theme = useTheme();
-  const [view, setView] = useState<DeckView>("grid");
   const found = cardIndexForSlug(cards, slug);
-  const activeIndex = Math.max(0, found);
+  const view: DeckView = found >= 0 ? "page" : "grid";
+  /** The page last shown, which the grid keeps raised and goes back to. */
+  const [lastSlug, setLastSlug] = useState(slug);
+  if (found >= 0 && slug !== lastSlug) setLastSlug(slug);
+  const activeIndex = Math.max(0, found >= 0 ? found : cardIndexForSlug(cards, lastSlug));
   const card = cards[activeIndex];
 
-  function show(index: number) {
+  /** Pages to a card: the reader stays in the page view, so the URL only follows. */
+  function page(index: number) {
     const next = cards[index];
-    if (next) onNavigate(`/${next.slug}`);
+    if (next) onNavigate(next.slug, "replace");
   }
+
+  /** Opens a card from the grid. */
+  function open(index: number) {
+    const next = cards[index];
+    if (next) onNavigate(next.slug, "push");
+  }
+
+  const reopen = useEffectEvent(() => open(activeIndex));
+  const title = routeTitle(active && view === "page" && card ? card : null);
+
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 
   useEffect(() => {
     if (view !== "grid" || !active) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !event.defaultPrevented) setView("page");
+      if (event.key === "Escape" && !event.defaultPrevented) reopen();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -58,25 +83,11 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
     );
   }
 
-  if (slug && found < 0) {
-    return (
-      <Status>
-        No Live component at “{slug}”.
-        <span className={styles.actions}>
-          {import.meta.env.DEV && <RefreshCatalogButton className={styles.action} />}
-          <button type="button" className={styles.action} onClick={() => show(0)}>
-            Show first
-          </button>
-        </span>
-      </Status>
-    );
-  }
-
   const viewButton = (
     <DeckViewButton
       view={view}
       title={card.title}
-      onToggle={() => setView(current => (current === "grid" ? "page" : "grid"))}
+      onToggle={() => (view === "grid" ? open(activeIndex) : onNavigate(null, "push"))}
     />
   );
 
@@ -97,7 +108,7 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
         hidden={view === "grid"}
         index={activeIndex}
         count={cards.length}
-        onStep={delta => show(activeIndex + delta)}
+        onStep={delta => page(activeIndex + delta)}
       />
       <p className={styles.srOnly} aria-live="polite">
         {view === "grid" ? "All components" : card.title}
@@ -108,14 +119,8 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
         activeIndex={activeIndex}
         listening={active}
         documentScroll={documentScroll}
-        onActiveChange={show}
-        onOpen={index => {
-          // Router navigations run as transitions; zoom in the same commit as the URL change.
-          startTransition(() => {
-            show(index);
-            setView("page");
-          });
-        }}
+        onActiveChange={page}
+        onOpen={open}
       />
     </div>
   );

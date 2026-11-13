@@ -244,7 +244,11 @@
   border: 0;
   border-radius: inherit;
   background: transparent;
+  text-decoration: none;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
   transition: box-shadow 160ms var(--ease-out);
 }
 

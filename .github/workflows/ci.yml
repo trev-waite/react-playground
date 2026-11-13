@@ -84,13 +84,17 @@ jobs:
         timeout-minutes: 3
         run: bun run --cwd apps/web smoke:local --no-build
 
-      - name: Install Chromium for the phone layout check
+      - name: Install Chromium for the browser checks
         working-directory: apps/web
         run: bunx playwright install --with-deps --only-shell chromium
 
       - name: Check every card fits a phone page unscaled
         timeout-minutes: 3
         run: bun run --cwd apps/web check:phone
+
+      - name: Check links, history, and direct paths in a browser
+        timeout-minutes: 3
+        run: bun run --cwd apps/web check:routes
 
       - name: Upload the tested build
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

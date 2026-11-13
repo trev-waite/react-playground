@@ -8,7 +8,7 @@ export type SmokeOptions = {
   origin: string;
   /** The origin the build was made for, which its og:url names. */
   siteUrl: string;
-  /** The build being served, for the scripts and component route to request. */
+  /** The build being served, for the scripts and component page to request. */
   dist: string;
   /** Skip a check that Cloudflare answers with a bot challenge. Only production sits behind Cloudflare. */
   skipChallenges: boolean;
@@ -59,13 +59,23 @@ const checks: Check[] = [
     },
   },
   {
-    name: "a component route serves the app",
+    name: "a component's path serves the app with that component's own title",
     async run({ origin, dist, get }) {
-      const route = await componentRoute(dist);
-      expect(route !== null, "dist has no component route page to request");
-      const response = await get(`${origin}/${route}`);
-      expect(response.status === 200 && isHtml(response), `/${route} status ${response.status}`);
-      expect((await response.text()).includes('<div id="root">'), `/${route} is not the app`);
+      const page = await componentPage(dist);
+      expect(page !== null, "dist has no component page to request");
+      const response = await get(`${origin}${page.path}`);
+      expect(response.status === 200 && isHtml(response), `${page.path} status ${response.status}`);
+      const html = await response.text();
+      expect(html.includes('<div id="root">'), `${page.path} is not the app`);
+      expect(html.includes(page.title), `${page.path} is not titled ${page.title}`);
+    },
+  },
+  {
+    name: "the sitemap lists the home page",
+    async run({ origin, siteUrl, get }) {
+      const response = await get(`${origin}/sitemap.xml`);
+      expect(response.status === 200, `status ${response.status}`);
+      expect((await response.text()).includes(`<loc>${siteUrl}/</loc>`), `no <loc> for ${siteUrl}/`);
     },
   },
   ...PROBES.map(
@@ -108,10 +118,12 @@ const checks: Check[] = [
   },
 ];
 
-/** A route from the build being smoke tested, when it is on disk. */
-async function componentRoute(dist: string): Promise<string | null> {
+/** A component's page from the build being smoke tested, and the title the build gave it. */
+async function componentPage(dist: string): Promise<{ path: string; title: string } | null> {
   for await (const file of new Glob("**/*.html").scan({ cwd: dist })) {
-    if (file !== "index.html" && file !== "404.html") return file.replace(/\.html$/, "");
+    if (file === "index.html" || file === "404.html") continue;
+    const title = /<title>[^<]*<\/title>/.exec(await Bun.file(path.join(dist, file)).text())?.[0];
+    if (title) return { path: `/${file.replace(/\.html$/, "")}`, title };
   }
   return null;
 }

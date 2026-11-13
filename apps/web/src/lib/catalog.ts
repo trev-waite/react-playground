@@ -7,6 +7,7 @@ import type {
   SiteTheme,
   FamilyMeta,
   LiveCatalog,
+  CatalogEntry,
   PlaygroundEntry,
   PreviewMeta,
   PreviewModule,
@@ -15,10 +16,6 @@ import type {
 export function slugFromPreviewPath(filePath: string): string | null {
   const match = filePath.replace(/\\/g, "/").match(/\/live\/(.+)\/preview\.tsx$/);
   return match?.[1] ?? null;
-}
-
-export function liveSlugFromPath(pathname: string): string | null {
-  return pathname.replace(/^\/+|\/+$/g, "") || null;
 }
 
 export function folderFromFamilyPath(filePath: string): string | null {
@@ -31,18 +28,29 @@ export function titleFromSlug(slug: string): string {
   return leaf.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
+/** One entry per `preview.tsx` path, in slug order. `metas` holds each preview's literal `meta`, by the same path. */
+export function catalogEntries(
+  previewPaths: readonly string[],
+  metas: Record<string, PreviewMeta | undefined> = {},
+): (CatalogEntry & { filePath: string })[] {
+  return previewPaths
+    .flatMap(filePath => {
+      const slug = slugFromPreviewPath(filePath);
+      if (!slug) return [];
+      const meta = metas[filePath];
+      return [{ slug, title: meta?.title ?? titleFromSlug(slug), meta, filePath }];
+    })
+    .sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
 export function catalogEntriesFromLoaders(
   loaders: Record<string, PlaygroundEntry["load"]>,
   metas: Record<string, PreviewMeta | undefined> = {},
 ): PlaygroundEntry[] {
-  return Object.entries(loaders)
-    .flatMap(([filePath, load]) => {
-      const slug = slugFromPreviewPath(filePath);
-      if (!slug) return [];
-      const meta = metas[filePath];
-      return [{ slug, title: meta?.title ?? titleFromSlug(slug), meta, load }];
-    })
-    .sort((a, b) => a.slug.localeCompare(b.slug));
+  return catalogEntries(Object.keys(loaders), metas).map(({ filePath, ...entry }) => ({
+    ...entry,
+    load: loaders[filePath]!,
+  }));
 }
 
 export function familiesFromModules(
@@ -57,15 +65,19 @@ export function familiesFromModules(
 }
 
 /** Which entries share a card, before any preview module has loaded. */
-export type CardPlan = {
+export type CardPlan<Entry extends CatalogEntry = PlaygroundEntry> = {
   slug: string;
   family?: FamilyMeta;
-  entries: PlaygroundEntry[];
+  entries: Entry[];
 };
 
-export function planCards({ entries, families, order }: LiveCatalog): CardPlan[] {
-  const plans: CardPlan[] = [];
-  const byFamily = new Map<string, CardPlan>();
+export function planCards<Entry extends CatalogEntry>({
+  entries,
+  families,
+  order,
+}: LiveCatalog<Entry>): CardPlan<Entry>[] {
+  const plans: CardPlan<Entry>[] = [];
+  const byFamily = new Map<string, CardPlan<Entry>>();
 
   for (const entry of entries) {
     const folder = entry.slug.split("/")[0] ?? "";
@@ -97,38 +109,46 @@ export type LiveCardMember = {
   module: Promise<PreviewModule>;
 };
 
-export type LiveCard = {
+/** How a card presents itself, known from source alone: the deck lays out from it and the build writes its page from it. */
+export type CardFace = {
   slug: string;
   title: string;
   description?: string;
   size: CardSize;
   surface: CardColors;
   reset?: CardMeta["reset"];
+};
+
+export type LiveCard = CardFace & {
   members: LiveCardMember[];
 };
+
+export function cardFace(plan: CardPlan<CatalogEntry>): CardFace {
+  const meta = cardMeta(plan);
+  return {
+    slug: plan.slug,
+    title: meta.title ?? plan.entries[0]?.title ?? titleFromSlug(plan.slug),
+    description: meta.description,
+    size: meta.size ?? "small",
+    surface: cardColors(plan.slug, meta.surface),
+    reset: meta.reset,
+  };
+}
 
 export function cardFromPlan(
   plan: CardPlan,
   moduleFor: (entry: PlaygroundEntry) => Promise<PreviewModule>,
 ): LiveCard {
-  const members = plan.entries.map(
-    (entry): LiveCardMember => ({ slug: entry.slug, title: entry.title, module: moduleFor(entry) }),
-  );
-  const meta = cardMeta(plan);
-
   return {
-    slug: plan.slug,
-    title: meta.title ?? members[0]?.title ?? titleFromSlug(plan.slug),
-    description: meta.description,
-    size: meta.size ?? "small",
-    surface: cardColors(plan.slug, meta.surface),
-    reset: meta.reset,
-    members,
+    ...cardFace(plan),
+    members: plan.entries.map(
+      (entry): LiveCardMember => ({ slug: entry.slug, title: entry.title, module: moduleFor(entry) }),
+    ),
   };
 }
 
 /** The family's meta, or a lone component's, which must then present a whole card. */
-function cardMeta(plan: CardPlan): CardMeta {
+function cardMeta(plan: CardPlan<CatalogEntry>): CardMeta {
   const meta = plan.family ?? plan.entries[0]?.meta;
   if (meta && isCardMeta(meta)) return meta;
   throw new Error(

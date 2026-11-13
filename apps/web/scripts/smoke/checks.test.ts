@@ -6,8 +6,9 @@ import { type Fetch, type Outcome, report, smoke } from "./checks";
 
 const ORIGIN = "https://studio.example.com";
 const SECURITY = { "content-security-policy": "default-src 'self'" };
-const APP = (siteUrl: string) =>
-  `<!doctype html><meta property="og:url" content="${siteUrl}/" /><div id="root"></div><script type="module" src="/assets/index-AbCd1234.js"></script>`;
+const APP = (siteUrl: string, title = "Trev’s Studio") =>
+  `<!doctype html><title>${title}</title><meta property="og:url" content="${siteUrl}/" /><div id="root"></div><script type="module" src="/assets/index-AbCd1234.js"></script>`;
+const SWITCH = "Controls · Trev’s Studio";
 
 let dist = "";
 
@@ -15,7 +16,7 @@ beforeAll(async () => {
   dist = await mkdtemp(path.join(tmpdir(), "smoke-"));
   await mkdir(path.join(dist, "controls"));
   await writeFile(path.join(dist, "index.html"), APP(ORIGIN));
-  await writeFile(path.join(dist, "controls/Switch.html"), APP(ORIGIN));
+  await writeFile(path.join(dist, "controls/Switch.html"), APP(ORIGIN, SWITCH));
 });
 
 afterAll(() => rm(dist, { recursive: true, force: true }));
@@ -25,7 +26,11 @@ function site(siteUrl = ORIGIN): (url: URL) => Response {
   return url => {
     if (url.protocol === "http:" && url.host === new URL(ORIGIN).host) return new Response(null, { status: 301, headers: { location: `${ORIGIN}/` } });
     if (url.pathname === "/" || url.pathname === "/controls/Switch") {
-      return new Response(APP(siteUrl), { headers: { "content-type": "text/html; charset=utf-8", ...SECURITY } });
+      const title = url.pathname === "/" ? undefined : SWITCH;
+      return new Response(APP(siteUrl, title), { headers: { "content-type": "text/html; charset=utf-8", ...SECURITY } });
+    }
+    if (url.pathname === "/sitemap.xml") {
+      return new Response(`<urlset><url><loc>${siteUrl}/</loc></url></urlset>`, { headers: { "content-type": "application/xml" } });
     }
     if (url.pathname === "/assets/index-AbCd1234.js") {
       return new Response("", { headers: { "content-type": "text/javascript", "cache-control": "public, immutable" } });
@@ -91,7 +96,8 @@ describe("smoke checks", () => {
     expect(statuses).toEqual({
       "home page serves the Live app with its security headers": "skip",
       "hashed scripts load and are cached as immutable": "ok",
-      "a component route serves the app": "skip",
+      "a component's path serves the app with that component's own title": "skip",
+      "the sitemap lists the home page": "skip",
       "/smoke-test-unknown-slug gets the 404 page": "skip",
       "/.env gets the 404 page": "skip",
       "/.git/config gets the 404 page": "skip",
