@@ -1,0 +1,57 @@
+{
+  "id": "cbc471db-4403-4a88-933b-df28cb6be4cc",
+  "revision": 4,
+  "name": "Moon Phase",
+  "componentName": "MoonPhase",
+  "updatedAt": "2026-11-13T19:00:54.349Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "form",
+        "label": "Tonight",
+        "mock": "form"
+      },
+      {
+        "id": "unform",
+        "label": "New moon",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Wax",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "pixelSize",
+        "label": "Pixel size",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 50
+      },
+      {
+        "id": "earthshine",
+        "label": "Earthshine",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 50
+      },
+      {
+        "id": "stars",
+        "label": "Stars",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 50
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "50ba94ca8894b0bc98cae753bff9360cd012aabf59d0f3df3e12fc19f9d26f1e",
+  "createdAt": "2026-11-13T18:41:10.085Z"
+}

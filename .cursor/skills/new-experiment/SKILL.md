@@ -1,6 +1,6 @@
 ---
 name: new-experiment
-description: Create or edit a playground idea in Experimental, then optionally publish it as a portable Live component. Use for experiments, prototypes, saved ideas, or Experimental authoring controls.
+description: Create or edit a playground idea in Experimental, bring a Live component into Experimental to tune, then optionally publish it as a portable Live component. Use for experiments, prototypes, saved ideas, or Experimental authoring controls.
 disable-model-invocation: true
 ---
 
@@ -35,9 +35,23 @@ apps/web/src/experimental/ideas/<IdeaName>/
 
 - `<IdeaName>` is a PascalCase component name (`QuietButton`). If that folder exists, use `QuietButton2`.
 - Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
-- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`. See [WebGPU with vgpu](../../../docs/WEBGPU.md).
+- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`, and any idea may import Live code by `@/live/`. See [WebGPU with vgpu](../../../docs/WEBGPU.md).
 - Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
 - After writing files, the next Experimental list or Open adopts the folder and writes `project.json`. Vite’s glob picks up new `source.tsx` folders; do not add a registry file.
+- The minted dock is generic: sliders `slider1` to `slider3` and three actions that do nothing. Once `project.json` exists, fill in `draft.sliders` (ids that match your `SLIDERS` keys, labels, ranges, values) and `draft.actions` (labels and `mock`) there, or set them in the studio. Until the ids match, the dock moves nothing, and a Save from the studio bakes the generic ids over your `SLIDERS`.
+
+### Bring a Live component into Experimental
+
+Use this to tune a component that is already Live, whether it began as an idea or was written straight into Live. The Live folder keeps its preview, styles, helpers, and tests; the idea takes over `<Name>.tsx` only. For `live/<folder>/<Name>/`:
+
+1. Copy `<Name>.tsx` to `experimental/ideas/<Name>/source.tsx`. Ideas commit only `source.tsx` and `project.json`, so leave everything else in the Live folder.
+2. In `source.tsx`, change each `./` import to `@/live/<folder>/<Name>/` (`./particleField` → `@/live/text/ParticleText/particleField`). Make Live turns them back into `./`.
+3. Rename `export function <Name>` to `export function Example`. Keep its props, give each required one a default so the stage can render it bare, and add `sliders = SLIDERS` and `progress = 1` to them.
+4. Add `const SLIDERS = { ... }` with a key for each value you want on the dock, and read them through `sliders` in the component. A computed value goes in the body, not in a parameter default: the React Compiler check rejects that.
+5. Open Experimental (or `curl localhost:3001/api/ideas`) to adopt the folder and mint `project.json`, then set `draft.sliders` ids to the `SLIDERS` keys.
+6. Make Live (or the publish call in the `new-component` skill) into the same `<folder>`. It rewrites `<Name>.tsx` and nothing else; check that its diff holds only what you meant, then run `bun run lint`, `bun run typecheck`, and `bun run test`.
+
+The Live component keeps the `sliders` and `progress` props it gained. A family member works the same way: `<folder>` is the family folder.
 
 ### Edit one saved idea
 
@@ -108,7 +122,7 @@ apps/web/src/live/<folder>/<Name>/
 
 GPU ideas: the Live deck card's preview frame already fills the card so `useGpu` gets a real layout. After publishing, open Live and confirm the component paints. If it should be a plaque rather than full-bleed, size that box from content (padding + in-flow fallback); do not rely on a 0-height `height: 100%` child. Full notes: [WebGPU with vgpu](../../../docs/WEBGPU.md) and the `gpu-idea` skill.
 
-Publishing keeps the saved Experimental project so it can continue evolving.
+Publishing keeps the saved Experimental project so it can continue evolving. **Update Live** rewrites only `<Name>.tsx`; it leaves a tuned `preview.tsx` and any tests, styles, or helpers beside it alone, so change the component in the idea, not in Live.
 
 ## Verify
 

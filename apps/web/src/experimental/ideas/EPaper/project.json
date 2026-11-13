@@ -1,0 +1,57 @@
+{
+  "id": "08434d11-9971-4633-a2b3-52170e70bde5",
+  "revision": 5,
+  "name": "E Paper",
+  "componentName": "EPaper",
+  "updatedAt": "2026-11-13T20:25:42.416Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "form",
+        "label": "Show",
+        "mock": "form"
+      },
+      {
+        "id": "unform",
+        "label": "Clear",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Flash",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "ghosting",
+        "label": "Ghosting",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 0
+      },
+      {
+        "id": "refreshSpeed",
+        "label": "Refresh speed",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 79
+      },
+      {
+        "id": "flashEvery",
+        "label": "Flash every",
+        "min": 1,
+        "max": 8,
+        "step": 1,
+        "value": 3
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "55508d1a2147b56ee504c1311023769d49792f7bb84145e56c0ba3323c2437fd",
+  "createdAt": "2026-11-13T18:41:10.084Z"
+}

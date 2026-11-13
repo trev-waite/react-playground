@@ -1,0 +1,57 @@
+{
+  "id": "23fd9fd3-a998-4948-a2a1-13985129920b",
+  "revision": 7,
+  "name": "Wind Tunnel",
+  "componentName": "WindTunnel",
+  "updatedAt": "2026-11-13T20:24:42.065Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "form",
+        "label": "Blow",
+        "mock": "form"
+      },
+      {
+        "id": "unform",
+        "label": "Calm",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Gust",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "windSpeed",
+        "label": "Wind speed",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 8
+      },
+      {
+        "id": "turbulence",
+        "label": "Turbulence",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 10
+      },
+      {
+        "id": "smokeLines",
+        "label": "Smoke lines",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 92
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "1f75f93b926088a54593eedf6742e3774a1c01a4fde84a879c2fb82267784697",
+  "createdAt": "2026-11-13T18:41:10.087Z"
+}

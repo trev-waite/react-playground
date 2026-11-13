@@ -3,14 +3,15 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { build, preview } from "vite";
 import { livePath } from "../../src/lib/liveRoutes.ts";
-import { readLiveCards } from "../../vite/liveCards.ts";
+import { readLiveCards, type BuildCard } from "../../vite/liveCards.ts";
 import { cardImagePath } from "../../vite/routeHead.ts";
 import { ogComponentHtml } from "./card.ts";
 
 /**
  * Draws each card's link-preview image into public/og/, where the build finds
  * it and names it as that page's og:image. Run it after adding a card or
- * changing how one looks; a card without an image shares the site's.
+ * changing how one looks; a card without an image shares the site's. Name
+ * slugs to draw only those cards (a family member's slug draws its family).
  */
 
 const WIDTH = 1200;
@@ -23,7 +24,17 @@ const PAGE_ONLY = '[class*="_bar_"], [class*="_pager_"], article > footer { visi
 
 const webRoot = path.resolve(import.meta.dirname, "../..");
 const publicDir = path.join(webRoot, "public");
-const cards = await readLiveCards(path.join(webRoot, "src/live"));
+const catalog = await readLiveCards(path.join(webRoot, "src/live"));
+const requested = process.argv.slice(2);
+const unknown = requested.filter(slug => !catalog.some(card => cardAnswers(card, slug)));
+if (unknown.length > 0) {
+  throw new Error(`No card for ${unknown.join(", ")}. Cards: ${catalog.map(card => card.slug).join(", ")}`);
+}
+const cards = requested.length === 0 ? catalog : catalog.filter(card => requested.some(slug => cardAnswers(card, slug)));
+
+function cardAnswers(card: BuildCard, slug: string): boolean {
+  return card.slug === slug || card.members.some(member => member.slug === slug);
+}
 
 await build({ root: webRoot, logLevel: "warn" });
 const server = await preview({ root: webRoot, preview: { port: 0 }, logLevel: "warn" });

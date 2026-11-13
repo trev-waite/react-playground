@@ -62,11 +62,72 @@ describe("publishIdeaToDisk", () => {
     expect((await readdir(path.dirname(componentPath))).sort()).toEqual(["MorphBlob.tsx", "preview.tsx"]);
   });
 
-  test("rejects partial or different destinations", async () => {
+  test("updates only the component of a finished card", async () => {
     const playground = await root();
-    const destination = path.join(playground, "shapes", "MorphBlob");
-    await mkdir(destination, { recursive: true });
-    await writeFile(path.join(destination, "notes.txt"), "user file");
+    await publishIdeaToDisk(playground, idea, "shapes");
+    const card = path.join(playground, "shapes", "MorphBlob");
+    const kept = {
+      "preview.tsx": "export const meta = { title: \"Tuned\" };\n",
+      "MorphBlob.test.ts": "test(\"morphs\", () => {});\n",
+      "MorphBlobPreview.module.css": ".stage { color: #fff; }\n",
+    };
+    for (const [name, content] of Object.entries(kept)) await writeFile(path.join(card, name), content);
+    await writeFile(path.join(card, "MorphBlob.tsx"), "export function MorphBlob() {}\n");
+
+    const published = await publishIdeaToDisk(playground, idea, "shapes");
+
+    expect(published.reused).toBe(false);
+    expect(await readFile(path.join(card, "MorphBlob.tsx"), "utf8")).toContain("sliders = SLIDERS");
+    for (const [name, content] of Object.entries(kept)) {
+      expect(await readFile(path.join(card, name), "utf8")).toBe(content);
+    }
+    expect((await readdir(card)).sort()).toEqual([
+      "MorphBlob.test.ts",
+      "MorphBlob.tsx",
+      "MorphBlobPreview.module.css",
+      "preview.tsx",
+    ]);
+  });
+
+  test("a finished card that is already up to date is left untouched", async () => {
+    const playground = await root();
+    await publishIdeaToDisk(playground, idea, "shapes");
+    const card = path.join(playground, "shapes", "MorphBlob");
+    await writeFile(path.join(card, "preview.tsx"), "export const meta = { title: \"Tuned\" };\n");
+    await writeFile(path.join(card, "MorphBlob.test.ts"), "test(\"morphs\", () => {});\n");
+    const before = await stat(path.join(card, "MorphBlob.tsx"));
+
+    expect((await publishIdeaToDisk(playground, idea, "shapes")).reused).toBe(true);
+    expect((await stat(path.join(card, "MorphBlob.tsx"))).mtimeMs).toBe(before.mtimeMs);
+  });
+
+  test("gives a component that lost its preview a starting one", async () => {
+    const playground = await root();
+    await publishIdeaToDisk(playground, idea, "shapes");
+    const card = path.join(playground, "shapes", "MorphBlob");
+    await rm(path.join(card, "preview.tsx"));
+
+    expect((await publishIdeaToDisk(playground, idea, "shapes")).reused).toBe(false);
+    expect(await readFile(path.join(card, "preview.tsx"), "utf8")).toContain("<MorphBlob />");
+  });
+
+  test("publishes beside stray files in a folder that holds no card yet", async () => {
+    const playground = await root();
+    const card = path.join(playground, "shapes", "MorphBlob");
+    await mkdir(card, { recursive: true });
+    await writeFile(path.join(card, "notes.txt"), "user file");
+
+    await publishIdeaToDisk(playground, idea, "shapes");
+
+    expect((await readdir(card)).sort()).toEqual(["MorphBlob.tsx", "notes.txt", "preview.tsx"]);
+    expect(await readFile(path.join(card, "notes.txt"), "utf8")).toBe("user file");
+  });
+
+  test("refuses a folder whose preview belongs to another component", async () => {
+    const playground = await root();
+    const card = path.join(playground, "shapes", "MorphBlob");
+    await mkdir(card, { recursive: true });
+    await writeFile(path.join(card, "preview.tsx"), "export default function Other() {}\n");
     try {
       await publishIdeaToDisk(playground, idea, "shapes");
       throw new Error("expected conflict");
@@ -74,6 +135,8 @@ describe("publishIdeaToDisk", () => {
       expect(error).toBeInstanceOf(IdeaError);
       expect((error as IdeaError).code).toBe("destination_exists");
     }
+    expect((await readdir(card)).sort()).toEqual(["preview.tsx"]);
+    expect(await readFile(path.join(card, "preview.tsx"), "utf8")).toBe("export default function Other() {}\n");
   });
 
   test("rejects reserved Live folders", async () => {
