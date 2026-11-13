@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { LiveCard, LiveCardMember } from "../../lib/catalog";
+import { livePath } from "../../lib/liveRoutes";
 import { opacity, px, transform, useMotionStyle } from "../motion/hooks";
 import type { MotionValue } from "../motion/motionValue";
 import type { PreviewModule } from "../../lib/types";
@@ -114,9 +115,19 @@ export function DeckCard({ card, motion: values, tile, pageWidth, mounted, inter
       </CardFooter>
 
       {onOpen ? (
-        <button type="button" className={styles.open} onClick={onOpen}>
+        // A real link to the card's page: it opens in a new tab, copies, and reads as a link. A plain click flies there.
+        <a
+          className={styles.open}
+          href={livePath(card.slug)}
+          draggable={false}
+          onClick={event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            onOpen();
+          }}
+        >
           <span className={styles.openLabel}>{card.title}</span>
-        </button>
+        </a>
       ) : null}
     </article>
   );

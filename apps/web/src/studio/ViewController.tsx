@@ -10,7 +10,7 @@ import {
 import { useMotionValue } from "../app/motion/hooks";
 import { animate, type MotionValue } from "../app/motion/motionValue";
 import { useLocation, useNavigate } from "react-router";
-import { liveSlugFromPath } from "../lib/catalog";
+import { livePath, liveSlugFromPath } from "../lib/liveRoutes";
 import { DEFAULT_DURATION_MS, REDUCED_MOTION_MS } from "./diagonalBand";
 
 export type ViewMode = "live" | "experimental";
@@ -81,9 +81,9 @@ export function ViewProvider({ children }: ViewProviderProps) {
     ? "experimental"
     : "live";
   const urlSlug = urlMode === "live" ? liveSlugFromPath(location.pathname) : null;
-  // Remember the Live page while Experimental is showing, so the toggle returns to it.
+  // Remember where Live was (a page, or the grid) while Experimental is showing, so the toggle returns to it.
   const [rememberedSlug, setRememberedSlug] = useState(urlSlug);
-  const liveSlug = urlSlug ?? rememberedSlug;
+  const liveSlug = urlMode === "live" ? urlSlug : rememberedSlug;
 
   const progress = useMotionValue(urlMode === "experimental" ? 1 : 0);
   const mode = urlMode;
@@ -101,7 +101,7 @@ export function ViewProvider({ children }: ViewProviderProps) {
   if (urlMode === "experimental" && experimentalHref !== location.pathname) {
     setExperimentalHref(location.pathname);
   }
-  if (urlSlug && urlSlug !== rememberedSlug) setRememberedSlug(urlSlug);
+  if (urlMode === "live" && urlSlug !== rememberedSlug) setRememberedSlug(urlSlug);
 
   useEffect(() => {
     const motionMq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -141,8 +141,7 @@ export function ViewProvider({ children }: ViewProviderProps) {
       if (next === "experimental") {
         navigate(experimentalHref);
       } else {
-        const path = liveSlug ? `/${liveSlug}` : "/";
-        navigate(path);
+        navigate(livePath(liveSlug));
       }
     },
     [navigate, liveSlug, experimentalHref],

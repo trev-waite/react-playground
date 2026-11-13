@@ -37,11 +37,6 @@
   color: var(--shell-ink-muted);
 }
 
-.actions {
-  display: flex;
-  gap: var(--space-1);
-}
-
 .action {
   appearance: none;
   height: var(--chrome-control);
