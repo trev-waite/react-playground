@@ -18,9 +18,9 @@
     "smoke:local": "bun run --cwd apps/web smoke:local"
   },
   "devDependencies": {
-    "bun": "1.4.0",
-    "oxlint": "1.91.0",
-    "turbo": "^2.10.11",
+    "bun": "1.4.4",
+    "oxlint": "1.93.0",
+    "turbo": "^2.11.10",
     "typescript": "^5.9.2"
   }
 }
