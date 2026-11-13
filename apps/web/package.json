@@ -14,7 +14,7 @@
     "smoke": "bun scripts/smoke/run.ts",
     "smoke:local": "bun scripts/smoke/local.ts",
     "check:deploy": "bun scripts/checkDeploy.ts",
-    "check:phone": "bun scripts/phoneFit.ts",
+    "check:phone": "bun scripts/phoneCheck.ts",
     "check:routes": "bun scripts/browserRoutes.ts"
   },
   "dependencies": {

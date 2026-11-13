@@ -452,7 +452,7 @@ export class Sheet {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", end);
       document.removeEventListener("pointercancel", end);
-      element.removeEventListener("lostpointercapture", end);
+      element.removeEventListener("lostpointercapture", lost);
       if (element.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
       element.style.cursor = ITEM_STYLES.cursor;
       if (this.#gesture?.end === finish) this.#gesture = null;
@@ -460,13 +460,18 @@ export class Sheet {
     const end = (last: PointerEvent) => {
       if (last.pointerId === pointerId) finish();
     };
+    // A finger is captured by the element it lands on. Capturing it to the item makes
+    // that child lose it, and the event bubbles here, but the drag goes on.
+    const lost = (last: PointerEvent) => {
+      if (last.target === element) end(last);
+    };
     // A press that is still down when another starts, or when the sheet goes away, ends first.
     this.#gesture?.end();
     this.#gesture = { item, end: finish };
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", end);
     document.addEventListener("pointercancel", end);
-    element.addEventListener("lostpointercapture", end);
+    element.addEventListener("lostpointercapture", lost);
   };
 
   readonly #onKeyDown = (event: KeyboardEvent) => {

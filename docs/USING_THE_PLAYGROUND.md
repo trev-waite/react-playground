@@ -70,7 +70,7 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 | `bun run --cwd apps/web og:cards` | Draw each card's link-preview image into `apps/web/public/og/` |
 | `bun run smoke:local` | Build Live, serve it with `wrangler dev`, run the smoke checks, and stop the server |
 | `bun run --cwd apps/web check:routes` | After a build, drive it in a browser: tile links, Back and Forward, paging, and every card's own path |
-| `bun run --cwd apps/web check:phone` | After a build, open every card's page on a phone-sized screen and fail if a preview had to shrink to fit |
+| `bun run --cwd apps/web check:phone` | After a build, open every card's page on a phone-sized screen, fail if a preview had to shrink to fit, and drag a Spacing Tidy square by touch |
 
 ## Deploy
 
