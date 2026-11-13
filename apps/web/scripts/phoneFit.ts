@@ -33,7 +33,7 @@ try {
   for (const title of titles) {
     await page.goto(url);
     const card = page.getByRole("article", { name: title, exact: true });
-    await card.locator(":scope > button").click();
+    await card.locator(":scope > a").click();
     await page.waitForFunction(
       name => {
         const scroller = document.querySelector('[data-layout="pages"]:not([data-flying])');

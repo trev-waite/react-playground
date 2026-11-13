@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { PublishIdeaInput } from "@react-playground/api";
+import { livePath } from "../lib/liveRoutes";
 import { refreshLiveCatalog } from "../lib/liveCatalog";
 import { useNavigate } from "react-router";
 import { playgroundApi } from "../lib/playgroundApi";
@@ -23,7 +24,7 @@ export function useIdeaPublishing() {
     try {
       const { slug } = await playgroundApi.publishIdea(id, input);
       await refreshLiveCatalog(slug);
-      navigate(`/${slug}`);
+      navigate(livePath(slug));
       published = true;
     } catch (error) {
       setPublishError(error instanceof Error ? error.message : "Publish failed");

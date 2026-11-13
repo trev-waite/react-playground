@@ -6,7 +6,7 @@ Persistence: [Experimental Projects](IDEA_PERSISTENCE.md). Conventions: [BEST_PR
 
 **Experimental** is WIP and runs only under `bun run dev`. Toggle **Live / Experimental** at the top. **Save** (`⌘S`) writes `apps/web/src/experimental/ideas/<Name>/` (`project.json` + `source.tsx`); dropping a `source.tsx` there on disk works too. **Make Live** asks for a Live folder and writes a portable component with the current slider numbers baked in.
 
-**Live** shows one component per page. Scroll, swipe, use the arrow keys, or use the pager to move to the next one. The grid button shrinks the page into its tile and pulls the rest of the catalog in around it; click a tile, or press Esc, to zoom back in. It sits beside the Live / Experimental toggle locally and alone at the top center when deployed.
+**Live** shows one component per page. Scroll, swipe, use the arrow keys, or use the pager to move to the next one. The grid button shrinks the page into its tile and pulls the rest of the catalog in around it; click a tile, or press Esc, to zoom back in. Each card has its own URL (`/navigation/MenuPill`; a family card is its folder, `/controls`), a tile is a real link to it, and Back returns from a page to the grid. It sits beside the Live / Experimental toggle locally and alone at the top center when deployed.
 
 **Live** entries live at `apps/web/src/live/<group>/<Name>/`. `preview.tsx` only mounts the component (see `buttons/PrimaryButton`). Do not put WIP in `live/shells/` or ship authoring controls in Live.
 
@@ -67,14 +67,16 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 | `bun run typecheck` | Strict TypeScript |
 | `bun run lint` | oxlint: React, accessibility, and leftover-code rules |
 | `bun run build` / `bun run start` | Build and preview the deployable Live app |
+| `bun run --cwd apps/web og:cards` | Draw each card's link-preview image into `apps/web/public/og/` |
 | `bun run smoke:local` | Build Live, serve it with `wrangler dev`, run the smoke checks, and stop the server |
+| `bun run --cwd apps/web check:routes` | After a build, drive it in a browser: tile links, Back and Forward, paging, and every card's own path |
 | `bun run --cwd apps/web check:phone` | After a build, open every card's page on a phone-sized screen and fail if a preview had to shrink to fit |
 
 ## Deploy
 
 Merging to `main` deploys Live to Cloudflare; see [Deployment](DEPLOYMENT.md). Make Live writes source files, so commit them to publish.
 
-Builds use `SITE_URL` for absolute `og:image` and `og:video` URLs; CI sets it to the production origin. The preview assets are `apps/web/public/og.png` (1200×630), the Trev’s Studio card beside the Live grid, and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
+Builds use `SITE_URL` for absolute link-preview and canonical URLs and for the sitemap; CI sets it to the production origin. Every card's page has its own title, description, and preview image, so a shared link unfurls as that component: the text comes from the card's `meta`, and the image from `apps/web/public/og/<slug>.png`. Draw the images with `bun run --cwd apps/web og:cards` after adding a card or changing how one looks; until then the card shares the site's image. The preview assets are `apps/web/public/og.png` (1200×630), the Trev’s Studio card beside the Live grid, and `og.mp4`, a short loop of the Live deck. Re-capture both with `bun run --cwd apps/web og` when the catalog changes (macOS and Google Chrome).
 
 ## Stack
 

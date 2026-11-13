@@ -43,6 +43,8 @@ type CardDeckProps = {
 
 const SCROLL_SETTLE_MS = 120;
 const INSTANT = { duration: 0 } as const;
+/** The open card's way back from its overshoot: as long as the morph spring takes, starting and ending at rest. */
+const SETTLE = { duration: 0.5, ease: (progress: number) => progress * progress * (3 - 2 * progress) } as const;
 /** Fallback for browsers without requestIdleCallback. */
 const IDLE_FALLBACK_MS = 200;
 
@@ -174,6 +176,8 @@ export function CardDeck({
   const [warm, setWarm] = useState<ReadonlySet<string>>(() => new Set());
   const [motions] = useState(() => new CardMotions());
   const flight = useRef(0);
+  /** The card a flight to a page is bringing in, and where its top is headed, to tell how far past it the card has sprung. */
+  const landing = useRef<{ slug: string; top: number } | null>(null);
   /** The last scroll the reader saw, and the grid card at the top of it, so a relayout keeps their place. */
   const scrolled = useRef<ScrollPlace>({
     host: null,
@@ -294,34 +298,79 @@ export function CardDeck({
       cards.forEach((card, index) => place(motionOf(card, index), index));
     const focus = grid.rects[activeIndex];
 
+    const pageAt = (index: number) => pagePose(offsetRect(frame, index * viewport.height));
+
     const showPages = () => {
       jumpPages(host, activeIndex * viewport.height);
       scrolled.current = scrollPlace(host);
-      each((motion, index) => jumpCard(motion, pagePose(offsetRect(frame, index * viewport.height))));
+      each((motion, index) => jumpCard(motion, pageAt(index)));
     };
 
-    /** Runs one camera move; true when it finished without being superseded. */
-    const fly = async (id: number, move: (card: LiveCard, index: number) => Promise<void>) => {
-      setFlying(true);
-      await Promise.all(cards.map(move));
-      if (flight.current !== id) return false;
-      setFlying(false);
-      return true;
-    };
-
-    /** Flies the camera in to the active page, then hands over to the page column. */
-    const flyToPage = (id: number) => {
-      if (!focus) return;
-      const camera = offsetRect(frame, host.scrollTop);
-      void fly(id, (card, index) =>
-        moveCard(
-          motionOf(card, index),
-          index === activeIndex ? pagePose(camera) : cameraPose(grid.rects[index]!, focus, camera),
-          transition,
-        ),
-      ).then(landed => {
-        if (landed) setPaged(true);
+    /**
+     * Takes the page column over from a camera that is still settling. The open
+     * card is at rest at the top of its overshoot, so it eases the last few
+     * pixels from there, still composited as a flight, while the pages above and
+     * below are placed at once: Safari shows their edges under its toolbars.
+     */
+    const landPages = () => {
+      const flown = landing.current;
+      // The reader paged on while the camera flew: the card it brought in is not the one to show, so nothing eases.
+      if (!flown || flown.slug !== cards[activeIndex]?.slug) {
+        showPages();
+        setFlying(false);
+        return;
+      }
+      const open = motionOf(cards[activeIndex]!, activeIndex);
+      const overshoot = open.top.get() - flown.top;
+      jumpPages(host, activeIndex * viewport.height);
+      scrolled.current = scrollPlace(host);
+      each((motion, index) => {
+        if (motion !== open) jumpCard(motion, pageAt(index));
       });
+      const page = pageAt(activeIndex);
+      open.top.jump(page.rect.y + overshoot);
+      const id = flight.current;
+      void moveCard(open, page, SETTLE).then(() => {
+        if (flight.current === id) setFlying(false);
+      });
+    };
+
+    /** Runs one camera move; `land` follows unless another move superseded it. */
+    const fly = (id: number, move: (card: LiveCard, index: number) => Promise<void>, land: () => void) => {
+      setFlying(true);
+      void Promise.all(cards.map(move)).then(() => {
+        if (flight.current === id) land();
+      });
+    };
+
+    /** Flies the camera in to the active page, and hands over to the page column as the card arrives. */
+    const flyToPage = (id: number) => {
+      const open = cards[activeIndex];
+      if (!focus || !open) return;
+      const camera = offsetRect(frame, host.scrollTop);
+      const { chrome } = motionOf(open, activeIndex);
+      landing.current = { slug: open.slug, top: camera.y };
+      // Chrome springs to 1, so falling from past 1 is the top of the overshoot. A move with no bounce lands at rest.
+      let last = chrome.get();
+      const stopWatching = chrome.on(next => {
+        const arrived = next >= 1 && next < last;
+        last = next;
+        if (arrived || flight.current !== id) stopWatching();
+        if (arrived && flight.current === id) setPaged(true);
+      });
+      fly(
+        id,
+        (card, index) =>
+          moveCard(
+            motionOf(card, index),
+            index === activeIndex ? pagePose(camera) : cameraPose(grid.rects[index]!, focus, camera),
+            transition,
+          ),
+        () => {
+          stopWatching();
+          setPaged(true);
+        },
+      );
     };
 
     if (prior && prior.view !== view && focus) {
@@ -346,7 +395,11 @@ export function CardDeck({
             ),
           );
         }
-        void fly(id, (card, index) => moveCard(motionOf(card, index), gridPose(grid.rects[index]!), transition));
+        fly(
+          id,
+          (card, index) => moveCard(motionOf(card, index), gridPose(grid.rects[index]!), transition),
+          () => setFlying(false),
+        );
       } else {
         flyToPage(id);
       }
@@ -354,7 +407,7 @@ export function CardDeck({
     }
 
     if (view === "page" && paged && prior && !prior.paged) {
-      showPages();
+      landPages();
       // The tile that opened this page is gone; keep keyboard focus in the deck.
       if (document.activeElement === document.body) scroller.focus({ preventScroll: true });
       return;

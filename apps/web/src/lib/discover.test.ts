@@ -6,7 +6,6 @@ import {
   cardIndexForSlug,
   catalogEntriesFromLoaders,
   familiesFromModules,
-  liveSlugFromPath,
   planCards,
   slugFromPreviewPath,
   titleFromSlug,
@@ -29,12 +28,6 @@ function entry(slug: string, meta: PreviewMeta = { surface: SURFACE }): Playgrou
 }
 
 describe("live catalog", () => {
-  test("reads the Live slug from the URL path", () => {
-    expect(liveSlugFromPath("/")).toBeNull();
-    expect(liveSlugFromPath("/buttons/PrimaryButton")).toBe("buttons/PrimaryButton");
-    expect(liveSlugFromPath("/buttons/PrimaryButton/")).toBe("buttons/PrimaryButton");
-  });
-
   test("maps Vite glob paths to Live slugs", () => {
     const entries = catalogEntriesFromLoaders({
       "../live/shaders/LightDispersion/preview.tsx": async () => ({ default: Preview }),
