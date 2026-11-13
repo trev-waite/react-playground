@@ -72,7 +72,7 @@ export function routeHead({ card }: LiveRoute, { siteUrl, cardImages }: HeadCont
 
 const ENTITIES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as const;
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text.replace(/[&<>"]/g, character => ENTITIES[character as keyof typeof ENTITIES]);
 }
 

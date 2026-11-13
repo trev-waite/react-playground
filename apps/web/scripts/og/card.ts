@@ -1,3 +1,6 @@
+import { SITE_TITLE } from "../../src/lib/liveRoutes.ts";
+import { escapeHtml } from "../../vite/routeHead.ts";
+
 type OgCardImages = {
   favicon: Buffer;
   grid: Buffer;
@@ -48,10 +51,6 @@ type OgComponentImages = {
   description?: string;
 };
 
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[character]!);
-}
-
 /** A card's own 1200×630 link preview: its name and line beside its page, on the same canvas as the site's. */
 export function ogComponentHtml({ favicon, shot, title, description }: OgComponentImages): string {
   const mark = `data:image/svg+xml;base64,${favicon.toString("base64")}`;
@@ -83,7 +82,7 @@ export function ogComponentHtml({ favicon, shot, title, description }: OgCompone
   .shot img { display: block; width: 100%; height: 100%; }
 </style>
 <div class="copy">
-  <div class="site"><img class="mark" src="${mark}" alt="">Trev’s Studio</div>
+  <div class="site"><img class="mark" src="${mark}" alt="">${SITE_TITLE}</div>
   <h1>${escapeHtml(title)}</h1>
   ${description ? `<p>${escapeHtml(description)}</p>` : ""}
 </div>
