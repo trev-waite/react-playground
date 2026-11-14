@@ -1,6 +1,6 @@
 # AGENTS.md
 
-React Playground is a personal studio for learning React by building isolated components. Ideas start in Experimental (`apps/web/src/experimental/`), a local-only studio with a shared dock of sliders, and Make Live writes the tuned, portable component into Live (`apps/web/src/live/`). Live is the deployable static catalog (`apps/web/src/app/`); it never imports the studio or Experimental, and `vite build` ships only Live. Shared libraries live in `packages/` (such as `@react-playground/layout-sheet`), and both Live and Experimental may import them.
+React Playground is a personal studio for learning React by building isolated components. A component is written straight into Live (`apps/web/src/live/`) or starts as an idea in Experimental (`apps/web/src/experimental/`), a local-only studio with a shared dock of sliders, where Make Live writes the tuned, portable component into Live; a Live component can be brought back into Experimental to tune. Live is the deployable static catalog (`apps/web/src/app/`); it never imports the studio or Experimental, and `vite build` ships only Live. Shared libraries live in `packages/` (such as `@react-playground/layout-sheet`), and both Live and Experimental may import them.
 
 Favor sound engineering judgment over rigid rules, and see below for the software engineering principles.
 
@@ -15,6 +15,8 @@ Start with the [README](README.md) for setup, commands, and workflows. Read the 
 Consult deeper documentation only when the task warrants it, rather than loading everything for every change.
 
 For UI defaults, use the `ui-golden-rules` skill when available.
+
+Adding a component, an experiment, or a shader? Follow the matching checklist in `.cursor/skills/`: `new-component`, `new-experiment`, or `gpu-idea`.
 
 ## Boundaries
 

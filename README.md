@@ -2,7 +2,7 @@
 
 Personal studio for learning React by building isolated components. The deployed site is branded **Trev’s Studio**; the repo and code keep the React Playground name.
 
-Write an idea in **Experimental**, tune it on the shared dock, then **Make Live**. Live is the published catalog: the component as you last configured it, no playground chrome. Live builds and deploys on its own; Experimental only runs locally.
+Write a component straight into **Live**, or start it as an idea in **Experimental**, tune it on the shared dock, then **Make Live**; a Live component can move back into Experimental to tune. Live is the published catalog: the component as you last configured it, no playground chrome. Live builds and deploys on its own; Experimental only runs locally.
 
 ## Quick start
 

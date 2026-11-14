@@ -1,7 +1,8 @@
 /**
  * The order cards appear in, as Live slugs: card slugs, so a family is its
- * folder. Wide cards lead and the tall shell starts a row so the 3- and
- * 4-column grids pack without holes. Unlisted cards follow alphabetically.
+ * folder. Wide cards lead and the tall shell starts a row so the 2-, 3-, and
+ * 4-column grids pack without holes (order.test.ts holds it to that).
+ * Unlisted cards follow alphabetically.
  */
 export const cardOrder: readonly string[] = [
   "controls",
@@ -9,4 +10,9 @@ export const cardOrder: readonly string[] = [
   "shells/ConfigurableShell",
   "tools/SpacingTidy",
   "buttons/PrimaryButton",
+  "particles/WindTunnel",
+  "dither/MoonPhase",
+  "text/FlipDots",
+  "particles/BubbleChamber",
+  "dither/EPaper",
 ];

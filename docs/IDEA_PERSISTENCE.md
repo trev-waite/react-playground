@@ -29,7 +29,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 
 Use the files this way:
 
-- Create `apps/web/src/experimental/ideas/<IdeaName>/source.tsx` to start a new idea on disk. The app writes `project.json` the next time it lists or opens projects.
+- Create `apps/web/src/experimental/ideas/<IdeaName>/source.tsx` to start a new idea on disk. The app writes `project.json` the next time it lists or opens projects, with a generic dock (`slider1` to `slider3`); set `draft.sliders` ids to the source's `SLIDERS` keys so the dock drives it.
 - Edit `source.tsx` when changing the component by hand or with an agent. Keep a `const SLIDERS = { ... }` block so the dock can bake current values on Save without rewriting the rest of the file.
 - Let the app manage `id`, `revision`, and `sourceDigest` in `project.json`. Dock labels, ranges, and values live in `draft.actions` and `draft.sliders`.
 - Commit both files so another machine or agent can reopen the project.
@@ -53,7 +53,7 @@ export function Example({
 }
 ```
 
-The source should be portable React code. It must not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu` so they can run in the stacked Experimental layer and after Make Live; see [WebGPU with vgpu](WEBGPU.md). Slider widgets and mock button effects belong to the Experimental harness, not this file. The harness passes `progress` from 0 to 1 for form, unform, and replay actions; components that do not need staged playback can ignore it.
+The source should be portable React code. It must not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu` so they can run in the stacked Experimental layer and after Make Live; see [WebGPU with vgpu](WEBGPU.md). Any idea may import Live code by `@/live/`. An idea brought in from Live imports the helpers and styles in its own Live folder that way (`@/live/<folder>/<Name>/…`), and Make Live writes those imports as `./…`; the `new-experiment` skill has the steps. Slider widgets and mock button effects belong to the Experimental harness, not this file. The harness passes `progress` from 0 to 1 for form, unform, and replay actions; components that do not need staged playback can ignore it.
 
 ## Editing and saving
 
@@ -81,4 +81,6 @@ apps/web/src/live/<folder>/<Name>/
 
 The component is portable. `preview.tsx` only renders `<Name />`. No sliders, Experimental chrome, mock triggers, or ConfigurableShell. The published file should look like it was written by hand at the current dock values. GPU components keep their `@/gpu` import; see [WebGPU with vgpu](WEBGPU.md).
 
-Make Live refreshes the catalog and navigates to the new entry without a reload. Republishing is safe and never deletes the Experimental project. The deployed Live build only changes when you rebuild.
+Make Live refreshes the catalog and navigates to the new entry without a reload. The deployed Live build only changes when you rebuild.
+
+Once an idea is Live the button reads **Update Live**. It rewrites `<Name>.tsx` from the idea and nothing else: a `preview.tsx` you have tuned, and any tests, styles, or helpers you added beside the component, stay as they are, so a finished card can be updated as often as needed. Hand edits to `<Name>.tsx` itself are replaced, so make those in the idea. It never deletes the Experimental project. A folder whose `preview.tsx` has no `<Name>.tsx` beside it belongs to another component, and publishing there is refused.

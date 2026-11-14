@@ -1,0 +1,57 @@
+{
+  "id": "a122d746-362d-46f0-9f23-8f9ae1e91cec",
+  "revision": 4,
+  "name": "Bubble Chamber",
+  "componentName": "BubbleChamber",
+  "updatedAt": "2026-11-13T19:00:54.346Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "form",
+        "label": "Beam on",
+        "mock": "form"
+      },
+      {
+        "id": "unform",
+        "label": "Beam off",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Burst",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "field",
+        "label": "Magnetic field",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 50
+      },
+      {
+        "id": "beamRate",
+        "label": "Beam rate",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 50
+      },
+      {
+        "id": "persistence",
+        "label": "Persistence",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 40
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "a32f87c7c899cf775ca976f6cfea97cda793f921407045f52690f93d564ce4ee",
+  "createdAt": "2026-11-13T18:41:10.086Z"
+}

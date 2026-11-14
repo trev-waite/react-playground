@@ -1,0 +1,57 @@
+{
+  "id": "bab56f5b-ba09-40d3-bf92-37740a19653c",
+  "revision": 4,
+  "name": "Flip Dots",
+  "componentName": "FlipDots",
+  "updatedAt": "2026-11-13T20:25:11.929Z",
+  "schemaVersion": 3,
+  "draft": {
+    "version": 1,
+    "actions": [
+      {
+        "id": "form",
+        "label": "Show",
+        "mock": "form"
+      },
+      {
+        "id": "unform",
+        "label": "Blank",
+        "mock": "unform"
+      },
+      {
+        "id": "replay",
+        "label": "Replay",
+        "mock": "replay"
+      }
+    ],
+    "sliders": [
+      {
+        "id": "flipSpeed",
+        "label": "Flip speed",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 55
+      },
+      {
+        "id": "sweep",
+        "label": "Sweep",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 77
+      },
+      {
+        "id": "hold",
+        "label": "Hold",
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "value": 84
+      }
+    ]
+  },
+  "sourceFile": "source.tsx",
+  "sourceDigest": "0931a20d923262bf43a8e94a0cda45979c176c28025451dd0f6cf90f257a8f5a",
+  "createdAt": "2026-11-13T18:41:10.081Z"
+}
