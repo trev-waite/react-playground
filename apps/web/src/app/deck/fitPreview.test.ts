@@ -1,5 +1,45 @@
 import { describe, expect, test } from "bun:test";
-import { familyLayoutWidth, flightLayout, PREVIEW_MIN_SIZE, previewScale, restLayout } from "./fitPreview";
+import {
+  drifted,
+  familyLayoutWidth,
+  FLIGHT_RELAYOUT_DRIFT,
+  flightLayout,
+  heldLayout,
+  PREVIEW_MIN_SIZE,
+  previewScale,
+  restLayout,
+} from "./fitPreview";
+
+describe("holding a layout in flight", () => {
+  test("keeps the layout in place until the blend drifts past the threshold on either side", () => {
+    const placed = { width: 400, height: 300 };
+    expect(drifted(placed, { width: 400 * 1.1, height: 300 })).toBe(false);
+    expect(drifted(placed, { width: 400, height: 300 / 1.1 })).toBe(false);
+    expect(drifted(placed, { width: 400 * FLIGHT_RELAYOUT_DRIFT, height: 300 })).toBe(true);
+    expect(drifted(placed, { width: 400, height: 300 / FLIGHT_RELAYOUT_DRIFT })).toBe(true);
+  });
+
+  test("a tile-to-page flight lays out a handful of times, not every frame", () => {
+    const tile = { width: 320, height: 320, scale: 0.8 };
+    const page = { width: 1200, height: 700, scale: 1 };
+    let placed = flightLayout({ width: 256, height: 256 }, tile, page, 0);
+    let relayouts = 0;
+    for (let frame = 1; frame <= 30; frame++) {
+      const next = flightLayout({ width: 256, height: 256 }, tile, page, frame / 30);
+      if (drifted(placed, next)) {
+        placed = next;
+        relayouts++;
+      }
+    }
+    expect(relayouts).toBeGreaterThan(0);
+    expect(relayouts).toBeLessThan(10);
+  });
+
+  test("scales a held layout to fit its area without stretching it", () => {
+    expect(heldLayout({ width: 400, height: 200 }, { width: 200, height: 200 })).toEqual({ width: 400, height: 200, scale: 0.5 });
+    expect(heldLayout({ width: 400, height: 200 }, { width: 800, height: 200 })).toEqual({ width: 400, height: 200, scale: 1 });
+  });
+});
 
 describe("previewScale", () => {
   test("keeps previews at full size on a page", () => {

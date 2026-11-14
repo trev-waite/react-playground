@@ -50,10 +50,25 @@ type DeckCardProps = {
   interactive: boolean;
   /** Present in the grid: the whole tile opens the page. */
   onOpen?: () => void;
+  /** Opens the card's source. */
+  onShowCode?: () => void;
+  /** The reader is reaching for the code button: fetch what it opens. */
+  onPrepareCode?: () => void;
   raised?: boolean;
 };
 
-export function DeckCard({ card, motion: values, tile, pageWidth, mounted, interactive, onOpen, raised }: DeckCardProps) {
+export function DeckCard({
+  card,
+  motion: values,
+  tile,
+  pageWidth,
+  mounted,
+  interactive,
+  onOpen,
+  onShowCode,
+  onPrepareCode,
+  raised,
+}: DeckCardProps) {
   const [resetKey, setResetKey] = useState(0);
   const cardRef = useRef<HTMLElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -102,6 +117,19 @@ export function DeckCard({ card, motion: values, tile, pageWidth, mounted, inter
           <h2 className={styles.title}>{card.title}</h2>
           {card.description ? <p className={styles.description}>{card.description}</p> : null}
         </div>
+        {onShowCode ? (
+          <button
+            type="button"
+            className={styles.code}
+            aria-haspopup="dialog"
+            onClick={onShowCode}
+            onPointerEnter={onPrepareCode}
+            onFocus={onPrepareCode}
+          >
+            <CodeIcon />
+            <span className={styles.buttonLabel}>Code</span>
+          </button>
+        ) : null}
         {card.reset ? (
           <button
             type="button"
@@ -109,7 +137,7 @@ export function DeckCard({ card, motion: values, tile, pageWidth, mounted, inter
             onClick={() => setResetKey(key => key + 1)}
           >
             <ResetIcon />
-            <span className={styles.resetLabel}>{card.reset === "replay" ? "Replay" : "Reset"}</span>
+            <span className={styles.buttonLabel}>{card.reset === "replay" ? "Replay" : "Reset"}</span>
           </button>
         ) : null}
       </CardFooter>
@@ -145,12 +173,13 @@ function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; in
     const footer = ref.current;
     const card = footer?.parentElement;
     if (!footer || !card) return;
-    const measure = () => {
-      const height = px(footer.offsetHeight);
+    const measure = (size: number) => {
+      const height = px(Math.round(size));
       if (card.style.getPropertyValue("--footer-height") !== height) card.style.setProperty("--footer-height", height);
     };
-    measure();
-    const observer = new ResizeObserver(measure);
+    measure(footer.offsetHeight);
+    // The observer hands over the size it measured: reading offsetHeight here would force another layout mid-flight.
+    const observer = new ResizeObserver(([entry]) => measure(entry?.borderBoxSize[0]?.blockSize ?? footer.offsetHeight));
     observer.observe(footer);
     return () => observer.disconnect();
   }, []);
@@ -222,9 +251,10 @@ const Members = memo(function Members({ members, familyWidth }: { members: LiveC
 });
 
 function Member({ member }: { member: LiveCardMember }) {
+  const module = member.load();
   return (
-    <PreviewBoundary title={member.title} module={member.module}>
-      <LoadedPreview module={member.module} />
+    <PreviewBoundary title={member.title} module={module}>
+      <LoadedPreview module={module} />
     </PreviewBoundary>
   );
 }
@@ -264,6 +294,20 @@ class PreviewBoundary extends Component<PreviewBoundaryProps, PreviewBoundarySta
     }
     return this.props.children;
   }
+}
+
+function CodeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function ResetIcon() {

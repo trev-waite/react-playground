@@ -1,4 +1,4 @@
-import type { CardSize } from "../../lib/types";
+import type { CardSize } from "../../lib/types.ts";
 
 export type Size = { width: number; height: number };
 /** Screen room kept clear for the notch, rounded corners, and the home indicator. */

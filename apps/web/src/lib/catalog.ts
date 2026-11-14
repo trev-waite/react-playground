@@ -1,4 +1,4 @@
-import { cardSwatch } from "./cardSwatches";
+import { cardSwatch } from "./cardSwatches.ts";
 import type {
   CardColors,
   CardMeta,
@@ -11,7 +11,7 @@ import type {
   PlaygroundEntry,
   PreviewMeta,
   PreviewModule,
-} from "./types";
+} from "./types.ts";
 
 export function slugFromPreviewPath(filePath: string): string | null {
   const match = filePath.replace(/\\/g, "/").match(/\/live\/(.+)\/preview\.tsx$/);
@@ -105,8 +105,8 @@ export function planCards<Entry extends CatalogEntry>({
 export type LiveCardMember = {
   slug: string;
   title: string;
-  /** Settles on its own, so each card shows as soon as its component arrives. */
-  module: Promise<PreviewModule>;
+  /** The component's module, imported once however often it is asked for. */
+  load: () => Promise<PreviewModule>;
 };
 
 /** How a card presents itself, known from source alone: the deck lays out from it and the build writes its page from it. */
@@ -142,7 +142,7 @@ export function cardFromPlan(
   return {
     ...cardFace(plan),
     members: plan.entries.map(
-      (entry): LiveCardMember => ({ slug: entry.slug, title: entry.title, module: moduleFor(entry) }),
+      (entry): LiveCardMember => ({ slug: entry.slug, title: entry.title, load: () => moduleFor(entry) }),
     ),
   };
 }

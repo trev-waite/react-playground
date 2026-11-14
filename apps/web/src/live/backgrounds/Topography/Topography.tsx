@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { clock, effect, sampler, target, type Frame } from "vgpu";
 import { pausableLoop, useGpu, type GpuSession, type PausableLoop } from "@/gpu";
 import { HEIGHT_SHADER, RELIEF_SHADER } from "./relief";
+import type { StillRequest, StillResult } from "./stillWorker";
 import { HEIGHTMAP_SCALE } from "./terraces";
 import styles from "./Topography.module.css";
 
@@ -116,11 +117,65 @@ function startRelief({ gpu, surface, canvas }: GpuSession) {
  */
 export function Topography() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  useGpu(canvasRef, { label: "Topography", start: startRelief, clearColor: [0.965, 0.967, 0.97, 1] });
+  const { status } = useGpu(canvasRef, { label: "Topography", start: startRelief, clearColor: [0.965, 0.967, 0.97, 1] });
+  const still = status === "unsupported" || status === "error";
 
   return (
     <div className={styles.field}>
       <canvas ref={canvasRef} className={styles.map} aria-hidden="true" />
+      {still ? <StillMap /> : null}
     </div>
   );
+}
+
+/** The longest a still map's side is drawn at; the canvas scales it up the rest of the way. */
+const STILL_MAX_SIDE = 720;
+/** Redraws wait until a resize has settled this long. */
+const STILL_SETTLE_MS = 150;
+
+/** Draws the still relief into `canvas` from a worker, and again once a new size settles. */
+function startStill(canvas: HTMLCanvasElement): () => void {
+  const context = canvas.getContext("2d");
+  if (!context) return () => {};
+  const worker = new Worker(new URL("./stillWorker.ts", import.meta.url), { type: "module" });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let asked = 0;
+  let size = "";
+  worker.onmessage = ({ data }: MessageEvent<StillResult>) => {
+    if (data.id !== asked) return;
+    canvas.width = data.width;
+    canvas.height = data.height;
+    context.putImageData(new ImageData(data.pixels, data.width, data.height), 0, 0);
+  };
+  const draw = () => {
+    const scale = Math.min(window.devicePixelRatio || 1, STILL_MAX_SIDE / Math.max(canvas.clientWidth, canvas.clientHeight, 1));
+    const width = Math.round(canvas.clientWidth * scale);
+    const height = Math.round(canvas.clientHeight * scale);
+    if (width < 2 || height < 2 || `${width}x${height}` === size) return;
+    size = `${width}x${height}`;
+    const request: StillRequest = { id: ++asked, width, height };
+    worker.postMessage(request);
+  };
+  const observer = new ResizeObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(draw, size ? STILL_SETTLE_MS : 0);
+  });
+  observer.observe(canvas);
+  return () => {
+    clearTimeout(timer);
+    observer.disconnect();
+    worker.terminate();
+  };
+}
+
+/** The relief, drawn on the CPU where WebGPU is missing, in a worker so the page never waits on it. */
+function StillMap() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) return startStill(canvas);
+  }, []);
+
+  return <canvas ref={canvasRef} className={styles.map} aria-hidden="true" />;
 }

@@ -1,4 +1,4 @@
-import type { CardTheme, HexColor, SiteTheme } from "./types";
+import type { CardTheme, HexColor, SiteTheme } from "./types.ts";
 
 export type CardSwatch = {
   background: HexColor;

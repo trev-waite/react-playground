@@ -135,7 +135,18 @@ describe("cardFromPlan", () => {
       surface: { light: CARD_SWATCHES.light.blue, dark: CARD_SWATCHES.dark.green },
       reset: "replay",
     });
-    expect(card.members[0]?.module).toBe(loaded);
+    expect(card.members[0]?.load()).toBe(loaded);
+  });
+
+  test("starts no download until a member is loaded", () => {
+    let calls = 0;
+    const card = cardFromPlan({ slug: "buttons/Plain", entries: [entry("buttons/Plain")] }, () => {
+      calls++;
+      return loaded;
+    });
+    expect(calls).toBe(0);
+    void card.members[0]?.load();
+    expect(calls).toBe(1);
   });
 
   test("lets the family meta present a grouped card", () => {
