@@ -1,31 +1,52 @@
-import { createCssVariablesTheme, createHighlighterCore, type HighlighterCore, type ThemedToken } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import type { HighlightRequest, HighlightResult } from "./highlightWorker";
+import type { CodeLanguage, Run } from "./tokenize";
 
-/** Token colors are CSS variables (`--code-token-*` in CodeSheet.module.css), so one pass serves both site themes. */
-const THEME = createCssVariablesTheme({ name: "studio", variablePrefix: "--code-", variableDefaults: {} });
+type Pending = { resolve: (lines: Run[][]) => void; reject: (error: Error) => void };
 
-export type CodeLanguage = "tsx" | "css";
+let worker: Worker | null = null;
+let nextId = 0;
+const pending = new Map<number, Pending>();
 
-let highlighter: Promise<HighlighterCore> | null = null;
-
-export function loadHighlighter(): Promise<HighlighterCore> {
-  highlighter ??= createHighlighterCore({
-    themes: [THEME],
-    langs: [import("shiki/langs/tsx.mjs"), import("shiki/langs/css.mjs")],
-    engine: createJavaScriptRegexEngine(),
-  }).catch(error => {
-    highlighter = null;
-    throw error;
-  });
-  return highlighter;
+/** The highlighting worker, started on first use. If it dies, every waiting file falls back to plain text and the next ask starts a new one. */
+function highlighter(): Worker {
+  if (worker) return worker;
+  const started = new Worker(new URL("./highlightWorker.ts", import.meta.url), { type: "module" });
+  started.onmessage = ({ data }: MessageEvent<HighlightResult>) => {
+    const waiting = pending.get(data.id);
+    pending.delete(data.id);
+    if ("lines" in data) waiting?.resolve(data.lines);
+    else waiting?.reject(new Error(data.error));
+  };
+  started.onerror = () => {
+    worker = null;
+    started.terminate();
+    for (const waiting of pending.values()) waiting.reject(new Error("The highlighter stopped"));
+    pending.clear();
+  };
+  worker = started;
+  return started;
 }
 
 export function languageOf(fileName: string): CodeLanguage {
   return fileName.endsWith(".css") ? "css" : "tsx";
 }
 
-/** The file's lines as colored tokens. The grammar loads on the first call. */
-export async function highlight(code: string, language: CodeLanguage): Promise<ThemedToken[][]> {
-  const core = await loadHighlighter();
-  return core.codeToTokensBase(code, { lang: language, theme: THEME.name! });
+/** The file's lines as colored runs, worked out in the highlighting worker. */
+export function highlight(code: string, language: CodeLanguage): Promise<Run[][]> {
+  return new Promise((resolve, reject) => {
+    const id = ++nextId;
+    pending.set(id, { resolve, reject });
+    const request: HighlightRequest = { id, code, language };
+    highlighter().postMessage(request);
+  });
+}
+
+let warmed = false;
+
+/** Starts the worker and compiles both grammars ahead of a press, so the sheet opens on colored code sooner. */
+export function warmHighlighter(): void {
+  if (warmed) return;
+  warmed = true;
+  highlight("export const a = <b className={c}>d</b>;", "tsx").catch(() => {});
+  highlight(".a { color: red; }", "css").catch(() => {});
 }

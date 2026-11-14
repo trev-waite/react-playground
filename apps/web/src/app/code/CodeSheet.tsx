@@ -11,6 +11,8 @@ import {
 } from "react";
 import type { SourceFile } from "../../lib/types";
 import { cardSource, fileTokens } from "./cardSource";
+import { holdPageUnder } from "./sheetTouch";
+import type { Run } from "./tokenize";
 import styles from "./CodeSheet.module.css";
 
 export type CodeSheetCard = { slug: string; title: string; members: readonly { slug: string }[] };
@@ -43,10 +45,6 @@ export default function CodeSheet({ card, open, onClose }: CodeSheetProps) {
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    // A drag outside the code would scroll the page under the sheet; phones scroll the document itself.
-    const hold = (event: TouchEvent) => {
-      if (!(event.target instanceof Element) || !event.target.closest("[data-scrolls]")) event.preventDefault();
-    };
     // A click on the backdrop lands on the dialog itself, outside its box. Escape and the close button do the same by keyboard.
     const dismiss = (event: MouseEvent) => {
       if (event.target !== dialog) return;
@@ -55,10 +53,10 @@ export default function CodeSheet({ card, open, onClose }: CodeSheetProps) {
         event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
       if (!inside) dialog.close();
     };
-    dialog.addEventListener("touchmove", hold, { passive: false });
+    const release = holdPageUnder(dialog);
     dialog.addEventListener("click", dismiss);
     return () => {
-      dialog.removeEventListener("touchmove", hold);
+      release();
       dialog.removeEventListener("click", dismiss);
     };
   }, []);
@@ -125,7 +123,7 @@ function Files({ card }: { card: CodeSheetCard }) {
             </button>
           ))}
         </div>
-        <CopyButton code={file.code} />
+        <CopyButton key={file.name} code={file.code} />
       </div>
       <div
         id={`${tabsId}-panel`}
@@ -145,8 +143,6 @@ function Files({ card }: { card: CodeSheetCard }) {
   );
 }
 
-/** Lines as `[text, color]` runs; plain lines have one uncolored run each. */
-type Run = { content: string; color?: string };
 
 function Code({ lines }: { lines: Run[][] }) {
   // A file's final newline is not a line of its own.

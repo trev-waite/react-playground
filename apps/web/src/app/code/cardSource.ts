@@ -1,6 +1,6 @@
 import { loadSource } from "../../lib/liveSource";
 import type { SourceFile } from "../../lib/types";
-import { highlight, languageOf, loadHighlighter } from "./highlight";
+import { highlight, languageOf, warmHighlighter } from "./highlight";
 
 type SourceCard = { slug: string; members: readonly { slug: string }[] };
 
@@ -21,7 +21,7 @@ export function cardSource(card: SourceCard): Promise<SourceFile[]> {
 /** Fetches the card's files and the highlighter before the sheet opens, so it opens on finished code. */
 export function prepareCode(card: SourceCard): void {
   cardSource(card).catch(() => {});
-  loadHighlighter().catch(() => {});
+  warmHighlighter();
 }
 
 /** The file's highlighted lines, worked out once per file. */

@@ -305,7 +305,7 @@ export function CardDeck({
 
   /** Marks the cards in flight: they ride the compositor, and a finger cannot scroll the page under them. */
   const setFlying = useCallback((flying: boolean) => {
-    if (!flying) setLanded(true);
+    setLanded(!flying);
     const scroller = scrollerRef.current;
     if (!scroller || scroller.hasAttribute("data-flying") === flying) return;
     scroller.toggleAttribute("data-flying", flying);
@@ -629,6 +629,7 @@ export function CardDeck({
               pageWidth={frame.width}
               mounted={warm.has(card.slug) || near.has(index)}
               interactive={layout === "pages"}
+              current={index === activeIndex}
               // Pages never overlap. Moving the raise as the reader pages made Safari repaint two whole cards.
               raised={layout !== "pages" && index === activeIndex}
               onOpen={layout === "grid" ? () => onOpen(index) : undefined}

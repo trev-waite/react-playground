@@ -85,8 +85,7 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
 
 /**
  * Runs the drop and the letters until stopped, handing each frame to
- * `paint`. Sleeps through each hold and off screen; reduced motion shows
- * each word still.
+ * `paint`. Sleeps off screen; reduced motion shows each word still.
  */
 function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) => void): () => void {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");

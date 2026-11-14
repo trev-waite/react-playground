@@ -48,6 +48,8 @@ type DeckCardProps = {
   mounted: boolean;
   /** Previews take input; off while the card is a tile or in flight. */
   interactive: boolean;
+  /** The page the reader is on. Only its footer takes focus, so Tab never lands on a neighbor and scrolls to it. */
+  current: boolean;
   /** Present in the grid: the whole tile opens the page. */
   onOpen?: () => void;
   onShowCode?: () => void;
@@ -63,6 +65,7 @@ export function DeckCard({
   pageWidth,
   mounted,
   interactive,
+  current,
   onOpen,
   onShowCode,
   onPrepareCode,
@@ -111,7 +114,7 @@ export function DeckCard({
         </FitStage>
       </div>
 
-      <CardFooter chrome={chrome} interactive={interactive}>
+      <CardFooter chrome={chrome} interactive={interactive && current}>
         <div className={styles.caption}>
           <h2 className={styles.title}>{card.title}</h2>
           {card.description ? <p className={styles.description}>{card.description}</p> : null}
@@ -173,6 +176,8 @@ function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; in
     const card = footer?.parentElement;
     if (!footer || !card) return;
     const measure = (size: number) => {
+      // A card skipped off screen can measure 0; it keeps the height it had, or the one-line default.
+      if (size <= 0) return;
       const height = px(Math.round(size));
       if (card.style.getPropertyValue("--footer-height") !== height) card.style.setProperty("--footer-height", height);
     };
