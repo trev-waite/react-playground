@@ -225,13 +225,18 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     schedule();
   }
 
+  function onMotionChange() {
+    if (reducedMotion.matches) duration = 0;
+    schedule();
+  }
+
   const intersectionObserver = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
     if (visible && !frame) frame = requestAnimationFrame(tick);
     schedule();
   });
   intersectionObserver.observe(canvas);
-  reducedMotion.addEventListener("change", schedule);
+  reducedMotion.addEventListener("change", onMotionChange);
 
   on = settings.current.progress >= 0.5;
   if (on) pigment = from = goal = Float32Array.from(pages[0]!);
@@ -245,7 +250,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
       cancelAnimationFrame(frame);
       window.clearTimeout(timer);
       intersectionObserver.disconnect();
-      reducedMotion.removeEventListener("change", schedule);
+      reducedMotion.removeEventListener("change", onMotionChange);
     },
   };
 }
