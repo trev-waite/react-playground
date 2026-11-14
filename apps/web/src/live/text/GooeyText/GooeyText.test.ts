@@ -76,6 +76,11 @@ describe("Gooey Text slime", () => {
     expect(free.dx).toBeCloseTo(0, 1);
   });
 
+  test("by the end of typing every letter, the last included, has snapped free and set black", () => {
+    const end = typing(timing.type - 1);
+    expect(end.letters.every(letter => letter.strand === 0 && letter.ink === 1)).toBe(true);
+  });
+
   test("a freed letter springs back from its stretch over a short beat instead of snapping straight", () => {
     const justFreed = tether(SNAP_DISTANCE + 0.02, 1);
     expect(justFreed.strand).toBe(0);
