@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
-const SLIDERS = {"ghosting":45,"refreshSpeed":50,"flashEvery":4};
+const SLIDERS = {"ghosting":25,"refreshSpeed":50,"flashEvery":3};
 
 const PANEL_WIDTH = 144;
 const PANEL_HEIGHT = 192;
