@@ -1,5 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { LEAD, SNAP_DISTANCE, TYPE_STEP_MS, bloom, ease, layoutWord, phases, poseAt, tether } from "./timeline";
+import {
+  HOLD_MS,
+  LEAD,
+  SETTLE_MS,
+  SETTLE_STAGGER_MS,
+  SNAP_DISTANCE,
+  TYPE_STEP_MS,
+  WINDUP_MS,
+  bloom,
+  breath,
+  ease,
+  jiggle,
+  layoutWord,
+  phases,
+  poseAt,
+  sway,
+  tether,
+  windup,
+} from "./timeline";
 
 const FONT = 100;
 const measure = (text: string) => text.length * 60;
@@ -75,11 +93,65 @@ describe("Gooey Text slime", () => {
 });
 
 describe("Gooey Text timeline", () => {
-  test("the word is hidden while the drop glides in, and black and still while it holds", () => {
+  test("the word is hidden while the drop glides in, and black and whole while it holds", () => {
     expect(poseAt(hello, flow, FONT, 0).letters.every(letter => letter.scale === 0)).toBe(true);
     const held = poseAt(hello, flow, FONT, timing.glide + timing.type + 10);
-    expect(held.still).toBe(true);
     expect(held.letters.every(letter => letter.scale === 1 && letter.ink === 1 && letter.strand === 0)).toBe(true);
+  });
+
+  test("the hold starts at rest, so a reduced-motion frame drawn there is still", () => {
+    const start = poseAt(hello, flow, FONT, timing.glide + timing.type);
+    expect(start.letters.every(letter => letter.stretch === 1 && letter.dy === 0)).toBe(true);
+    expect(start.dropScale).toBe(1);
+    expect(start.dropSquash).toBe(0);
+  });
+
+  test("as the drop parks, a wobble runs back through the word from the letter nearest it, then dies away", () => {
+    const at = (ms: number) => poseAt(hello, flow, FONT, timing.glide + timing.type + ms).letters;
+    const firstMoves = (index: number) => {
+      for (let ms = 0; ms < HOLD_MS; ms += 2) if (Math.abs(at(ms)[index]!.stretch - 1) > 0.005) return ms;
+      return Infinity;
+    };
+    expect(firstMoves(4)).toBeLessThan(firstMoves(3));
+    expect(firstMoves(1)).toBeLessThan(firstMoves(0));
+    const swing = (from: number, to: number) =>
+      Math.max(...Array.from({ length: 100 }, (_, i) => Math.abs(at(from + ((to - from) * i) / 100)[4]!.stretch - 1)));
+    const settling = swing(0, SETTLE_MS);
+    expect(settling).toBeGreaterThan(0.06);
+    expect(settling).toBeLessThan(0.16);
+    // Once the wobble has died, only the soft sway is left: a few percent at most.
+    expect(swing(SETTLE_MS + hello.letters.length * SETTLE_STAGGER_MS, HOLD_MS)).toBeLessThan(0.025);
+  });
+
+  test("the word sways softly through the hold, then comes to rest before the drop winds up", () => {
+    const at = (ms: number) => poseAt(hello, flow, FONT, timing.glide + timing.type + ms).letters;
+    const mid = at(HOLD_MS * 0.6);
+    expect(mid.some(letter => Math.abs(letter.stretch - 1) > 0.005)).toBe(true);
+    expect(new Set(mid.map(letter => letter.stretch.toFixed(4))).size).toBeGreaterThan(1);
+    expect(at(HOLD_MS - WINDUP_MS).every(letter => letter.stretch === 1 && letter.dy === 0)).toBe(true);
+    expect(sway(0, 0)).toBe(0);
+  });
+
+  test("the drop breathes while the word holds, gently", () => {
+    const scales = Array.from({ length: 100 }, (_, i) => poseAt(hello, flow, FONT, timing.glide + timing.type + (i * HOLD_MS) / 100).dropScale);
+    expect(Math.max(...scales)).toBeGreaterThan(1.02);
+    expect(Math.min(...scales)).toBeLessThan(0.98);
+    expect(scales.every(scale => Math.abs(scale - 1) <= 0.05)).toBe(true);
+    expect(breath(0)).toBe(1);
+  });
+
+  test("the drop squeezes narrow just before it slides back, and at no other time", () => {
+    const squash = (ms: number) => poseAt(hello, flow, FONT, timing.glide + timing.type + ms).dropSquash;
+    expect(squash(HOLD_MS - WINDUP_MS - 1)).toBe(0);
+    expect(squash(HOLD_MS - WINDUP_MS / 2)).toBeLessThan(-0.15);
+    expect(windup(HOLD_MS)).toBe(0);
+    expect(poseAt(hello, flow, FONT, timing.glide + 100).dropSquash).toBe(0);
+  });
+
+  test("a wobble is still at both ends", () => {
+    expect(jiggle(0)).toBe(0);
+    expect(jiggle(1)).toBe(0);
+    expect(Math.abs(jiggle(0.9))).toBeLessThan(0.01);
   });
 
   test("letters are born left to right, each out of the drop as it leads past", () => {

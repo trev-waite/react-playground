@@ -24,6 +24,9 @@ import styles from "./GooeyText.module.css";
 const DEFAULT_WORDS = ["hello", "gooey", "flow"] as const;
 /** A reduced-motion line shows each word this long, still. */
 const STILL_MS = 3200;
+/** The spring the drop's stretch rides: a few soft swings that settle in about half a second. */
+const DROP_STIFFNESS = 170;
+const DROP_DAMPING = 11;
 
 /** The thinnest a neck gets before it snaps, so it still reads as one strand of slime. */
 const NECK_MIN = FONT_SIZE * 0.011;
@@ -97,7 +100,9 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   let timer = 0;
   let visible = true;
   let lastDropX: number | null = null;
+  /** The drop's stretch rides a spring toward the stretch its speed asks for, so it wobbles like jelly when it starts and stops. */
   let stretch = 0;
+  let stretchVelocity = 0;
 
   function show(index: number) {
     layers.forEach(layer => {
@@ -106,15 +111,22 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     });
   }
 
-  /** Poses word `index` at `ms` into its cycle; returns whether it is holding still. */
-  function draw(index: number, ms: number, dt: number): boolean {
+  /** Poses word `index` at `ms` into its cycle. A `dt` of 0 draws a still frame, with the drop at rest. */
+  function draw(index: number, ms: number, dt: number) {
     const word = lines.words[index]!;
     const before = lines.words[(index - 1 + lines.words.length) % lines.words.length]!;
     const pose = poseAt(word, before, FONT_SIZE, ms);
     const speed = lastDropX == null || dt <= 0 ? 0 : Math.abs(pose.dropX - lastDropX) / dt;
     lastDropX = pose.dropX;
-    stretch += (Math.min(0.42, speed * 0.5) - stretch) * (1 - Math.exp(-dt / 60));
-    if (pose.still) stretch = 0;
+    if (dt <= 0) {
+      stretch = pose.dropSquash;
+      stretchVelocity = 0;
+    } else {
+      const target = Math.min(0.42, speed * 0.5) + pose.dropSquash;
+      const seconds = dt / 1000;
+      stretchVelocity += (DROP_STIFFNESS * (target - stretch) - DROP_DAMPING * stretchVelocity) * seconds;
+      stretch = Math.min(0.5, Math.max(-0.3, stretch + stretchVelocity * seconds));
+    }
     const letters = pose.letters.map((letter, i) => {
       const layout = word.letters[i]!;
       const center = layout.left + layout.width / 2;
@@ -129,10 +141,10 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
         strand: { from: pose.dropX, to: facing, width: letter.strand * FONT_SIZE },
       };
     });
-    paint({ word: index, letters, drop: { x: pose.dropX, sx: 1 + stretch, sy: 1 / (1 + stretch * 0.55) } });
+    const drop = { x: pose.dropX, sx: (1 + stretch) * pose.dropScale, sy: pose.dropScale / (1 + stretch * 0.55) };
+    paint({ word: index, letters, drop });
     const pinches = necks[index]!.children;
     letters.forEach((letter, i) => write(pinches[i], "d", neckPath(letter.strand.from, letter.strand.to, letter.strand.width)));
-    return pose.still;
   }
 
   function advance(dt: number) {
@@ -150,18 +162,8 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     const dt = Math.min(48, now - previous);
     previous = now;
     advance(dt);
-    const holding = draw(wordIndex, elapsed, dt);
-    if (!visible) return;
-    if (holding) {
-      const timing = phases(lines.words[wordIndex]!.letters.length);
-      const rest = timing.glide + timing.type + timing.hold - elapsed;
-      timer = window.setTimeout(() => {
-        advance(rest);
-        resume();
-      }, rest);
-      return;
-    }
-    frame = requestAnimationFrame(tick);
+    draw(wordIndex, elapsed, dt);
+    if (visible) frame = requestAnimationFrame(tick);
   }
 
   function resume() {
