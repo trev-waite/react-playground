@@ -11,7 +11,6 @@ const bySlug = new Map(
   }),
 );
 
-/** The component's source files, fetched on first ask. */
 export function loadSource(slug: string): Promise<SourceFile[]> {
   return bySlug.get(slug)?.() ?? Promise.resolve([]);
 }

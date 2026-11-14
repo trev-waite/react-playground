@@ -50,7 +50,6 @@ type DeckCardProps = {
   interactive: boolean;
   /** Present in the grid: the whole tile opens the page. */
   onOpen?: () => void;
-  /** Opens the card's source. */
   onShowCode?: () => void;
   /** The reader is reaching for the code button: fetch what it opens. */
   onPrepareCode?: () => void;

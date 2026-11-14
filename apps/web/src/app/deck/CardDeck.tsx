@@ -38,9 +38,8 @@ type CardDeckProps = {
   onActiveChange: (index: number) => void;
   /** A grid tile was chosen. */
   onOpen: (index: number) => void;
-  /** A page asked to show its code. */
   onShowCode?: (index: number) => void;
-  /** A page's code button is about to be pressed. */
+  /** A page's code button is about to be pressed (hovered or focused): fetch what it opens. */
   onPrepareCode?: (index: number) => void;
   /** The deck owns the page, so phones may scroll the document itself. */
   documentScroll?: boolean;
