@@ -57,7 +57,7 @@ A preview is laid out in the card's box, never the viewport, so size from that b
 
 - **As a page**, the box is the card less its padding and footer. On the 402px phone page that is about 322px wide. A component with a fixed size wider than that needs a `@media (max-width: 48rem)` layout; `check:phone` fails one that had to shrink.
 - **As a grid tile**, the preview is laid out at 320px or more and scaled down, and takes no input.
-- **In the grid**, cards pack into 2, 3, or 4 columns, each in the first cell it fits (`gridLayout` in `app/deck/deckLayout.ts`). Choose `size` and the position in `live/order.ts`, then run `bun test apps/web/src/live/order.test.ts`: it lays out the real catalog at 2, 3, and 4 columns and names each empty cell above the last row. Move cards in the order until it passes; at 3 columns every wide card needs a small card, or half a tall one, beside it.
+- **In the grid**, cards pack into 2, 3, or 4 columns, each in the first cell it fits (`gridLayout` in `app/deck/deckLayout.ts`). Choose `size` and the position in `live/order.ts`, then run `bun test apps/web/src/live/order.test.ts`: it lays out the real catalog at 2, 3, and 4 columns and names each hole: an empty cell above the last row, or one in it with a card to its right. Move cards in the order until it passes; at 3 columns every wide card needs a small card, or half a tall one, beside it.
 
 ## Card surfaces
 

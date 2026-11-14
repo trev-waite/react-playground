@@ -12,6 +12,14 @@ const DASH = { length: 20, lit: 16 };
 const STILL_AIR = 0.06;
 const RESIZE_SETTLE_MS = 120;
 const INK_CHECK_MS = 500;
+/**
+ * Speeds and the pointer are set in screen pixels per viewport, like CSS
+ * `vmin`, so the air moves the same in a scaled-down tile and on the page.
+ */
+const WIND_PER_VMIN = 0.00093;
+const POINTER_VMIN = 0.024;
+const POINTER_MIN_PX = 14;
+const SCREEN_CHECK_MS = 250;
 
 const smoothstep = (low: number, high: number, value: number) => {
   const t = Math.min(1, Math.max(0, (value - low) / (high - low)));
@@ -164,6 +172,9 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
   let frame = 0;
   let settle = 0;
   let lastTime = 0;
+  let screenScale = 1;
+  let viewMin = 800;
+  let screenCheckedAt = -Infinity;
 
   const slider = (key: keyof typeof SLIDERS) => (settings.current.sliders[key] ?? SLIDERS[key]) / 100;
 
@@ -237,12 +248,21 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
     filament.emitted += 1;
   }
 
+  function measureScreen(time: number) {
+    if (time - screenCheckedAt < SCREEN_CHECK_MS) return;
+    screenCheckedAt = time;
+    const rect = root.getBoundingClientRect();
+    screenScale = rect.width > 0 && root.clientWidth > 0 ? rect.width / root.clientWidth : 1;
+    viewMin = Math.min(window.innerWidth, window.innerHeight);
+  }
+
   function step(seconds: number) {
-    const speed = (60 + slider("windSpeed") * 260) * (fontSize / 100) * Math.min(1, Math.max(0, settings.current.progress));
+    const pace = viewMin / screenScale;
+    const speed = (60 + slider("windSpeed") * 260) * WIND_PER_VMIN * pace * Math.min(1, Math.max(0, settings.current.progress));
     const gust = slider("turbulence") * 1.5;
     const scale = 100 / fontSize;
     const span = fontSize * 0.75;
-    const post = fontSize * 0.36;
+    const post = Math.max(POINTER_MIN_PX, viewMin * POINTER_VMIN) / screenScale;
     const move = speed * seconds;
     clock += seconds;
     pointer.strength += ((pointer.inside ? 1 : 0) - pointer.strength) * (1 - Math.exp(-seconds * 9));
@@ -346,6 +366,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
     const seconds = Math.min(0.034, Math.max(0, (time - lastTime) / 1000));
     lastTime = time;
     if (builtFor.split("|")[2] !== String(slider("smokeLines"))) build();
+    measureScreen(time);
     if (!reducedMotion.matches) step(seconds);
     draw(time);
     if (visible && !reducedMotion.matches) frame = requestAnimationFrame(tick);
@@ -368,8 +389,13 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
     pointer = { ...pointer, inside: false };
   }
 
+  function onPointerUp(event: PointerEvent) {
+    if (event.pointerType !== "mouse") onPointerLeave();
+  }
+
   const resizeObserver = new ResizeObserver(() => {
     window.clearTimeout(settle);
+    screenCheckedAt = -Infinity;
     settle = window.setTimeout(() => {
       build();
       wake();
@@ -384,7 +410,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
   root.addEventListener("pointermove", onPointerMove);
   root.addEventListener("pointerdown", onPointerMove);
   root.addEventListener("pointerleave", onPointerLeave);
-  root.addEventListener("pointerup", onPointerLeave);
+  root.addEventListener("pointerup", onPointerUp);
   root.addEventListener("pointercancel", onPointerLeave);
   reducedMotion.addEventListener("change", wake);
 
@@ -396,7 +422,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
     root.removeEventListener("pointermove", onPointerMove);
     root.removeEventListener("pointerdown", onPointerMove);
     root.removeEventListener("pointerleave", onPointerLeave);
-    root.removeEventListener("pointerup", onPointerLeave);
+    root.removeEventListener("pointerup", onPointerUp);
     root.removeEventListener("pointercancel", onPointerLeave);
     reducedMotion.removeEventListener("change", wake);
   };

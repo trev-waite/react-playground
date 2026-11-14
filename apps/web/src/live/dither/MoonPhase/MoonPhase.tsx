@@ -121,6 +121,8 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
   let centerY = 0;
   let normals = new Float32Array(0);
   let surface = new Float32Array(0);
+  /** The sphere's shading depends only on its radius in cells, which holds while a card grows. */
+  let sphereRadius = -1;
   let stars: { x: number; y: number; period: number; phase: number }[] = [];
   let layoutKey = "";
   let paintedKey = "";
@@ -154,19 +156,22 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
     root.style.setProperty("--moon-label-top", `${(centerY + radius) * cell + 20}px`);
     image = ctx.createImageData(columns, rows);
 
-    const span = radius * 2 + 1;
-    normals = new Float32Array(span * span * 3);
-    surface = new Float32Array(span * span).fill(-1);
-    for (let j = 0; j < span; j++) {
-      for (let i = 0; i < span; i++) {
-        const x = (i - radius) / radius;
-        const y = (radius - j) / radius;
-        const rim = x * x + y * y;
-        if (rim > 1) continue;
-        const z = Math.sqrt(1 - rim);
-        const at = j * span + i;
-        normals.set([x, y, z], at * 3);
-        surface[at] = albedo(x, y, z);
+    if (radius !== sphereRadius) {
+      sphereRadius = radius;
+      const span = radius * 2 + 1;
+      normals = new Float32Array(span * span * 3);
+      surface = new Float32Array(span * span).fill(-1);
+      for (let j = 0; j < span; j++) {
+        for (let i = 0; i < span; i++) {
+          const x = (i - radius) / radius;
+          const y = (radius - j) / radius;
+          const rim = x * x + y * y;
+          if (rim > 1) continue;
+          const z = Math.sqrt(1 - rim);
+          const at = j * span + i;
+          normals.set([x, y, z], at * 3);
+          surface[at] = albedo(x, y, z);
+        }
       }
     }
 

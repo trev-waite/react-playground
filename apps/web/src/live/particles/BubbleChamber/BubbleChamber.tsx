@@ -8,6 +8,12 @@ const ALPHA_LEVELS = 6;
 const FADE_SECONDS = 2;
 const GROW_SECONDS = 0.6;
 const INK_CHECK_MS = 500;
+/**
+ * Tracks travel in screen pixels per viewport, like CSS `vmin`, so a tile and
+ * its page play at the same speed. At a desktop tile this matches `unit`.
+ */
+const TRAVEL_VMIN = 1340;
+const SCREEN_CHECK_MS = 250;
 
 /** A small seeded generator, so a still picture of the chamber is the same every time. */
 export function mulberry32(seed: number): () => number {
@@ -83,6 +89,10 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
   let visible = true;
   let frame = 0;
   let lastTime = 0;
+  let screenScale = 1;
+  let viewMin = 800;
+  let screenCheckedAt = -Infinity;
+  let developed = false;
 
   const slider = (key: keyof typeof SLIDERS) => (settings.current.sliders[key] ?? SLIDERS[key]) / 100;
   const between = (low: number, high: number) => low + (high - low) * random();
@@ -141,7 +151,7 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
     clock += seconds;
     const next: Track[] = [];
     for (const track of tracks) {
-      const reach = (track.beam ? 2600 : 1100) * unit * seconds;
+      const reach = (track.beam ? 2600 : 1100) * (viewMin / screenScale / TRAVEL_VMIN) * seconds;
       let alive = true;
       for (let moved = 0; moved < reach && alive; moved += STEP) {
         advanceTrack(track, STEP, field);
@@ -228,6 +238,7 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
 
   /** With motion reduced, one finished photograph: the same event every time, fully developed. */
   function still() {
+    developed = true;
     random = mulberry32(7);
     tracks = [];
     head = 0;
@@ -241,15 +252,42 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
     clock += GROW_SECONDS;
   }
 
+  function measureScreen(time: number) {
+    if (time - screenCheckedAt < SCREEN_CHECK_MS) return;
+    screenCheckedAt = time;
+    const rect = canvas.getBoundingClientRect();
+    screenScale = rect.width > 0 && canvas.clientWidth > 0 ? rect.width / canvas.clientWidth : 1;
+    viewMin = Math.min(window.innerWidth, window.innerHeight);
+  }
+
+  /** Keeps what is already in the chamber in place when the canvas changes size. */
+  function rescale(sx: number, sy: number) {
+    for (const track of tracks) {
+      track.x *= sx;
+      track.y *= sy;
+      if (track.vertexAt !== undefined) track.vertexAt *= sx;
+    }
+    for (let i = 0; i < MAX_BUBBLES; i++) {
+      bubbleX[i] = bubbleX[i]! * sx;
+      bubbleY[i] = bubbleY[i]! * sy;
+    }
+  }
+
   function resize() {
-    width = canvas.clientWidth;
-    height = canvas.clientHeight;
+    const nextWidth = canvas.clientWidth;
+    const nextHeight = canvas.clientHeight;
+    if (width > 1 && height > 1 && (nextWidth !== width || nextHeight !== height)) rescale(nextWidth / width, nextHeight / height);
+    width = nextWidth;
+    height = nextHeight;
+    screenCheckedAt = -Infinity;
+    measureScreen(performance.now());
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.max(1, Math.round(width * dpr));
     canvas.height = Math.max(1, Math.round(height * dpr));
     unit = Math.max(0.6, Math.min(width, height) / 420);
-    if (reducedMotion.matches) still();
-    else if (clock === 0 && width > 1 && settings.current.progress >= 0.5) {
+    if (reducedMotion.matches) {
+      if (!developed && width > 1) still();
+    } else if (clock === 0 && width > 1 && settings.current.progress >= 0.5) {
       spill();
       for (let step = 0; step < 40; step++) advance(0.034);
     }
@@ -259,6 +297,7 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
     frame = 0;
     const seconds = Math.min(0.034, Math.max(0, (time - lastTime) / 1000));
     lastTime = time;
+    measureScreen(time);
     if (!reducedMotion.matches) {
       if (settings.current.progress >= 0.5 && clock >= nextSpillAt) spill();
       advance(seconds);
@@ -291,6 +330,7 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
     wake();
   });
   const onMotionChange = () => {
+    developed = false;
     resize();
     wake();
   };

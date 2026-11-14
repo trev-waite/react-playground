@@ -15,7 +15,9 @@ export type BuildCard = CardFace & { members: { slug: string }[] };
  * build to it.
  */
 export async function readLiveCards(liveDir: string): Promise<BuildCard[]> {
-  const files = (await readdir(liveDir, { recursive: true })).map(file => path.join(liveDir, file).replace(/\\/g, "/"));
+  const files = (await readdir(liveDir, { recursive: true }))
+    .filter(file => !file.split(/[\\/]/).some(part => part.startsWith(".")))
+    .map(file => path.join(liveDir, file).replace(/\\/g, "/"));
   const metas: Record<string, PreviewMeta | undefined> = {};
   const families: Record<string, FamilyMeta> = {};
   for (const file of files) {

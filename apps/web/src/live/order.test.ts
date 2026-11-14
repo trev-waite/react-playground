@@ -4,7 +4,7 @@ import { readLiveCards } from "../../vite/liveCards";
 
 const VIEWPORT_WIDTHS = [402, 800, 1280];
 
-/** Every empty cell above the grid's last row, for the deck laid out at one viewport width. */
+/** Every empty cell a later card could have filled: any above the last row, and any in it with a card to its right. */
 async function holes(viewportWidth: number): Promise<{ columns: number; holes: string[] }> {
   const cards = await readLiveCards(import.meta.dir);
   const gutter = gridGutter(viewportWidth);
@@ -27,9 +27,9 @@ async function holes(viewportWidth: number): Promise<{ columns: number; holes: s
     }
   });
 
-  const found = grid.slice(0, -1).flatMap((row, index) =>
+  const found = grid.flatMap((row, index) =>
     Array.from({ length: columns }, (_, column) => column)
-      .filter(column => !row[column])
+      .filter(column => !row[column] && (index < grid.length - 1 || row.slice(column + 1).some(Boolean)))
       .map(column => `row ${index + 1}, column ${column + 1} is empty (row holds ${[...new Set(row.filter(Boolean))].join(", ")})`),
   );
   return { columns, holes: found };

@@ -33,6 +33,9 @@ describe("buildComponentModule / buildPreviewModule", () => {
         `import styles from '@/live/text/ParticleText/ParticleText.module.css';`,
         `import { Switch } from "@/live/controls/Switch/Switch";`,
         `import { Other } from "@/live/text/ParticleTextTwo/Other";`,
+        `import "@/live/text/ParticleText/fonts.css";`,
+        `const lazy = () => import("@/live/text/ParticleText/particleSim");`,
+        `const note = "@/live/text/ParticleText/ is this card's folder";`,
         `export function Example() {\n  return <div />;\n}`,
       ].join("\n"),
       "text/ParticleText",
@@ -41,6 +44,9 @@ describe("buildComponentModule / buildPreviewModule", () => {
     expect(component).toContain(`from './ParticleText.module.css';`);
     expect(component).toContain(`from "@/live/controls/Switch/Switch";`);
     expect(component).toContain(`from "@/live/text/ParticleTextTwo/Other";`);
+    expect(component).toContain(`import "./fonts.css";`);
+    expect(component).toContain(`import("./particleSim")`);
+    expect(component).toContain(`"@/live/text/ParticleText/ is this card's folder"`);
   });
 
   test("buildSlug joins folder and name", () => {

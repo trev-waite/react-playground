@@ -231,6 +231,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     schedule();
   });
   intersectionObserver.observe(canvas);
+  reducedMotion.addEventListener("change", schedule);
 
   on = settings.current.progress >= 0.5;
   if (on) pigment = from = goal = Float32Array.from(pages[0]!);
@@ -244,6 +245,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
       cancelAnimationFrame(frame);
       window.clearTimeout(timer);
       intersectionObserver.disconnect();
+      reducedMotion.removeEventListener("change", schedule);
     },
   };
 }

@@ -16,7 +16,7 @@ export function buildComponentModule(
     throw new Error("Portable source must export exactly one Example function");
   }
   body = body.replace(placeholder, `export function ${componentName}`);
-  body = body.replaceAll(new RegExp(`(["'])@/live/${RegExp.escape(slug)}/`, "g"), "$1./");
+  body = body.replaceAll(new RegExp(`((?:from|import)\\s*\\(?\\s*["'])@/live/${RegExp.escape(slug)}/`, "g"), "$1./");
 
   if (!body.endsWith("\n")) body += "\n";
   return body;
