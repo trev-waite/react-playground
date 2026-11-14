@@ -42,6 +42,16 @@ export function clampValue(value: number): number {
  * a fill channel starting at `left` that is `width` wide. The fill runs from
  * MIN_FILL wide at 0 to the whole channel at 1.
  */
+/**
+ * A viewport x as layout px from the left of an element drawn `renderedWidth`
+ * wide on screen and `layoutWidth` wide in layout, so a scaled-down ancestor
+ * does not shift where the pointer lands.
+ */
+export function layoutX(clientX: number, renderedLeft: number, renderedWidth: number, layoutWidth: number): number {
+  const scale = layoutWidth > 0 && renderedWidth > 0 ? renderedWidth / layoutWidth : 1;
+  return (clientX - renderedLeft) / scale;
+}
+
 export function fractionAt(x: number, left: number, width: number): number {
   const travel = width - MIN_FILL;
   if (travel <= 0) return 0;

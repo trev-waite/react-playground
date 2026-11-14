@@ -12,6 +12,7 @@ import {
   fills,
   fractionAt,
   keyValue,
+  layoutX,
   pillShape,
   shapedX,
   stepSpring,
@@ -206,9 +207,10 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
     const body = bodyRef.current;
     const channel = channelRef.current;
     if (!root || !body || !channel) return latest.current / MAX_VALUE;
-    const bodyLeft = root.getBoundingClientRect().left + body.offsetLeft;
-    const x = bodyLeft + (pill.current?.rest(clientX - bodyLeft) ?? clientX - bodyLeft);
-    return fractionAt(x, bodyLeft + body.clientLeft + channel.offsetLeft, channel.offsetWidth);
+    const rendered = root.getBoundingClientRect();
+    const local = layoutX(clientX, rendered.left, rendered.width, root.offsetWidth) - body.offsetLeft;
+    const x = pill.current?.rest(local) ?? local;
+    return fractionAt(x, body.clientLeft + channel.offsetLeft, channel.offsetWidth);
   }
 
   function dragTo(clientX: number) {
@@ -238,8 +240,9 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
     const onTouchMove = (event: TouchEvent) => {
       const current = press.current;
       const touch = event.touches[0];
-      if (!current || !touch || event.touches.length > 1) return;
+      if (!current || !touch) return;
       if (!current.sliding) {
+        if (event.touches.length > 1) return;
         const intent = touchIntent(touch.clientX - current.x, touch.clientY - current.y);
         if (!intent) return;
         if (intent === "scroll") {

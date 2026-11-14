@@ -13,6 +13,7 @@ import {
   stretchFor,
   touchIntent,
   fractionAt,
+  layoutX,
   fillOffset,
   MIN_FILL,
   HANDLE_INSET,
@@ -41,6 +42,15 @@ describe("Stretch Slider value", () => {
     expect(fractionAt(-40, 10, width)).toBe(0);
     expect(fractionAt(900, 10, width)).toBe(1);
     expect(fractionAt(50, 10, MIN_FILL)).toBe(0);
+  });
+
+  test("reads the pointer in layout px when the deck draws the slider scaled down", () => {
+    const width = 360;
+    const scale = 0.75;
+    const end = 10 + width + fillOffset(1, width) - HANDLE_INSET;
+    const onScreen = 100 + end * scale;
+    expect(fractionAt(layoutX(onScreen, 100, width * scale, width), 10, width)).toBeCloseTo(1);
+    expect(layoutX(140, 100, 0, 0)).toBe(40);
   });
 
   test("the fill never shrinks past room for the number and the handle", () => {
