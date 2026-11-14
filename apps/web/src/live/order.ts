@@ -6,6 +6,10 @@
  */
 export const cardOrder: readonly string[] = [
   "controls",
+  "loaders/RelayDots",
+  "buttons/ProfileButton",
+  "text/GooeyText",
+  "backgrounds/Topography",
   "shaders/LightDispersion",
   "shells/ConfigurableShell",
   "tools/SpacingTidy",
@@ -15,4 +19,9 @@ export const cardOrder: readonly string[] = [
   "text/FlipDots",
   "particles/BubbleChamber",
   "dither/EPaper",
+  "navigation/MenuPill",
+  "navigation/ProjectRail",
+  "svgs/BlobPet",
+  "text/ParticleText",
+  "inputs/StretchSlider",
 ];

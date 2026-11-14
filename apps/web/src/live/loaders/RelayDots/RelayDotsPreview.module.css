@@ -1,0 +1,6 @@
+.stage {
+  display: grid;
+  place-items: center;
+  color: #171c25;
+  font-size: 2rem;
+}
