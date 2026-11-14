@@ -1,0 +1,8 @@
+.stage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 22.5rem;
+  padding-inline: 8px;
+  box-sizing: border-box;
+}

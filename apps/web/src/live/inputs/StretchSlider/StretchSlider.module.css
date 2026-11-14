@@ -1,0 +1,90 @@
+.slider {
+  --ink: #0b0b0c;
+  --track: #ffffff;
+  --fill: #949494;
+  --full: #2fbf5b;
+  --gap: 4px;
+
+  position: relative;
+  width: min(100%, 22.5rem);
+  height: 60px;
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: grab;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.slider[data-dragging] {
+  cursor: grabbing;
+}
+
+.slider:focus-visible {
+  outline: 2px solid #456bff;
+  outline-offset: 4px;
+}
+
+.body {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: var(--gap);
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--track);
+}
+
+.channel {
+  height: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+/* Full width, slid left by script to show how full it is. */
+.fill {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--fill);
+  transition: background-color 200ms ease-out;
+}
+
+.slider[data-full] .fill {
+  background: var(--full);
+}
+
+.handle {
+  position: absolute;
+  top: 50%;
+  right: 13px;
+  width: 2.5px;
+  height: 44%;
+  border-radius: 2px;
+  background: var(--ink);
+  translate: 0 -50%;
+}
+
+.number {
+  position: absolute;
+  top: 50%;
+  left: 22px;
+  translate: 0 -50%;
+  font: 650 1.125rem/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  pointer-events: none;
+}
+
+.unit {
+  margin-inline-start: 1px;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+}

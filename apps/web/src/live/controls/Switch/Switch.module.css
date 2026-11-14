@@ -29,8 +29,15 @@
   --press: 4px;
 }
 
+/* The compact track is 32px tall; this keeps its touch target at 44px without changing how it looks. */
+.switch[data-size="compact"]::before {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}
+
 .switch[aria-checked="true"] {
-  background: #34c759;
+  background: var(--switch-on, #34c759);
 }
 
 .thumb {

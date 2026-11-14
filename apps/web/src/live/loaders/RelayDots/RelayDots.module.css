@@ -1,0 +1,139 @@
+.dots {
+  --dot: 0.5em;
+  --pitch: 0.9em;
+  --lap: calc(var(--step) * var(--count));
+  --slide-ease: cubic-bezier(0.65, 0, 0.35, 1);
+
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: calc(var(--pitch) * (var(--count) - 1) + var(--dot));
+  height: calc(var(--dot) + var(--pitch) * 1.15);
+  color: inherit;
+  vertical-align: middle;
+}
+
+.lane {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: var(--dot);
+  height: var(--dot);
+  animation: relay-slide var(--lap) linear var(--delay) infinite;
+}
+
+.dot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: currentColor;
+  transform-origin: 50% 100%;
+  animation: relay-hop var(--lap) linear var(--delay) infinite;
+}
+
+/* Each quarter of a lap is one handoff: travel for four fifths of it, then rest. */
+@keyframes relay-slide {
+  0% {
+    translate: 0 0;
+    animation-timing-function: var(--slide-ease);
+  }
+
+  20%,
+  25% {
+    translate: calc(var(--pitch) * 3) 0;
+    animation-timing-function: var(--slide-ease);
+  }
+
+  45%,
+  50% {
+    translate: calc(var(--pitch) * 2) 0;
+    animation-timing-function: var(--slide-ease);
+  }
+
+  70%,
+  75% {
+    translate: var(--pitch) 0;
+    animation-timing-function: var(--slide-ease);
+  }
+
+  95%,
+  100% {
+    translate: 0 0;
+  }
+}
+
+/* The lead dot crouches, stretches over the others, and lands with a squash; then it dims and waits its turn. */
+@keyframes relay-hop {
+  0% {
+    translate: 0 0;
+    scale: 1 1;
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+
+  3% {
+    translate: 0 0;
+    scale: 1.22 0.78;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+
+  11% {
+    translate: 0 calc(var(--pitch) * -1.1);
+    scale: 0.86 1.14;
+    animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.4);
+  }
+
+  19% {
+    translate: 0 0;
+    scale: 1.28 0.74;
+    animation-timing-function: ease-out;
+  }
+
+  23% {
+    scale: 0.94 1.06;
+    animation-timing-function: ease-in-out;
+  }
+
+  27% {
+    translate: 0 0;
+    scale: 1 1;
+    opacity: 1;
+    animation-timing-function: ease-in-out;
+  }
+
+  40%,
+  86% {
+    opacity: 0.3;
+    animation-timing-function: ease-in-out;
+  }
+
+  100% {
+    translate: 0 0;
+    scale: 1 1;
+    opacity: 1;
+  }
+}
+
+@keyframes relay-breathe {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* No travel: the dots hold their slots and brighten in turn, so it still reads as working. */
+@media (prefers-reduced-motion: reduce) {
+  .lane {
+    animation: none;
+    translate: calc(var(--pitch) * var(--slot)) 0;
+  }
+
+  .dot {
+    animation: relay-breathe var(--lap) ease-in-out var(--delay) infinite;
+  }
+}

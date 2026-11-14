@@ -1,0 +1,235 @@
+.stage {
+  --ink: #f4f6fb;
+  --muted: #8f9bbf;
+  --accent: #3d6bff;
+  --press-ease: cubic-bezier(0.23, 1, 0.32, 1);
+
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 20px;
+  isolation: isolate;
+  contain: layout paint;
+}
+
+.avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--avatar);
+  height: var(--avatar);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--room);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms var(--press-ease);
+}
+
+.avatar:active {
+  transform: scale(0.95);
+}
+
+.avatar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.avatarFace {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.06),
+    0 1px 2px rgb(0 0 0 / 0.12),
+    0 8px 24px rgb(16 24 48 / 0.16);
+}
+
+/* Shows the "Show when I'm online" setting from the room: the one spot of color. */
+.presence {
+  position: absolute;
+  right: 4%;
+  bottom: 4%;
+  width: 18%;
+  height: 18%;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring, #ffffff);
+  opacity: 0;
+  scale: 0.4;
+  transition:
+    opacity 180ms ease-out,
+    scale 320ms var(--press-ease);
+}
+
+.presence[data-online] {
+  opacity: 1;
+  scale: 1;
+}
+
+/* The window into the room: a circle on the avatar, sized by script to reach every corner. Its flat
+   wall color fills the window past the room's edge while the room is small, at no raster cost. */
+.portal {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--room);
+  transform-origin: 50% 50%;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.stage[data-flight] .portal {
+  visibility: visible;
+}
+
+.stage[data-open] .portal {
+  pointer-events: auto;
+}
+
+.room {
+  position: absolute;
+  overflow: hidden;
+  background: var(--room);
+  color: var(--ink);
+  transform-origin: 0 0;
+}
+
+.portrait {
+  position: absolute;
+}
+
+.portraitFace {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+  font: 400 0.9375rem/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.back {
+  position: absolute;
+  top: var(--arrow-top);
+  left: var(--arrow-x);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    transform 160ms var(--press-ease);
+}
+
+.back:active {
+  transform: scale(0.92);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.details {
+  position: absolute;
+  top: var(--details-top);
+  left: var(--details-left);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: var(--details-width);
+}
+
+.identity {
+  text-align: center;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: 16px;
+  width: 100%;
+}
+
+.content:is([data-layout="side"], [data-layout="strip"]) .details {
+  align-items: flex-start;
+}
+
+.content:is([data-layout="side"], [data-layout="strip"]) .identity {
+  text-align: start;
+}
+
+.content[data-layout="strip"] .details {
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+.content[data-layout="strip"] .settings {
+  gap: 8px;
+  width: auto;
+}
+
+.content[data-layout="strip"] .identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  margin: 0;
+  font: 650 1.25rem/1.2 system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -0.015em;
+}
+
+.handle {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.setting {
+  --switch-on: var(--accent);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 17rem;
+  min-height: 44px;
+  color: var(--ink);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .avatar:hover {
+    transform: scale(1.04);
+  }
+
+  .back:hover {
+    color: var(--accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar,
+  .presence,
+  .back {
+    transition: none;
+  }
+}
