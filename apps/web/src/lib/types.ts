@@ -51,6 +51,9 @@ export type PreviewModule = {
   meta?: PreviewMeta;
 };
 
+/** One file of a Live component's source, as a card shows it. */
+export type SourceFile = { name: string; code: string };
+
 /** A Live component as its source describes it, before anything loads. The build writes each page's link preview from these. */
 export type CatalogEntry = {
   slug: string;

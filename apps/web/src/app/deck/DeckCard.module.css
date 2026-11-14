@@ -10,6 +10,9 @@
   position: absolute;
   overflow: hidden;
   contain: layout paint;
+  /* Mounted cards off screen keep their state but skip style, layout, paint, and layering
+     until they near the screen, so a swipe draws only the pages in view. Inline sizes keep their boxes. */
+  content-visibility: auto;
   background: var(--card-background);
   color: var(--card-ink);
   box-shadow: var(--card-shadow);
@@ -198,20 +201,46 @@
   transition: transform 140ms var(--ease-out), opacity 160ms ease;
 }
 
-/* Phones give the caption the width: the footer spans the card and the button keeps only its icon. */
+/* The quieter of the two: a tint of the card's ink, beside the filled reset. */
+.code {
+  appearance: none;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  height: 44px;
+  margin: 0 0 0 auto;
+  padding: 0 var(--space-2) 0 14px;
+  border: 0;
+  border-radius: var(--shell-radius-pill);
+  background: color-mix(in srgb, var(--card-ink) 8%, transparent);
+  color: var(--card-ink);
+  font-size: var(--text-body);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: transform 140ms var(--ease-out), background-color 160ms ease;
+}
+
+/* The two buttons are one group: half the footer's gap between them. */
+.code + .reset {
+  margin-left: calc(var(--space-1) - var(--space-2));
+}
+
+/* Phones give the caption the width: the footer spans the card and the buttons keep only their icons. */
 @media (max-width: 719px) {
   .footer {
     width: calc(100% - var(--space-4));
     max-width: none;
   }
 
-  .reset {
+  .reset,
+  .code {
     justify-content: center;
     width: 44px;
     padding: 0;
   }
 
-  .resetLabel {
+  .buttonLabel {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -223,9 +252,14 @@
 }
 
 .reset:focus-visible,
+.code:focus-visible,
 .open:focus-visible {
   outline: 2px solid var(--card-ink);
   outline-offset: 2px;
+}
+
+.code:active {
+  transform: scale(0.97);
 }
 
 .reset:active {
@@ -300,6 +334,10 @@
   .reset:hover {
     opacity: 0.88;
   }
+
+  .code:hover {
+    background: color-mix(in srgb, var(--card-ink) 14%, transparent);
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -311,6 +349,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .reset,
+  .code,
   .open {
     transition: none;
   }

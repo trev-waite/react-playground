@@ -6,6 +6,7 @@ import { defineConfig, loadEnv } from "vite";
 import { assetHeadersPlugin } from "./vite/assetHeadersPlugin.ts";
 import { liveCatalogPlugin } from "./vite/liveCatalogPlugin.ts";
 import { liveRoutesPlugin } from "./vite/liveRoutesPlugin.ts";
+import { liveSourcePlugin } from "./vite/liveSourcePlugin.ts";
 import { previewMetaPlugin } from "./vite/previewMetaPlugin.ts";
 import { previewPreloadPlugin } from "./vite/previewPreloadPlugin.ts";
 import { themeTogglePlugin } from "./vite/themeTogglePlugin.ts";
@@ -21,6 +22,7 @@ export default defineConfig(({ mode }) => {
       babel({ presets: [reactCompilerPreset()] }),
       liveCatalogPlugin(),
       previewMetaPlugin(),
+      liveSourcePlugin(),
       previewPreloadPlugin(),
       themeTogglePlugin(env),
       liveRoutesPlugin(env),

@@ -7,6 +7,7 @@ import { CardDeck, type DeckView } from "./deck/CardDeck";
 import { BackPill, ChromeBar, DeckChromeSlot, DeckPager, DeckViewButton, ThemeButton } from "./deck/DeckChrome";
 import { RefreshCatalogButton } from "./RefreshCatalogButton";
 import { useTheme } from "./theme/theme";
+import { LazyCodeSheet, prepareCode } from "./code/LazyCodeSheet";
 import styles from "./LivePage.module.css";
 
 /**
@@ -45,6 +46,10 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
   if (found >= 0 && slug !== lastSlug) setLastSlug(slug);
   const activeIndex = Math.max(0, found >= 0 ? found : cardIndexForSlug(cards, lastSlug));
   const card = cards[activeIndex];
+  /** The card whose code was last asked for. The sheet stays mounted once opened, so it can animate out. */
+  const [code, setCode] = useState<{ slug: string; open: boolean } | null>(null);
+  const codeCard = code ? cards.find(each => each.slug === code.slug) : undefined;
+  const codeOpen = Boolean(code?.open && code.slug === card?.slug && view === "page" && active);
 
   /** Pages to a card: the reader stays in the page view, so the URL only follows. */
   function page(index: number) {
@@ -121,7 +126,18 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
         documentScroll={documentScroll}
         onActiveChange={page}
         onOpen={open}
+        onShowCode={index => {
+          const shown = cards[index];
+          if (shown) setCode({ slug: shown.slug, open: true });
+        }}
+        onPrepareCode={index => {
+          const shown = cards[index];
+          if (shown) prepareCode(shown);
+        }}
       />
+      {codeCard ? (
+        <LazyCodeSheet card={codeCard} open={codeOpen} onClose={() => setCode(current => current && { ...current, open: false })} />
+      ) : null}
     </div>
   );
 }

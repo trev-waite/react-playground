@@ -27,7 +27,7 @@ export const meta: CardMeta = {
 };
 ```
 
-With neither `description` nor `reset`, the card has no footer.
+**Code.** Every card's footer has a Code button that opens the component's source in a sheet, one tab per file, with a copy button. It shows `<Name>.tsx` and every file in its folder that it imports, directly or not; `preview.tsx`, tests, and staging styles stay out (`vite/liveSourcePlugin.ts`). So name the component's file after its folder, and keep demo-only code in `preview.tsx`. Each card's source is its own chunk, and the highlighter loads only when a reader reaches for the button.
 
 The site has a light and a dark theme and follows the system's. A sun/moon button beside the back pill lets a visitor override it; it is built but stays hidden until `VITE_THEME_TOGGLE=on`. `surface` is required: for each site theme, a `swatch` from the shared palette in `src/lib/cardSwatches.ts` (paper, night, orange, blue, and green on both sites) and `content`, the component's main colors on it, which must stand 3:1 apart from the swatch. Each swatch already stands apart from the site canvas and sets the footer ink. `src/live/surfaces.test.ts` checks every card. Make Live writes a starting pair to tune; the `new-component` skill walks through choosing one.
 
@@ -39,7 +39,7 @@ Keep `meta` a plain literal, with no variables, spreads, or calls. The build rea
 
 ## Export
 
-Copy the Live folder into another app. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. GPU components also need `vgpu` and `apps/web/src/gpu/`.
+Copy the Live folder into another app, or copy each file from the card's Code sheet. Keep the component and `*.module.css`; drop `preview.tsx` unless you want the demo. GPU components also need `vgpu` and `apps/web/src/gpu/`.
 
 ## Layout
 

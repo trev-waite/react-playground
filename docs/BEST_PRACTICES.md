@@ -31,8 +31,10 @@ Hold 60 fps on integrated GPUs. Measure transitions in real Chrome (frame gaps, 
 - Drive per-frame values with motion values, never React state. Re-rendering a page 60 times a second costs more than the animation.
 - Animate `transform` and `opacity`. Add `will-change: transform` only while something flies, and cap how far off-screen layers scale; a huge first raster stalls the whole frame.
 - Do not blur (`backdrop-filter`) a surface that moves over a flat color, and keep blur radii fixed while animating.
-- Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), so a transition never pays for first renders.
+- Mount heavy content before it animates (idle pre-warming, or wait for a ready signal), so a transition never pays for first renders. The deck warms every card nearest first, in idle moments and as a transition, never while the camera flies or a page glides (`deck/mountPolicy.ts`): a card that is not warm yet flies as its tile and fills in once the camera lands. A phone's touch scroll runs on the compositor, so warming carries on through it.
 - Pause offscreen loops (`IntersectionObserver`) and defer expensive resize work until the size settles.
+- Never read layout (`clientWidth`, `getBoundingClientRect`) or set `ctx.font` inside a frame loop: after the deck has moved a card that frame, either one restyles the whole page. Read sizes in a `ResizeObserver` callback, keep them, and set the font when the canvas resizes. A canvas resized in that callback is cleared before the next frame's draw, so draw it there too.
+- In flight, a preview keeps its layout until the blended size drifts 20% (`fitPreview.ts`), so a canvas that redraws on resize does so a few times per flight, not every frame.
 
 iOS Safari, where the deck scrolls and snaps the document itself (`apps/web/src/app/safari.test.ts` pins each fix):
 

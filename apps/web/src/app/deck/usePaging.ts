@@ -19,11 +19,12 @@ function scrollsWithin(target: EventTarget | null, boundary: HTMLElement, deltaY
   return false;
 }
 
+/** Keys typed into a field, or pressed in a dialog over the deck, belong to them. */
 function isTyping(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
     target.isContentEditable ||
-    target.closest("input, textarea, select, [role='slider'], [role='spinbutton']") != null
+    target.closest("input, textarea, select, dialog, [role='slider'], [role='spinbutton']") != null
   );
 }
 

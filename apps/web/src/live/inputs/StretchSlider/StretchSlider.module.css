@@ -42,12 +42,14 @@
   border-radius: 999px;
 }
 
-/* Full width, slid left by script to show how full it is. */
+/* Full width, slid left by script to show how full it is. Its leading edge, where the grab line
+   sits, is nearly flat; the channel's own round end shapes the other. A pill radius on the far
+   corners would scale these down to nothing, since corners that overrun the box all shrink together. */
 .fill {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--fill);
   transition: background-color 200ms ease-out;
 }

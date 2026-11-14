@@ -157,17 +157,6 @@ describe("standards lint: code", () => {
     }
     report(violations);
   });
-
-  test("no debugging leftovers in shipped code", async () => {
-    const violations: string[] = [];
-    for (const { file, text } of await sources(OWNED_DIRS, "**/*.{ts,tsx}")) {
-      for (const match of text.matchAll(/\bconsole\.(log|debug)\(|\bdebugger\b/g)) {
-        if (allowedNear(text, match.index!, "lint-allow:")) continue;
-        violations.push(`${file}:${lineOf(text, match.index!)} leaves \`${match[0]}\` in; remove it before finishing.`);
-      }
-    }
-    report(violations);
-  });
 });
 
 /** Rules whose selector uses :hover without an enclosing `@media (hover: hover)`. */

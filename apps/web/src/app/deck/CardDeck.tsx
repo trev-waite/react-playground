@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { LiveCard } from "../../lib/catalog";
 import { frame as frameLoop } from "../motion/frameLoop";
 import { useReducedMotion } from "../motion/hooks";
 import { SPRING } from "../motion/transitions";
 import { CardMotions, jumpCard, moveCard, type CardMotion } from "./cardMotion";
 import { DeckCard } from "./DeckCard";
+import { nearCards, nextToWarm, type DeckPlace, type GridWindow } from "./mountPolicy";
 import { useDocumentScroll } from "./useDocumentScroll";
 import { commitDistance, EDGE_PULL, PageScroll } from "./pageScroll";
 import { usePaging } from "./usePaging";
@@ -37,6 +38,9 @@ type CardDeckProps = {
   onActiveChange: (index: number) => void;
   /** A grid tile was chosen. */
   onOpen: (index: number) => void;
+  onShowCode?: (index: number) => void;
+  /** A page's code button is about to be pressed (hovered or focused): fetch what it opens. */
+  onPrepareCode?: (index: number) => void;
   /** The deck owns the page, so phones may scroll the document itself. */
   documentScroll?: boolean;
 };
@@ -47,14 +51,41 @@ const INSTANT = { duration: 0 } as const;
 const SETTLE = { duration: 0.5, ease: (progress: number) => progress * progress * (3 - 2 * progress) } as const;
 /** Fallback for browsers without requestIdleCallback. */
 const IDLE_FALLBACK_MS = 200;
+/** A scroll this recent still counts as the reader moving. */
+const QUIET_AFTER_SCROLL_MS = 200;
 
-function whenIdle(callback: () => void): () => void {
-  if ("requestIdleCallback" in window) {
-    const id = window.requestIdleCallback(callback, { timeout: 2000 });
-    return () => window.cancelIdleCallback(id);
-  }
-  const id = setTimeout(callback, IDLE_FALLBACK_MS);
-  return () => clearTimeout(id);
+/**
+ * Runs `callback` in an idle moment when nothing is moving. Mounting a
+ * preview can take several frames, so it waits out flights, glides, and
+ * scrolls rather than stalling them.
+ */
+function whenQuiet(isMoving: () => boolean, callback: () => void): () => void {
+  let cancel = () => {};
+  const wait = () => {
+    const run = () => (isMoving() ? wait() : callback());
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(run);
+      cancel = () => window.cancelIdleCallback(id);
+    } else {
+      const id = setTimeout(run, IDLE_FALLBACK_MS);
+      cancel = () => clearTimeout(id);
+    }
+  };
+  wait();
+  return () => cancel();
+}
+
+/** Mounts `card` once its code has arrived and nothing is moving, so the mount never waits on the network mid-motion. */
+function warmWhenReady(card: LiveCard, isMoving: () => boolean, mount: () => void): () => void {
+  let stopped = false;
+  let stopWaiting = () => {};
+  void Promise.allSettled(card.members.map(member => member.load())).then(() => {
+    if (!stopped) stopWaiting = whenQuiet(isMoving, mount);
+  });
+  return () => {
+    stopped = true;
+    stopWaiting();
+  };
 }
 
 /**
@@ -156,6 +187,8 @@ export function CardDeck({
   listening,
   onActiveChange,
   onOpen,
+  onShowCode,
+  onPrepareCode,
   documentScroll = false,
 }: CardDeckProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -167,12 +200,24 @@ export function CardDeck({
   const [paged, setPaged] = useState(view === "page");
   // Leaving a view hands it to the camera: the page column only returns once a flight lands.
   const [shownView, setShownView] = useState(view);
+  /** Where the reader scrolled the grid to, in quarter screens; null until they scroll it, when it centers the open card. */
+  const [gridTop, setGridTop] = useState<number | null>(null);
+  /**
+   * The camera is at rest: no flight since the view last changed has yet to
+   * land. The page column takes over before the open card stops settling, so
+   * `paged` alone would let new previews mount under a moving card.
+   */
+  const [landed, setLanded] = useState(true);
   if (shownView !== view) {
     setShownView(view);
     setPaged(false);
+    setLanded(false);
+    if (view === "grid") setGridTop(null);
   }
   const [nearIndex, setNearIndex] = useState(activeIndex);
-  /** Previews mounted ahead of time, and kept, so the grid never pays for first renders mid-flight. */
+  /** The page whose neighbors mount: it trails `nearIndex` in a background render, so a new neighbor never blocks a glide. */
+  const mountIndex = useDeferredValue(nearIndex);
+  /** Previews mounted once near, or ahead of time while idle, and kept, so a flight never pays for first renders. */
   const [warm, setWarm] = useState<ReadonlySet<string>>(() => new Set());
   const [motions] = useState(() => new CardMotions());
   const flight = useRef(0);
@@ -185,6 +230,8 @@ export function CardDeck({
     anchor: null,
   });
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** When the reader last scrolled, so idle work waits for them to stop. */
+  const lastScroll = useRef(-Infinity);
   /** Bumped by every programmatic scroll, so only the last one to rest turns snapping back on. */
   const snapRequest = useRef(0);
   const [pages] = useState(() => new PageScroll());
@@ -205,9 +252,24 @@ export function CardDeck({
   useLayoutEffect(() => {
     latest.current = { cards, grid, frame, viewport, activeIndex, transition, scrollsDocument };
   });
-  if (layout === "pages" ? false : cards.some(card => !warm.has(card.slug))) {
-    setWarm(new Set(cards.map(card => card.slug)));
-  }
+  const focusRect = grid.rects[activeIndex];
+  const gridWindow: GridWindow = {
+    rects: grid.rects,
+    top: gridTop ?? (focusRect ? centeredScrollTop(focusRect, viewport, grid.height) : 0),
+    height: viewport.height,
+  };
+  const place: DeckPlace = !landed
+    ? { layout: "flight" }
+    : layout === "pages"
+      ? { layout, index: mountIndex }
+      : layout === "grid"
+        ? { layout, grid: gridWindow }
+        : { layout: "flight" };
+  const near = nearCards(place, cards.length);
+  const nearSlugs = [...near].map(index => cards[index]!.slug);
+  if (nearSlugs.some(slug => !warm.has(slug))) setWarm(new Set([...warm, ...nearSlugs]));
+  const warmNext = nextToWarm(place, cards.length, index => warm.has(cards[index]!.slug));
+  const warmNextSlug = warmNext === null ? null : cards[warmNext]!.slug;
   const [nearFor, setNearFor] = useState({ activeIndex, layout });
   if (nearFor.activeIndex !== activeIndex || nearFor.layout !== layout) {
     setNearFor({ activeIndex, layout });
@@ -243,6 +305,7 @@ export function CardDeck({
 
   /** Marks the cards in flight: they ride the compositor, and a finger cannot scroll the page under them. */
   const setFlying = useCallback((flying: boolean) => {
+    setLanded(!flying);
     const scroller = scrollerRef.current;
     if (!scroller || scroller.hasAttribute("data-flying") === flying) return;
     scroller.toggleAttribute("data-flying", flying);
@@ -463,12 +526,21 @@ export function CardDeck({
     [pages, motions],
   );
 
+  // A phone's document scroll runs on the compositor, so a mount cannot stall it; waiting out a run
+  // of flicks would only leave each card to mount as it arrives. The deck's own glide is drawn here.
+  const isMoving = useCallback(
+    () =>
+      Boolean(scrollerRef.current?.hasAttribute("data-flying")) ||
+      pages.moving ||
+      (!scrollsDocument && performance.now() - lastScroll.current < QUIET_AFTER_SCROLL_MS),
+    [pages, scrollsDocument],
+  );
+
   useEffect(() => {
-    if (layout !== "pages") return;
-    const next = cards.find(card => !warm.has(card.slug));
-    if (!next) return;
-    return whenIdle(() => setWarm(current => new Set(current).add(next.slug)));
-  }, [cards, layout, warm]);
+    const card = latest.current.cards.find(each => each.slug === warmNextSlug);
+    if (!card) return;
+    return warmWhenReady(card, isMoving, () => startTransition(() => setWarm(current => new Set(current).add(card.slug))));
+  }, [warmNextSlug, isMoving]);
 
   const restingTop = () => latest.current.activeIndex * viewport.height;
   const pageHost = () => scrollHost(latest.current.scrollsDocument, scrollerRef.current);
@@ -492,17 +564,33 @@ export function CardDeck({
   });
 
   function onScroll() {
+    lastScroll.current = performance.now();
     const host = pageHost();
     if (!host) return;
     scrolled.current = scrollPlace(host, layout === "grid" ? latest.current.grid : undefined);
+    if (layout === "grid") {
+      const step = viewport.height / 4;
+      setGridTop(Math.round(host.scrollTop / step) * step);
+    }
     if (layout !== "pages") return;
     const index = Math.round(host.scrollTop / viewport.height);
     setNearIndex(index);
     clearTimeout(settleTimer.current);
     // Only a scroll the reader made picks the page; a glide already knows where it is going.
-    settleTimer.current = setTimeout(() => {
-      if (!pages.moving && index !== latest.current.activeIndex) onActiveChange(index);
-    }, SCROLL_SETTLE_MS);
+    const settle = (top: number) => {
+      settleTimer.current = setTimeout(() => {
+        const now = pageHost()?.scrollTop ?? top;
+        // A long frame can hold this timer past the last scroll event while momentum still
+        // carries the page; picking a page then would glide back against the reader's flick.
+        if (Math.abs(now - top) > 1) {
+          settle(now);
+          return;
+        }
+        const resting = Math.round(now / viewport.height);
+        if (!pages.moving && resting !== latest.current.activeIndex) onActiveChange(resting);
+      }, SCROLL_SETTLE_MS);
+    };
+    settle(host.scrollTop);
   }
 
   const onDocumentScroll = useEffectEvent(onScroll);
@@ -539,11 +627,14 @@ export function CardDeck({
               motion={motionFor(card, index)}
               tile={grid.rects[index]!}
               pageWidth={frame.width}
-              mounted={layout !== "pages" || warm.has(card.slug) || Math.abs(index - nearIndex) <= 1}
+              mounted={warm.has(card.slug) || near.has(index)}
               interactive={layout === "pages"}
+              current={index === activeIndex}
               // Pages never overlap. Moving the raise as the reader pages made Safari repaint two whole cards.
               raised={layout !== "pages" && index === activeIndex}
               onOpen={layout === "grid" ? () => onOpen(index) : undefined}
+              onShowCode={onShowCode ? () => onShowCode(index) : undefined}
+              onPrepareCode={onPrepareCode ? () => onPrepareCode(index) : undefined}
             />
           ))}
         </div>

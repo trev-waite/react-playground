@@ -40,6 +40,25 @@ export function flightLayout(area: Size, tile: Size, page: Size, progress: numbe
   return { width, height, scale: Math.min(area.width / width, area.height / height) };
 }
 
+/**
+ * How far a flight's blended layout may drift from the one in place before
+ * the preview lays out again. Between relayouts only its scale changes, which
+ * the compositor draws: a preview that redraws on resize (a canvas) does so a
+ * handful of times per flight, not every frame.
+ */
+export const FLIGHT_RELAYOUT_DRIFT = 1.2;
+
+/** Whether `next` has drifted far enough from `placed` to lay the preview out again. */
+export function drifted(placed: Size, next: Size): boolean {
+  const ratio = (a: number, b: number) => Math.max(a / b, b / a);
+  return Math.max(ratio(placed.width, next.width), ratio(placed.height, next.height)) >= FLIGHT_RELAYOUT_DRIFT;
+}
+
+/** The layout in place, scaled to fit `area`: what a flight draws until it drifts. */
+export function heldLayout(layout: Size, area: Size): FitLayout {
+  return { width: layout.width, height: layout.height, scale: Math.min(area.width / layout.width, area.height / layout.height) };
+}
+
 type Fit = {
   area: HTMLElement;
   content: HTMLElement;
@@ -50,6 +69,8 @@ type Fit = {
   progress: MotionValue | undefined;
   /** The layouts the preview last rested at as a tile and as a page, at one viewport width. */
   rest: { tile?: FitLayout; page?: FitLayout; viewportWidth?: number };
+  /** In flight: the blended layout last laid out, before any overflow correction. Null at rest. */
+  flight: Size | null;
 };
 
 const fits = new Map<Element, Fit>();
@@ -59,7 +80,11 @@ function place(fit: Fit) {
   const { width, height, scale } = fit.layout;
   fit.content.style.width = `${width}px`;
   fit.content.style.height = `${height}px`;
-  fit.content.style.transform = scale === 1 ? "" : `scale(${scale})`;
+  // A held layout can be a little off the area's shape; it stays centered in it.
+  const x = (fit.width - width * scale) / 2;
+  const y = (fit.height - height * scale) / 2;
+  const offset = Math.abs(x) > 0.5 || Math.abs(y) > 0.5 ? `translate(${x}px, ${y}px) ` : "";
+  fit.content.style.transform = scale === 1 && !offset ? "" : `${offset}scale(${scale})`;
 }
 
 /** Where the card is between tile (0) and page (1), or the end it has landed at. */
@@ -88,13 +113,23 @@ function layoutFor(fit: Fit, progress: Progress): FitLayout {
  */
 function refit(batch: Fit[]) {
   const progress = batch.map(progressOf);
-  batch.forEach((fit, index) => {
-    fit.layout = layoutFor(fit, progress[index]);
+  const relaid = batch.map((fit, index) => {
+    const next = layoutFor(fit, progress[index]);
+    const inFlight = typeof progress[index] === "number" && fit.rest.tile && fit.rest.page;
+    if (inFlight && fit.flight && !drifted(fit.flight, next)) {
+      fit.layout = heldLayout(fit.layout, { width: fit.width, height: fit.height });
+      place(fit);
+      return false;
+    }
+    fit.flight = inFlight ? { width: next.width, height: next.height } : null;
+    fit.layout = next;
     place(fit);
+    return true;
   });
-  const spills = batch.map(fit => {
+  const spills = batch.map((fit, index) => {
     const overflow = fit.content.firstElementChild;
-    if (!overflow) return 1;
+    // A held layout has not changed, so neither has its overflow.
+    if (!overflow || !relaid[index]) return 1;
     return Math.max(
       overflow.scrollWidth / fit.content.clientWidth,
       overflow.scrollHeight / fit.content.clientHeight,
@@ -147,7 +182,7 @@ export function refitArea(area: Element) {
 export function observeFit(area: HTMLElement, content: HTMLElement, progress?: MotionValue): () => void {
   const width = Math.max(area.clientWidth, 1);
   const height = Math.max(area.clientHeight, 1);
-  const fit: Fit = { area, content, width, height, layout: restLayout({ width, height }), progress, rest: {} };
+  const fit: Fit = { area, content, width, height, layout: restLayout({ width, height }), progress, rest: {}, flight: null };
   fits.set(area, fit);
   refit([fit]);
   sharedObserver().observe(area);

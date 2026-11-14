@@ -3,18 +3,26 @@
  * start of a word, then along it. Each letter is born inside the drop and is
  * left behind as the drop moves on: it stretches toward the drop on a strand
  * of slime that thins as they part, the strand snaps, and the letter, free,
- * turns black. The word holds, then the drop slides back, the strands reach
+ * turns black. The word settles with a wobble and sways while the drop
+ * breathes; then the drop gathers itself and slides back, the strands reach
  * out again, and it swallows the word letter by letter before gliding on.
  *
  * Distances are in font-size units (`em`), so the look holds at any size.
  */
 
-export const TYPE_STEP_MS = 170;
-export const ERASE_STEP_MS = 95;
-export const GLIDE_MS = 560;
-export const HOLD_MS = 2000;
+export const TYPE_STEP_MS = 220;
+export const ERASE_STEP_MS = 125;
+export const GLIDE_MS = 720;
+export const HOLD_MS = 2400;
 /** How long a newborn letter takes to swell to full size. */
-export const BLOOM_MS = 560;
+export const BLOOM_MS = 680;
+/** Once the drop parks, a wobble runs back through the word: each letter jiggles this long, the next a beat later. */
+export const SETTLE_MS = 900;
+export const SETTLE_STAGGER_MS = 70;
+/** While the word holds, the drop breathes: it swells and eases back over this period. */
+export const BREATH_MS = 1700;
+/** Before it slides back to swallow the word, the drop gathers itself for this long. */
+export const WINDUP_MS = 320;
 
 /** The drop's radius, and how far past the word's last letter it parks. */
 export const DROP_RADIUS = 0.17;
@@ -24,7 +32,7 @@ export const SNAP_DISTANCE = 0.4;
 /** The drop rides this far (em) past a newborn letter's center, so the strand has room to show. */
 export const LEAD = 0.62;
 /** How long a newborn letter clings to the drop, riding along with it, before it eases back into its place. */
-export const CLING_MS = 300;
+export const CLING_MS = 360;
 /** A strand's width where it leaves the drop, as a fraction of the drop's diameter. */
 const STRAND_WIDTH = 0.62;
 /** Where the drop sits at the start of a word, left of its first letter. */
@@ -116,8 +124,42 @@ function passing(from: number, to: number, x: number): number {
 
 /** `ink` runs from 0 (drop blue) to 1 (black). `strand` is a width in em, 0 when snapped. */
 export type LetterPose = { scale: number; stretch: number; dx: number; dy: number; ink: number; strand: number };
-/** The drop's stretch comes from its speed, which the caller knows across frames. `still` marks the hold, when nothing moves. */
-export type Pose = { letters: LetterPose[]; dropX: number; still: boolean };
+/**
+ * The drop's stretch from its speed comes from the caller, which knows it
+ * across frames. `dropScale` is its breath (1 at rest), and `dropSquash` a
+ * stretch it adds on its own: negative squeezes it narrow and tall.
+ */
+export type Pose = { letters: LetterPose[]; dropX: number; dropScale: number; dropSquash: number };
+
+/** A wobble `t` (0 to 1) of the way through: a few swings that die away, 0 at both ends. */
+function jiggle(t: number): number {
+  if (t <= 0 || t >= 1) return 0;
+  return Math.exp(-4.2 * t) * Math.sin(t * Math.PI * 2 * 2.4) * (1 - t);
+}
+
+/** The drop's breath `ms` into the hold: it eases in, so the drop does not start swelling the instant it parks. */
+export function breath(ms: number): number {
+  const fade = smoothstep(0, 500, ms);
+  return 1 + 0.045 * fade * Math.sin((ms / BREATH_MS) * Math.PI * 2);
+}
+
+/**
+ * Letter `index`'s soft sway `ms` into the hold, -1 to 1: a slow wave through
+ * the word in time with the drop's breath. It rises once the settling wobble
+ * has died and falls away before the drop winds up, so the erase starts at rest.
+ */
+export function sway(ms: number, index: number): number {
+  const rise = smoothstep(SETTLE_MS * 0.6, SETTLE_MS * 1.4, ms);
+  const fall = 1 - smoothstep(HOLD_MS - WINDUP_MS - 400, HOLD_MS - WINDUP_MS, ms);
+  return rise * fall * Math.sin((ms / BREATH_MS) * Math.PI * 2 - index * 0.65);
+}
+
+/** The drop gathering itself `ms` into the hold: it squeezes narrow just before the run back, then lets go into it. */
+export function windup(ms: number): number {
+  const u = (ms - (HOLD_MS - WINDUP_MS)) / WINDUP_MS;
+  if (u <= 0 || u >= 1) return 0;
+  return -0.2 * Math.sin(u * Math.PI);
+}
 
 /** How far (em) the drop travels past a snap while the freed letter springs back to shape: about 100ms at typing pace. */
 const RECOIL = 0.14;
@@ -168,7 +210,7 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
 
   if (ms < timing.glide) {
     const from = ends(previous, fontSize)[0];
-    return { letters: hidden, dropX: from + (start - from) * ease(ms / timing.glide), still: false };
+    return { letters: hidden, dropX: from + (start - from) * ease(ms / timing.glide), dropScale: 1, dropSquash: 0 };
   }
 
   let t = ms - timing.glide;
@@ -192,13 +234,24 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
         strand: pull.strand,
       };
     });
-    return { letters, dropX, still: false };
+    return { letters, dropX, dropScale: 1, dropSquash: 0 };
   }
 
   t -= timing.type;
   if (t < timing.hold) {
-    const settled = word.letters.map(() => ({ scale: 1, stretch: 1, dx: 0, dy: 0, ink: 1, strand: 0 }));
-    return { letters: settled, dropX: park, still: true };
+    const settled = word.letters.map((_, index) => {
+      const wobble = jiggle((t - (n - 1 - index) * SETTLE_STAGGER_MS) / SETTLE_MS);
+      const wave = sway(t, index);
+      return {
+        scale: 1,
+        stretch: 1 + 0.15 * wobble + 0.02 * wave,
+        dx: 0,
+        dy: (-0.05 * wobble - 0.012 * wave) * fontSize,
+        ink: 1,
+        strand: 0,
+      };
+    });
+    return { letters: settled, dropX: park, dropScale: breath(t), dropSquash: windup(t) };
   }
 
   t -= timing.hold;
@@ -217,5 +270,5 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
       strand: pull.strand,
     };
   });
-  return { letters, dropX, still: false };
+  return { letters, dropX, dropScale: 1, dropSquash: 0 };
 }

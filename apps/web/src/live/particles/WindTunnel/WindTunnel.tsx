@@ -357,7 +357,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
     ctx.lineJoin = "round";
     ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.font = font;
+    // `build` set the font, and it holds until the canvas resizes; setting it again each frame would restyle the page.
     ctx.fillText(WORD, word.left, word.baseline);
   }
 

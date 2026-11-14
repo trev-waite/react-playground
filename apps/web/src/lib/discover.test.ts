@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { Glob } from "bun";
-import path from "node:path";
 import {
   cardFromPlan,
   cardIndexForSlug,
@@ -13,7 +11,6 @@ import {
 import { CARD_SWATCHES } from "./cardSwatches";
 import type { CardSurfaces, PlaygroundEntry, PreviewMeta, PreviewModule } from "./types";
 
-const liveRoot = path.join(import.meta.dir, "../live");
 const Preview = () => null;
 const loaded: Promise<PreviewModule> = Promise.resolve({ default: Preview });
 const moduleFor = () => loaded;
@@ -60,17 +57,6 @@ describe("live catalog", () => {
         "../live/controls/Switch/family.ts": { title: "Ignored", surface: SURFACE },
       }),
     ).toEqual({ controls: { title: "Controls", surface: SURFACE } });
-  });
-
-  test("keeps a Light Dispersion preview on disk for the Vite glob", async () => {
-    const slugs: string[] = [];
-    for await (const file of new Glob("**/preview.tsx").scan({
-      cwd: liveRoot,
-      onlyFiles: true,
-    })) {
-      slugs.push(file.replace(/\/preview\.tsx$/, "").replace(/\\/g, "/"));
-    }
-    expect(slugs).toContain("shaders/LightDispersion");
   });
 });
 
@@ -135,7 +121,18 @@ describe("cardFromPlan", () => {
       surface: { light: CARD_SWATCHES.light.blue, dark: CARD_SWATCHES.dark.green },
       reset: "replay",
     });
-    expect(card.members[0]?.module).toBe(loaded);
+    expect(card.members[0]?.load()).toBe(loaded);
+  });
+
+  test("starts no download until a member is loaded", () => {
+    let calls = 0;
+    const card = cardFromPlan({ slug: "buttons/Plain", entries: [entry("buttons/Plain")] }, () => {
+      calls++;
+      return loaded;
+    });
+    expect(calls).toBe(0);
+    void card.members[0]?.load();
+    expect(calls).toBe(1);
   });
 
   test("lets the family meta present a grouped card", () => {

@@ -124,6 +124,9 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
   let timer = 0;
   let pitch = 1;
   let dpr = 1;
+  /** The canvas's CSS size, read on resize; reading it per frame would force a layout. */
+  let cssWidth = 1;
+  let cssHeight = 1;
 
   const slider = (name: keyof typeof SLIDERS) => (settings.current.sliders[name] ?? SLIDERS[name]) / 100;
   const flipMs = () => (reducedMotion.matches ? 0 : 420 - slider("flipSpeed") * 320);
@@ -145,13 +148,15 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    const height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    cssWidth = canvas.clientWidth;
+    cssHeight = canvas.clientHeight;
+    const width = Math.max(1, Math.round(cssWidth * dpr));
+    const height = Math.max(1, Math.round(cssHeight * dpr));
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
       canvas.height = height;
     }
-    pitch = canvas.clientWidth / COLUMNS;
+    pitch = cssWidth / COLUMNS;
   }
 
   function draw(now: number): boolean {
@@ -159,7 +164,7 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
     const radius = pitch * 0.42;
     let busy = false;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
     for (const lit of [0, 1]) {
       ctx.beginPath();
       for (let i = 0; i < count; i++) {
@@ -237,6 +242,8 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
 
   const resizeObserver = new ResizeObserver(() => {
     resize();
+    // Resizing clears the canvas, and this frame paints before the next animation frame: draw now, or the board blinks.
+    draw(performance.now());
     wake();
   });
   const intersectionObserver = new IntersectionObserver(([entry]) => {
