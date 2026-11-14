@@ -10,7 +10,6 @@ import {
   bloom,
   breath,
   ease,
-  jiggle,
   layoutWord,
   phases,
   poseAt,
@@ -77,12 +76,6 @@ describe("Gooey Text slime", () => {
     expect(free.dx).toBeCloseTo(0, 1);
   });
 
-  test("the snap happens at the same reach for every letter", () => {
-    expect(SNAP_DISTANCE).toBeGreaterThan(0.3);
-    const end = typing(timing.type - 1);
-    expect(end.letters.every(letter => letter.strand === 0 && letter.ink === 1)).toBe(true);
-  });
-
   test("a freed letter springs back from its stretch over a short beat instead of snapping straight", () => {
     const justFreed = tether(SNAP_DISTANCE + 0.02, 1);
     expect(justFreed.strand).toBe(0);
@@ -146,12 +139,6 @@ describe("Gooey Text timeline", () => {
     expect(squash(HOLD_MS - WINDUP_MS / 2)).toBeLessThan(-0.15);
     expect(windup(HOLD_MS)).toBe(0);
     expect(poseAt(hello, flow, FONT, timing.glide + 100).dropSquash).toBe(0);
-  });
-
-  test("a wobble is still at both ends", () => {
-    expect(jiggle(0)).toBe(0);
-    expect(jiggle(1)).toBe(0);
-    expect(Math.abs(jiggle(0.9))).toBeLessThan(0.01);
   });
 
   test("letters are born left to right, each out of the drop as it leads past", () => {

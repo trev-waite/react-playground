@@ -132,7 +132,7 @@ export type LetterPose = { scale: number; stretch: number; dx: number; dy: numbe
 export type Pose = { letters: LetterPose[]; dropX: number; dropScale: number; dropSquash: number };
 
 /** A wobble `t` (0 to 1) of the way through: a few swings that die away, 0 at both ends. */
-export function jiggle(t: number): number {
+function jiggle(t: number): number {
   if (t <= 0 || t >= 1) return 0;
   return Math.exp(-4.2 * t) * Math.sin(t * Math.PI * 2 * 2.4) * (1 - t);
 }

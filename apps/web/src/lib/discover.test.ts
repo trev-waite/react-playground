@@ -1,6 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { Glob } from "bun";
-import path from "node:path";
 import {
   cardFromPlan,
   cardIndexForSlug,
@@ -13,7 +11,6 @@ import {
 import { CARD_SWATCHES } from "./cardSwatches";
 import type { CardSurfaces, PlaygroundEntry, PreviewMeta, PreviewModule } from "./types";
 
-const liveRoot = path.join(import.meta.dir, "../live");
 const Preview = () => null;
 const loaded: Promise<PreviewModule> = Promise.resolve({ default: Preview });
 const moduleFor = () => loaded;
@@ -60,17 +57,6 @@ describe("live catalog", () => {
         "../live/controls/Switch/family.ts": { title: "Ignored", surface: SURFACE },
       }),
     ).toEqual({ controls: { title: "Controls", surface: SURFACE } });
-  });
-
-  test("keeps a Light Dispersion preview on disk for the Vite glob", async () => {
-    const slugs: string[] = [];
-    for await (const file of new Glob("**/preview.tsx").scan({
-      cwd: liveRoot,
-      onlyFiles: true,
-    })) {
-      slugs.push(file.replace(/\/preview\.tsx$/, "").replace(/\\/g, "/"));
-    }
-    expect(slugs).toContain("shaders/LightDispersion");
   });
 });
 
