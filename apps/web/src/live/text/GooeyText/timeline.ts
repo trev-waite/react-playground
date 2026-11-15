@@ -289,7 +289,7 @@ export function gulp(ms: number, length = GULP_MS): number {
  * stretched along it, then sloshes forward past round, heightening, and
  * wobbles back to round, rumpling as it goes.
  */
-export function gulpShape(ms: number, length: number, side: number): Blob {
+function gulpShape(ms: number, length: number, side: number): Blob {
   const u = ms / length;
   return { lobe: side * 0.5 * slosh(u, 1, 1.4), oval: 0.13 * slosh(u, 1.5, 1.5), ripple: 0.06 * slosh(u, 2, 1) };
 }
