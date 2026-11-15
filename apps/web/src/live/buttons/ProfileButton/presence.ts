@@ -1,0 +1,109 @@
+import { OPEN_MS, PULL, frameAt, type Geometry, type Point } from "./portal";
+
+/**
+ * The presence dot through the camera move. It does not let the window close
+ * over it: as the window starts to open it melts onto the window's rim and
+ * spreads around it, a bead of blue hugging the black, then rides the rim out
+ * past the stage's edge. Played backward, it rides back in and gathers into
+ * the dot again.
+ */
+
+/** The dot where it sits on the avatar, in stage px. */
+export type Dot = Point & { radius: number };
+
+/** The white ring between the dot and the picture, which the bead keeps between itself and the window, slimming as the bead thins. */
+export const RING = 3;
+const MELTED_RING = 2;
+/** The share of the flight over which the dot melts onto the rim: it answers the press at once, then settles onto the rim. */
+const MELT = 0.42;
+/** How far the dot spreads along the rim: its half-length, in dot radii, once it has melted. */
+const SPREAD = 3.2;
+/** How far (radians) the bead swirls around the rim as the window pulls the viewer in. */
+const SWIRL = 0.3;
+/** The bead never thins below this share of the dot's diameter, so it stays a bead rather than a hairline. */
+const MIN_THICKNESS = 0.3;
+/** Below 1, the bead's ends stay full and round off, as surface tension holds a drop, rather than tapering to points. */
+const FULLNESS = 0.7;
+/** Once thinned to its floor, the bead stops lengthening, so it never holds more blue than this share of the dot. */
+const MAX_AREA = 1.1;
+/** The share of the flight over which the bead curves from round to the rim's arc; it stretches at once but bends in gently. */
+const BEND = 0.19;
+/** Before it bends, the dot answers the press by stretching along the rim by up to this much, keeping its area. */
+const SQUASH = 0.5;
+/** As it swirls, the bead carries its weight at the trailing end and thins toward the leading one, by this share. */
+const LEAN = 0.28;
+/** Points traced around the bead's outline. */
+const POINTS = 56;
+
+function clamp01(t: number) {
+  return Math.min(1, Math.max(0, t));
+}
+
+function ease(t: number) {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
+}
+
+/** The window's radius `t` of the way through the flight (0 outside, 1 in the room). */
+export function rimAt(g: Geometry, t: number): number {
+  return g.reach * frameAt(g, PULL(clamp01(t))).portal;
+}
+
+/**
+ * The bead's outline `t` of the way through the flight, as points around it.
+ * At 0 it is the dot exactly. As it melts it spreads along the rim, keeping
+ * its area, with its inner edge one ring's width off the window and its outer
+ * edge swelling like a drop resting on a curve.
+ */
+export function beadOutline(g: Geometry, dot: Dot, t: number): Point[] {
+  const { avatar } = g;
+  const melt = melted(t);
+  const angle = Math.atan2(dot.y - avatar.y, dot.x - avatar.x) + SWIRL * ease(t);
+  const resting = Math.hypot(dot.x - avatar.x, dot.y - avatar.y);
+  const inner = 0.5 - 0.3 * melt;
+  const reach = dot.radius * (1 + (SPREAD - 1) * melt);
+  const rim = rimAt(g, t);
+  const floor = MIN_THICKNESS * 2 * dot.radius;
+  const length = Math.min(reach * Math.sqrt(Math.max(1, (rim + RING) / resting)), (MAX_AREA * 2 * dot.radius * dot.radius) / floor);
+  const thickness = Math.max(floor, (2 * dot.radius * dot.radius) / length);
+  const ring = ringAt(t);
+  const middle = resting + (rim + ring + inner * thickness - resting) * melt;
+  const bend = ease(t / BEND);
+  const squash = 1 + SQUASH * melt;
+  const tangent = { x: -Math.sin(angle), y: Math.cos(angle) };
+  const normal = { x: Math.cos(angle), y: Math.sin(angle) };
+  const points: Point[] = [];
+  for (let i = 0; i < POINTS; i++) {
+    const psi = (i / POINTS) * Math.PI * 2;
+    const along = Math.cos(psi);
+    const across = Math.sin(psi);
+    const full = Math.sign(across) * Math.pow(Math.abs(across), FULLNESS);
+    const round = {
+      x: dot.x + dot.radius * (along * squash * tangent.x + (across / squash) * normal.x),
+      y: dot.y + dot.radius * (along * squash * tangent.y + (across / squash) * normal.y),
+    };
+    const at = angle + (length * along) / middle;
+    const belly = 1 - LEAN * along * melt;
+    const radius = middle + thickness * belly * full * (across > 0 ? 1 - inner : inner);
+    const bent = { x: avatar.x + radius * Math.cos(at), y: avatar.y + radius * Math.sin(at) };
+    points.push({ x: round.x + (bent.x - round.x) * bend, y: round.y + (bent.y - round.y) * bend });
+  }
+  return points;
+}
+
+/** The width of the white ring around the bead `t` of the way through the flight. */
+export function ringAt(t: number): number {
+  return RING + (MELTED_RING - RING) * melted(t);
+}
+
+function melted(t: number): number {
+  return 1 - Math.pow(1 - clamp01(t / MELT), 3);
+}
+
+/** The bead's outline as an SVG path, `ms` into the flight; empty once it has ridden off the stage. */
+export function beadPath(g: Geometry, dot: Dot, ms: number): string {
+  const points = beadOutline(g, dot, ms / OPEN_MS);
+  const margin = RING;
+  const onStage = points.some(p => p.x > -margin && p.y > -margin && p.x < g.stage.width + margin && p.y < g.stage.height + margin);
+  return onStage ? `M${points.map(p => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join("L")}Z` : "";
+}

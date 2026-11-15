@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { SegmentedControl } from "@/live/controls/SegmentedControl/SegmentedControl";
 import { Switch } from "@/live/controls/Switch/Switch";
 import { CLOSE_RATE, MAX_PORTRAIT, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
+import { beadPath, ringAt, type Dot } from "./presence";
 import { ROOM_COLOR, paintSilhouette } from "./silhouette";
 import styles from "./ProfileButton.module.css";
 
@@ -22,15 +23,32 @@ function Silhouette({ className, pixels }: { className?: string; pixels?: number
   return <canvas ref={ref} className={className} aria-hidden="true" />;
 }
 
-/** The layers of one flight, played forward to open and backward to close. `stale` marks a stage resized mid-flight. */
-type Flight = { animations: Animation[]; portal: Animation; stale: boolean };
+/**
+ * The layers of one flight, played forward to open and backward to close.
+ * `stale` marks a stage resized mid-flight; `trace` is the frame that redraws
+ * the presence bead while the flight plays, from where the dot sat, `dot`.
+ */
+type Flight = {
+  animations: Animation[];
+  portal: Animation;
+  geometry: Geometry;
+  reduced: boolean;
+  stale: boolean;
+  trace: number;
+  dot: Dot | null;
+};
 
 type Layers = { stage: HTMLElement; avatar: HTMLElement; portal: HTMLElement; room: HTMLElement; portrait: HTMLElement; content: HTMLElement };
+
+/** The stage's on-screen scale, for a stage drawn inside a transformed card. */
+function stageScale(stage: HTMLElement): number {
+  return stage.getBoundingClientRect().width / stage.offsetWidth || 1;
+}
 
 function measure({ stage, avatar }: Layers): Geometry {
   const stageRect = stage.getBoundingClientRect();
   const avatarRect = avatar.getBoundingClientRect();
-  const scale = stageRect.width / stage.offsetWidth || 1;
+  const scale = stageScale(stage);
   return geometry(
     { width: stage.offsetWidth, height: stage.offsetHeight },
     {
@@ -83,7 +101,7 @@ function launch(layers: Layers, g: Geometry, reduced: boolean): Flight {
       timing,
     ),
   );
-  return { animations, portal, stale: false };
+  return { animations, portal, geometry: g, reduced, stale: false, trace: 0, dot: null };
 }
 
 function prefersReducedMotion(): boolean {
@@ -97,6 +115,46 @@ function steer(flight: Flight, direction: 1 | -1) {
   }
 }
 
+/** Where the presence dot sits on screen right now, in stage px. */
+function measureDot(stage: HTMLElement, presence: HTMLElement): Dot {
+  const stageRect = stage.getBoundingClientRect();
+  const rect = presence.getBoundingClientRect();
+  const scale = stageScale(stage);
+  return {
+    x: (rect.left + rect.width / 2 - stageRect.left) / scale,
+    y: (rect.top + rect.height / 2 - stageRect.top) / scale,
+    radius: rect.width / 2 / scale,
+  };
+}
+
+/**
+ * Hands the presence dot to the bead above the window for the flight, and
+ * redraws the bead from the flight's own clock each frame it plays, so it
+ * keeps pace both ways and through a reversal mid-flight.
+ */
+function traceDot(flight: Flight, stage: HTMLElement, bead: SVGPathElement, dot: Dot) {
+  cancelAnimationFrame(flight.trace);
+  const draw = () => {
+    const ms = Number(flight.portal.currentTime ?? 0);
+    const d = beadPath(flight.geometry, dot, ms);
+    if (bead.getAttribute("d") !== d) {
+      bead.setAttribute("d", d);
+      bead.style.strokeWidth = `${(ringAt(ms / OPEN_MS) * 2).toFixed(2)}px`;
+    }
+    const gone = d === "" && flight.portal.playbackRate > 0;
+    // perf-allow: runs only while a flight the viewer started plays, at most 1.3s, and stops once the bead has ridden off the stage.
+    flight.trace = flight.portal.playState === "running" && !gone ? requestAnimationFrame(draw) : 0;
+  };
+  stage.dataset.trace = "";
+  draw();
+}
+
+function stopTracing(flight: Flight, stage: HTMLElement) {
+  cancelAnimationFrame(flight.trace);
+  flight.trace = 0;
+  delete stage.dataset.trace;
+}
+
 /** The flight in progress, kept outside React. */
 type Cockpit = { flight: Flight | null };
 
@@ -108,6 +166,7 @@ function adopt(cockpit: Cockpit, layers: Layers, started: Flight) {
   started.portal.addEventListener("finish", () => {
     if (cockpit.flight !== started) return;
     if (started.portal.playbackRate >= 0) {
+      stopTracing(started, layers.stage);
       if (started.stale) refit(cockpit, layers);
       return;
     }
@@ -138,6 +197,7 @@ function primeFlight(cockpit: Cockpit, layers: Layers) {
 function releaseFlight(cockpit: Cockpit, stage: HTMLElement, landed = false) {
   const current = cockpit.flight;
   if (!current || (!landed && current.portal.playState !== "paused")) return;
+  stopTracing(current, stage);
   for (const animation of current.animations) animation.cancel();
   cockpit.flight = null;
   delete stage.dataset.flight;
@@ -162,6 +222,8 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
   const roomRef = useRef<HTMLDivElement>(null);
   const portraitRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const presenceRef = useRef<HTMLSpanElement>(null);
+  const beadRef = useRef<SVGPathElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
   const cockpit = useRef<Cockpit>({ flight: null });
   const onlineId = useId();
@@ -188,12 +250,26 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     if (stageRef.current) releaseFlight(cockpit.current, stageRef.current);
   }
 
+  /** Plays the flight toward the room (1) or back out (-1), the presence dot riding the window's rim when it shows. */
+  function fly(flight: Flight, direction: 1 | -1) {
+    const [stage, presence, bead] = [stageRef.current, presenceRef.current, beadRef.current];
+    if (stage && presence && bead && online && !flight.reduced) {
+      const dot = flight.trace && flight.dot ? flight.dot : measureDot(stage, presence);
+      flight.dot = dot;
+      steer(flight, direction);
+      traceDot(flight, stage, bead, dot);
+      return;
+    }
+    if (stage) stopTracing(flight, stage);
+    steer(flight, direction);
+  }
+
   function enter() {
     prime();
     const { flight } = cockpit.current;
     if (!flight) return;
     flushSync(() => setOpen(true));
-    steer(flight, 1);
+    fly(flight, 1);
     backRef.current?.focus({ preventScroll: true });
   }
 
@@ -201,7 +277,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     const { flight } = cockpit.current;
     if (!flight) return;
     flushSync(() => setOpen(false));
-    steer(flight, -1);
+    fly(flight, -1);
     avatarRef.current?.focus({ preventScroll: true });
   }
 
@@ -236,6 +312,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     observer.observe(stage);
     return () => {
       observer.disconnect();
+      cancelAnimationFrame(pilot.flight?.trace ?? 0);
       for (const animation of pilot.flight?.animations ?? []) animation.cancel();
     };
   }, []);
@@ -261,7 +338,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
         onClick={enter}
       >
         <Silhouette className={styles.avatarFace} />
-        <span className={styles.presence} data-online={online || undefined} aria-hidden="true" />
+        <span ref={presenceRef} className={styles.presence} data-online={online || undefined} aria-hidden="true" />
       </button>
       <div ref={portalRef} className={styles.portal}>
         <div ref={roomRef} className={styles.room} role="dialog" aria-label={`${profile.name}'s profile`} inert={!open}>
@@ -288,6 +365,9 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
           </div>
         </div>
       </div>
+      <svg className={styles.trace} aria-hidden="true">
+        <path ref={beadRef} />
+      </svg>
     </div>
   );
 }

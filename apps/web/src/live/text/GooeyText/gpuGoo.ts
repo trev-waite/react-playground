@@ -10,7 +10,9 @@ import {
   GOO_BLUR,
   GOO_EDGE,
   HEIGHT,
-  inkColor,
+  INK,
+  DRAIN_SOFTNESS,
+  PINCH_WIDTH,
   SPILL_X,
   SPILL_Y,
   type GooFrame,
@@ -35,13 +37,16 @@ struct Scene {
   span: vec2f,
   drop: vec4f,
   blue: vec4f,
+  ink: vec4f,
   unit: f32,
   count: u32,
   cells: array<vec4f, ${MAX_LETTERS}>,
   atlas: array<vec4f, ${MAX_LETTERS}>,
   poses: array<vec4f, ${MAX_LETTERS}>,
-  inks: array<vec4f, ${MAX_LETTERS}>,
-  strands: array<vec4f, ${MAX_LETTERS}>,
+  drains: array<vec4f, ${MAX_LETTERS}>,
+  spans: array<vec4f, ${MAX_LETTERS}>,
+  necks: array<vec4f, ${MAX_LETTERS}>,
+  beads: array<vec4f, ${MAX_LETTERS}>,
 }
 
 @group(0) @binding(0) var<uniform> scene: Scene;
@@ -52,29 +57,51 @@ fn over(under: vec4f, color: vec3f, alpha: f32) -> vec4f {
   return vec4f(color * alpha, alpha) + under * (1.0 - alpha);
 }
 
+fn cover(d: f32) -> f32 {
+  return clamp(0.5 - d * scene.unit, 0.0, 1.0);
+}
+
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let p = scene.origin + uv * scene.span;
   var out = vec4f(0.0);
   for (var i = 0u; i < scene.count; i++) {
-    let strand = scene.strands[i];
-    if (strand.z <= 0.0) { continue; }
-    let along = clamp(p.x, min(strand.x, strand.y), max(strand.x, strand.y));
-    let off = length(vec2f(p.x - along, p.y - scene.drop.y));
-    out = over(out, scene.blue.rgb, clamp((strand.z * 0.5 - off) * scene.unit + 0.5, 0.0, 1.0));
+    let neck = scene.necks[i];
+    let span = scene.spans[i];
+    if (neck.x + neck.y > 0.0 && abs(span.y - span.x) > 1e-3 && p.x >= min(span.x, span.y) && p.x <= max(span.x, span.y)) {
+      let s = (p.x - span.x) / (span.y - span.x);
+      var r = neck.z + neck.x * (1.0 - s) * (1.0 - s) + neck.y * s * s;
+      let bead = scene.beads[i];
+      if (neck.w > 0.0 && bead.w > 0.0) {
+        let at = (bead.x - span.x) / (span.y - span.x);
+        let width = bead.w * ${PINCH_WIDTH.toFixed(3)};
+        let near = (s - at + bead.w) / width;
+        let far = (s - at - bead.w) / width;
+        r -= neck.w * (exp(-near * near) + exp(-far * far));
+      }
+      out = over(out, scene.blue.rgb, cover(abs(p.y - mix(span.z, span.w, s)) - r));
+    }
+    let bead = scene.beads[i];
+    if (bead.z > 0.0) {
+      out = over(out, scene.blue.rgb, cover(length(p - bead.xy) - bead.z));
+    }
   }
   for (var i = 0u; i < scene.count; i++) {
     let pose = scene.poses[i];
     if (min(pose.z, pose.w) <= 0.0) { continue; }
     let cell = scene.cells[i];
-    let t = ((p - pose.xy) / pose.zw - cell.xy) / cell.zw;
+    let local = (p - pose.xy) / pose.zw;
+    let t = (local - cell.xy) / cell.zw;
     if (any(t < vec2f(0.0)) || any(t > vec2f(1.0))) { continue; }
     let atlas = scene.atlas[i];
     let alpha = textureSampleLevel(glyphs, glyphSampler, atlas.xy + t * atlas.zw, 0.0).a;
-    out = over(out, scene.inks[i].rgb, alpha);
+    let drain = scene.drains[i];
+    let u = drain.y * local.x / drain.z + 0.5;
+    let cured = clamp((drain.x * (1.0 + ${DRAIN_SOFTNESS.toFixed(3)}) - u) / ${DRAIN_SOFTNESS.toFixed(3)}, 0.0, 1.0);
+    out = over(out, mix(scene.blue.rgb, scene.ink.rgb, cured * cured * (3.0 - 2.0 * cured)), alpha);
   }
   let q = (p - scene.drop.xy) / scene.drop.zw;
   let edge = (length(q) - 1.0) * min(scene.drop.z, scene.drop.w);
-  return over(out, scene.blue.rgb, clamp(0.5 - edge * scene.unit, 0.0, 1.0));
+  return over(out, scene.blue.rgb, cover(edge));
 }
 `;
 
@@ -166,7 +193,7 @@ export type GooRenderer = { paint(state: GooFrame): void; destroy(): void };
 
 /**
  * The goo on the GPU, matching the SVG filter, which costs WebKit about 10ms
- * a frame: the letters, strands, and drop are drawn into a half-size buffer,
+ * a frame: the letters, the slime, and the drop are drawn into a half-size buffer,
  * blurred, then cut back at full size to an edge one pixel soft, even where
  * two shapes are just pinching together.
  */
@@ -185,6 +212,7 @@ export function createGooRenderer(gpu: Gpu, surface: Surface, lines: Lines): Goo
   const field = target(gpu, { size: [1, 1], format: "rgba8unorm", label: "Gooey Text field" });
   const scratch = target(gpu, { size: [1, 1], format: "rgba8unorm", label: "Gooey Text blur" });
   const blue: Vec4 = [BLUE[0] / 255, BLUE[1] / 255, BLUE[2] / 255, 1];
+  const ink: Vec4 = [INK[0] / 255, INK[1] / 255, INK[2] / 255, 1];
   const origin = [-SPILL_X, -SPILL_Y];
   const span = [lines.width + SPILL_X * 2, HEIGHT + SPILL_Y * 2];
   const scene = effect(gpu, SCENE_SHADER, { label: "Gooey Text scene", set: { glyphs, glyphSampler: linear } });
@@ -217,13 +245,16 @@ export function createGooRenderer(gpu: Gpu, surface: Surface, lines: Lines): Goo
           span,
           drop: [state.drop.x, state.drop.y, DROP_SIZE * state.drop.sx, DROP_SIZE * state.drop.sy],
           blue,
+          ink,
           unit: fieldSize[0] / span[0]!,
           count: Math.min(word.length, state.letters.length),
           cells: padded(word.map(cell => cell.box)),
           atlas: padded(word.map(cell => cell.atlas)),
           poses: padded(state.letters.map(letter => [letter.x, letter.y, letter.sx, letter.sy])),
-          inks: padded(state.letters.map(letter => [...inkColor(letter.ink).map(channel => channel / 255), 1] as Vec4)),
-          strands: padded(state.letters.map(letter => [letter.strand.from, letter.strand.to, letter.strand.width, 0])),
+          drains: padded(state.letters.map(letter => [letter.drain, letter.toward, Math.max(1, letter.width), 0])),
+          spans: padded(state.letters.map(({ bridge }) => [bridge.from, bridge.to, bridge.fromY, bridge.toY])),
+          necks: padded(state.letters.map(({ bridge }) => [bridge.start, bridge.end, bridge.waist, bridge.pinch])),
+          beads: padded(state.letters.map(({ bridge }) => [bridge.beadX, bridge.beadY, bridge.bead, bridge.spread])),
         },
       });
       f.pass(field, scene);

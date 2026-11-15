@@ -11,14 +11,20 @@ import {
   GOO_GAIN,
   HEIGHT,
   DROP_SIZE,
-  inkColor,
+  BLUE,
+  DRAIN_SOFTNESS,
+  INK,
   measureLines,
   SPILL_X,
   SPILL_Y,
+  bridgePath,
   type GooFrame,
   type Lines,
 } from "./scene";
-import { phases, poseAt, restingPose, type Pose } from "./timeline";
+import { BEAD_RADIUS, phases, poseAt, restingPose, type Pose } from "./timeline";
+
+/** How far either side of the bead (in bead radii) the thread thins before it breaks. */
+const PINCH_SPREAD = 2.1;
 import styles from "./GooeyText.module.css";
 
 const DEFAULT_WORDS = ["hello", "gooey", "flow"] as const;
@@ -28,36 +34,6 @@ const STILL_MS = 3200;
 const DROP_STIFFNESS = 170;
 const DROP_DAMPING = 11;
 
-/** The thinnest a neck gets before it snaps, so it still reads as one strand of slime. */
-const NECK_MIN = FONT_SIZE * 0.011;
-
-/**
- * A strand of slime from the drop at `from` to a letter at `to`, `width`
- * across at the drop: pinched in the middle the way a stretched neck thins,
- * and drawn above the goo so even its finest point stays visible.
- */
-function neckPath(from: number, to: number, width: number): string {
-  if (width <= 0) return "";
-  const length = to - from;
-  const middle = from + length / 2;
-  const edge = width / 2;
-  const tip = edge * 0.7;
-  const pinch = Math.max(NECK_MIN, edge * 0.32);
-  const y = DROP_Y;
-  const top = (h: number) => (y - h).toFixed(2);
-  const bottom = (h: number) => (y + h).toFixed(2);
-  const x = (v: number) => v.toFixed(2);
-  return [
-    `M${x(from)} ${top(edge)}`,
-    `C${x(from + length * 0.3)} ${top(edge)} ${x(middle - length * 0.18)} ${top(pinch)} ${x(middle)} ${top(pinch)}`,
-    `C${x(middle + length * 0.18)} ${top(pinch)} ${x(to - length * 0.3)} ${top(tip)} ${x(to)} ${top(tip)}`,
-    `L${x(to)} ${bottom(tip)}`,
-    `C${x(to - length * 0.3)} ${bottom(tip)} ${x(middle + length * 0.18)} ${bottom(pinch)} ${x(middle)} ${bottom(pinch)}`,
-    `C${x(middle - length * 0.18)} ${bottom(pinch)} ${x(from + length * 0.3)} ${bottom(edge)} ${x(from)} ${bottom(edge)}`,
-    "Z",
-  ].join("");
-}
-
 /** Writes an attribute only when it changed, so a settled letter costs nothing. */
 function write(element: Element | undefined, name: string, value: string) {
   if (element && element.getAttribute(name) !== value) element.setAttribute(name, value);
@@ -66,18 +42,26 @@ function write(element: Element | undefined, name: string, value: string) {
 /** Paints a frame into the SVG goo, which shows wherever the GPU goo cannot run. */
 function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
   const groups = Array.from(svg.querySelectorAll<SVGGElement>("[data-word]"));
-  const strands = Array.from(svg.querySelectorAll<SVGGElement>("[data-strands]"));
+  const slime = Array.from(svg.querySelectorAll<SVGGElement>("[data-slime]"));
+  const inks = Array.from(svg.querySelectorAll<SVGDefsElement>("[data-inks]"));
   const drop = svg.querySelector<SVGCircleElement>("[data-drop]") ?? undefined;
   return state => {
     const letters = groups[state.word]?.children;
-    const threads = strands[state.word]?.children;
+    const bridges = slime[state.word]?.querySelectorAll("path");
+    const beads = slime[state.word]?.querySelectorAll("circle");
+    const drains = inks[state.word]?.children;
     state.letters.forEach((letter, i) => {
       const transform = `translate(${letter.x.toFixed(2)} ${letter.y.toFixed(2)}) scale(${letter.sx.toFixed(4)} ${letter.sy.toFixed(4)}) translate(${(-letter.center).toFixed(2)} ${-DROP_Y})`;
       write(letters?.[i], "transform", transform);
-      write(letters?.[i], "fill", `rgb(${inkColor(letter.ink).join(" ")})`);
-      write(threads?.[i], "x1", letter.strand.from.toFixed(2));
-      write(threads?.[i], "x2", letter.strand.to.toFixed(2));
-      write(threads?.[i], "stroke-width", letter.strand.width.toFixed(2));
+      const drain = drains?.[i];
+      write(drain, "x1", letter.toward > 0 ? "0" : "1");
+      write(drain, "x2", letter.toward > 0 ? "1" : "0");
+      write(drain?.children[0], "offset", (letter.drain * (1 + DRAIN_SOFTNESS) - DRAIN_SOFTNESS).toFixed(3));
+      write(drain?.children[1], "offset", (letter.drain * (1 + DRAIN_SOFTNESS)).toFixed(3));
+      write(bridges?.[i], "d", bridgePath(letter.bridge));
+      write(beads?.[i], "cx", letter.bridge.beadX.toFixed(2));
+      write(beads?.[i], "cy", letter.bridge.beadY.toFixed(2));
+      write(beads?.[i], "r", letter.bridge.bead.toFixed(2));
     });
     write(drop, "transform", `translate(${state.drop.x.toFixed(2)} ${state.drop.y.toFixed(2)}) scale(${state.drop.sx.toFixed(4)} ${state.drop.sy.toFixed(4)})`);
   };
@@ -89,8 +73,7 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
  */
 function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) => void): () => void {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const layers = Array.from(svg.querySelectorAll<SVGGElement>("[data-word], [data-strands], [data-necks]"));
-  const necks = Array.from(svg.querySelectorAll<SVGGElement>("[data-necks]"));
+  const layers = Array.from(svg.querySelectorAll<SVGGElement>("[data-word], [data-slime]"));
   const cycles = lines.words.map(word => phases(word.letters.length).total);
   let wordIndex = 0;
   let elapsed = 0;
@@ -105,7 +88,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
 
   function show(index: number) {
     layers.forEach(layer => {
-      const own = layer.dataset.word ?? layer.dataset.strands ?? layer.dataset.necks;
+      const own = layer.dataset.word ?? layer.dataset.slime;
       write(layer, "visibility", Number(own) === index ? "visible" : "hidden");
     });
   }
@@ -130,24 +113,42 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
       stretchVelocity += (DROP_STIFFNESS * (target - stretch) - DROP_DAMPING * stretchVelocity) * seconds;
       stretch = Math.min(0.5, Math.max(-0.3, stretch + stretchVelocity * seconds));
     }
+    const drop = { x: pose.dropX, y: DROP_Y + pose.dropSink, sx: (1 + stretch) * pose.dropScale, sy: pose.dropScale / (1 + stretch * 0.55) };
     const letters = pose.letters.map((letter, i) => {
       const layout = word.letters[i]!;
       const center = layout.left + layout.width / 2;
-      const facing = center + letter.dx + Math.sign(pose.dropX - center) * layout.width * 0.3 * letter.scale;
+      const x = center + letter.dx;
+      const y = DROP_Y + letter.dy;
+      const toward = pose.dropX >= x ? 1 : -1;
+      const to = x + toward * layout.width * 0.15 * letter.scale;
+      const { bridge } = letter;
       return {
         center,
+        width: layout.width,
         sx: Math.max(0, letter.scale * letter.stretch),
         sy: Math.max(0, letter.scale / Math.sqrt(letter.stretch)),
-        x: center + letter.dx,
-        y: DROP_Y + letter.dy,
-        ink: letter.ink,
-        strand: { from: pose.dropX, to: facing, width: letter.strand * FONT_SIZE },
+        x,
+        y,
+        drain: letter.drain,
+        toward,
+        bridge: {
+          from: drop.x,
+          fromY: drop.y,
+          to,
+          toY: y,
+          start: bridge.drop * FONT_SIZE * pose.dropScale,
+          end: bridge.letter * FONT_SIZE * letter.scale,
+          waist: bridge.waist * FONT_SIZE,
+          bead: bridge.bead * FONT_SIZE,
+          beadX: drop.x + (to - drop.x) * bridge.beadAt,
+          beadY: drop.y + (y - drop.y) * bridge.beadAt,
+          beadAt: bridge.beadAt,
+          pinch: bridge.pinch * FONT_SIZE,
+          spread: (BEAD_RADIUS * PINCH_SPREAD * FONT_SIZE) / Math.max(1, Math.abs(to - drop.x)),
+        },
       };
     });
-    const drop = { x: pose.dropX, y: DROP_Y + pose.dropSink, sx: (1 + stretch) * pose.dropScale, sy: pose.dropScale / (1 + stretch * 0.55) };
     paint({ word: index, letters, drop });
-    const pinches = necks[index]!.children;
-    letters.forEach((letter, i) => write(pinches[i], "d", neckPath(letter.strand.from, letter.strand.to, letter.strand.width)));
   }
 
   function advance(dt: number) {
@@ -228,15 +229,19 @@ type GooeyTextProps = {
 
 /**
  * Text typed by a drop of ink: it glides along the line and each letter oozes
- * out of it on a strand of slime that thins until it snaps, and the freed
- * letter sets black. The drop lands after the word as its period, then lifts
- * off, slides back, swallows the word, and flows on to the next.
+ * out of it on a bridge of slime that necks down until it pinches off, and
+ * the blue drains back out of the freed letter, leaving it black. The drop
+ * swings straight back to land after the word as its period, then lifts off,
+ * slides back, swallows the word, and flows on to the next.
  */
 export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<GooRenderer | null>(null);
   const latestRef = useRef<GooFrame | null>(null);
+  const paintSvgRef = useRef<((state: GooFrame) => void) | null>(null);
+  /** While the GPU goo shows, the hidden SVG goo is left alone, and caught up the moment it shows again. */
+  const gpuShownRef = useRef(false);
   const filterId = `goo-${useId().replace(/[^\w-]/g, "")}`;
   const lines = measureLines(words);
 
@@ -260,13 +265,19 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
   });
 
   useEffect(() => {
+    gpuShownRef.current = status === "running";
+    if (!gpuShownRef.current && latestRef.current) paintSvgRef.current?.(latestRef.current);
+  }, [status]);
+
+  useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     const paintSvg = svgPainter(svg);
+    paintSvgRef.current = paintSvg;
     return startFlow(svg, lines, state => {
       latestRef.current = state;
-      paintSvg(state);
       rendererRef.current?.paint(state);
+      if (!gpuShownRef.current) paintSvg(state);
     });
   }, [lines]);
 
@@ -294,18 +305,31 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
               <feColorMatrix in="blur" values={`1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ${GOO_GAIN} -${GOO_CUT}`} />
             </filter>
           </defs>
+          {lines.words.map((word, index) => (
+            <defs key={index} data-inks={index}>
+              {word.letters.map((_, i) => (
+                <linearGradient key={i} id={`${filterId}-ink-${index}-${i}`}>
+                  <stop offset="0" stopColor={`rgb(${INK.join(" ")})`} />
+                  <stop offset="0" stopColor={`rgb(${BLUE.join(" ")})`} />
+                </linearGradient>
+              ))}
+            </defs>
+          ))}
           <g filter={`url(#${filterId})`} display={status === "running" ? "none" : undefined}>
             {lines.words.map((word, index) => (
-              <g key={index} data-strands={index} visibility={index === 0 ? "visible" : "hidden"} className={styles.strand}>
+              <g key={index} data-slime={index} visibility={index === 0 ? "visible" : "hidden"} className={styles.slime}>
                 {word.letters.map((_, i) => (
-                  <line key={i} y1={DROP_Y} y2={DROP_Y} strokeWidth={0} />
+                  <path key={i} d="" />
+                ))}
+                {word.letters.map((_, i) => (
+                  <circle key={i} r={0} />
                 ))}
               </g>
             ))}
             {lines.words.map((word, index) => (
               <g key={index} data-word={index} visibility={index === 0 ? "visible" : "hidden"} style={{ font: FONT }}>
                 {word.letters.map((letter, i) => (
-                  <text key={i} x={letter.left} y={BASELINE} transform="scale(0)">
+                  <text key={i} x={letter.left} y={BASELINE} transform="scale(0)" fill={`url(#${filterId}-ink-${index}-${i})`}>
                     {letter.char}
                   </text>
                 ))}
@@ -313,13 +337,6 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
             ))}
             <circle data-drop="" r={DROP_SIZE} className={styles.drop} />
           </g>
-          {lines.words.map((word, index) => (
-            <g key={index} data-necks={index} visibility={index === 0 ? "visible" : "hidden"} className={styles.neck}>
-              {word.letters.map((_, i) => (
-                <path key={i} d="" />
-              ))}
-            </g>
-          ))}
         </svg>
       </div>
     </div>
