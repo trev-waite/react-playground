@@ -4,9 +4,9 @@ export const ROOM_COLOR = "#000000";
 /** The bust's soft edge, as a share of the picture's width. */
 const SOFTNESS = 0.017;
 
-/** Head and shoulders in a square `s` wide: a large head on a neck that flares into sloping shoulders. */
-function bust(ctx: CanvasRenderingContext2D, s: number) {
-  const at = (x: number, y: number) => [s * x, s * y] as const;
+/** Head and shoulders in a square `s` wide, `shift` along: a large head on a neck that flares into sloping shoulders. */
+function bust(ctx: CanvasRenderingContext2D, s: number, shift: number) {
+  const at = (x: number, y: number) => [s * x + shift, s * y] as const;
   ctx.beginPath();
   ctx.arc(...at(0.5, 0.385), s * 0.185, 0, Math.PI * 2);
   ctx.moveTo(...at(0.06, 1.04));
@@ -42,12 +42,11 @@ export function paintSilhouette(canvas: HTMLCanvasElement, pixels: number) {
   ctx.fillRect(0, 0, pixels, pixels);
 
   ctx.save();
-  ctx.translate(-pixels * 2, 0);
   ctx.shadowOffsetX = pixels * 2;
   ctx.shadowBlur = pixels * SOFTNESS * 2;
   ctx.shadowColor = ROOM_COLOR;
   ctx.fillStyle = ROOM_COLOR;
-  bust(ctx, pixels);
+  bust(ctx, pixels, -pixels * 2);
   ctx.restore();
 
   const vignette = ctx.createRadialGradient(pixels / 2, pixels / 2, 0, pixels / 2, pixels / 2, pixels / 2);
