@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, ty
 import { flushSync } from "react-dom";
 import { SegmentedControl } from "@/live/controls/SegmentedControl/SegmentedControl";
 import { Switch } from "@/live/controls/Switch/Switch";
-import { CLOSE_RATE, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
+import { CLOSE_RATE, MAX_PORTRAIT, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
 import { ROOM_COLOR, paintSilhouette } from "./silhouette";
 import styles from "./ProfileButton.module.css";
 
@@ -266,7 +266,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
       <div ref={portalRef} className={styles.portal}>
         <div ref={roomRef} className={styles.room} role="dialog" aria-label={`${profile.name}'s profile`} inert={!open}>
           <div ref={portraitRef} className={styles.portrait}>
-            <Silhouette className={styles.portraitFace} pixels={192} />
+            <Silhouette className={styles.portraitFace} pixels={MAX_PORTRAIT * 2} />
           </div>
           <div ref={contentRef} className={styles.content}>
             <button ref={backRef} type="button" className={styles.back} aria-label="Zoom back out" onClick={leave}>

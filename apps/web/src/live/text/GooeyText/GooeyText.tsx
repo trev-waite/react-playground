@@ -18,7 +18,7 @@ import {
   type GooFrame,
   type Lines,
 } from "./scene";
-import { phases, poseAt } from "./timeline";
+import { phases, poseAt, restingPose, type Pose } from "./timeline";
 import styles from "./GooeyText.module.css";
 
 const DEFAULT_WORDS = ["hello", "gooey", "flow"] as const;
@@ -79,13 +79,13 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
       write(threads?.[i], "x2", letter.strand.to.toFixed(2));
       write(threads?.[i], "stroke-width", letter.strand.width.toFixed(2));
     });
-    write(drop, "transform", `translate(${state.drop.x.toFixed(2)} ${DROP_Y}) scale(${state.drop.sx.toFixed(4)} ${state.drop.sy.toFixed(4)})`);
+    write(drop, "transform", `translate(${state.drop.x.toFixed(2)} ${state.drop.y.toFixed(2)}) scale(${state.drop.sx.toFixed(4)} ${state.drop.sy.toFixed(4)})`);
   };
 }
 
 /**
  * Runs the drop and the letters until stopped, handing each frame to
- * `paint`. Sleeps off screen; reduced motion shows each word still.
+ * `paint`. Sleeps off screen; reduced motion shows each word still, with its period.
  */
 function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) => void): () => void {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -110,11 +110,15 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     });
   }
 
-  /** Poses word `index` at `ms` into its cycle. A `dt` of 0 draws a still frame, with the drop at rest. */
-  function draw(index: number, ms: number, dt: number) {
-    const word = lines.words[index]!;
+  /** Poses word `index` at `ms` into its cycle. */
+  function play(index: number, ms: number, dt: number) {
     const before = lines.words[(index - 1 + lines.words.length) % lines.words.length]!;
-    const pose = poseAt(word, before, FONT_SIZE, ms);
+    draw(index, poseAt(lines.words[index]!, before, FONT_SIZE, ms), dt);
+  }
+
+  /** Draws word `index` in `pose`. A `dt` of 0 draws a still frame, with the drop's stretch at rest. */
+  function draw(index: number, pose: Pose, dt: number) {
+    const word = lines.words[index]!;
     const speed = lastDropX == null || dt <= 0 ? 0 : Math.abs(pose.dropX - lastDropX) / dt;
     lastDropX = pose.dropX;
     if (dt <= 0) {
@@ -140,7 +144,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
         strand: { from: pose.dropX, to: facing, width: letter.strand * FONT_SIZE },
       };
     });
-    const drop = { x: pose.dropX, sx: (1 + stretch) * pose.dropScale, sy: pose.dropScale / (1 + stretch * 0.55) };
+    const drop = { x: pose.dropX, y: DROP_Y + pose.dropSink, sx: (1 + stretch) * pose.dropScale, sy: pose.dropScale / (1 + stretch * 0.55) };
     paint({ word: index, letters, drop });
     const pinches = necks[index]!.children;
     letters.forEach((letter, i) => write(pinches[i], "d", neckPath(letter.strand.from, letter.strand.to, letter.strand.width)));
@@ -161,7 +165,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     const dt = Math.min(48, now - previous);
     previous = now;
     advance(dt);
-    draw(wordIndex, elapsed, dt);
+    play(wordIndex, elapsed, dt);
     if (visible) frame = requestAnimationFrame(tick);
   }
 
@@ -173,9 +177,8 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   function still() {
     window.clearTimeout(timer);
     show(wordIndex);
-    const timing = phases(lines.words[wordIndex]!.letters.length);
     lastDropX = null;
-    draw(wordIndex, timing.glide + timing.type, 0);
+    draw(wordIndex, restingPose(lines.words[wordIndex]!, FONT_SIZE), 0);
     timer = window.setTimeout(() => {
       wordIndex = (wordIndex + 1) % lines.words.length;
       still();
@@ -207,7 +210,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   });
   observer.observe(svg);
   reducedMotion.addEventListener("change", wake);
-  draw(0, 0, 0);
+  play(0, 0, 0);
   wake();
 
   return () => {
@@ -226,8 +229,8 @@ type GooeyTextProps = {
 /**
  * Text typed by a drop of ink: it glides along the line and each letter oozes
  * out of it on a strand of slime that thins until it snaps, and the freed
- * letter sets black. Then the drop slides back, swallows the word, and flows
- * on to the next.
+ * letter sets black. The drop lands after the word as its period, then lifts
+ * off, slides back, swallows the word, and flows on to the next.
  */
 export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
   const svgRef = useRef<SVGSVGElement>(null);

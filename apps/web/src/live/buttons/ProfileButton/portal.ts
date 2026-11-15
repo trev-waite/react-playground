@@ -38,7 +38,7 @@ const DETAILS_GAP = 16;
 export const DETAILS_HEIGHT = 196;
 const MARGIN = 24;
 const MIN_PORTRAIT = 96;
-const MAX_PORTRAIT = 280;
+export const MAX_PORTRAIT = 280;
 const DETAILS_WIDTH = 352;
 /** Below this stage height the details sit beside the portrait instead of under it. */
 export const STACK_MIN_HEIGHT = ARROW_SIZE + ARROW_GAP + MIN_PORTRAIT + DETAILS_GAP + DETAILS_HEIGHT + MARGIN * 2;
