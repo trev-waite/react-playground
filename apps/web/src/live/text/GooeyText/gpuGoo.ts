@@ -12,6 +12,7 @@ import {
   HEIGHT,
   INK,
   DRAIN_SOFTNESS,
+  LOBE_MEAN,
   PINCH_WIDTH,
   SPILL_X,
   SPILL_Y,
@@ -36,6 +37,7 @@ struct Scene {
   origin: vec2f,
   span: vec2f,
   drop: vec4f,
+  blob: vec4f,
   blue: vec4f,
   ink: vec4f,
   unit: f32,
@@ -100,7 +102,10 @@ fn cover(d: f32) -> f32 {
     out = over(out, mix(scene.blue.rgb, scene.ink.rgb, cured * cured * (3.0 - 2.0 * cured)), alpha);
   }
   let q = (p - scene.drop.xy) / scene.drop.zw;
-  let edge = (length(q) - 1.0) * min(scene.drop.z, scene.drop.w);
+  let angle = select(atan2(q.y, q.x), 0.0, dot(q, q) < 1e-8);
+  let along = max(0.0, sign(scene.blob.x) * cos(angle));
+  let reach = 1.0 + abs(scene.blob.x) * (along * along * along - ${LOBE_MEAN.toFixed(5)}) + scene.blob.y * cos(2.0 * angle) + scene.blob.z * cos(3.0 * angle);
+  let edge = (length(q) - reach) * min(scene.drop.z, scene.drop.w);
   return over(out, scene.blue.rgb, cover(edge));
 }
 `;
@@ -244,6 +249,7 @@ export function createGooRenderer(gpu: Gpu, surface: Surface, lines: Lines): Goo
           origin,
           span,
           drop: [state.drop.x, state.drop.y, DROP_SIZE * state.drop.sx, DROP_SIZE * state.drop.sy],
+          blob: [state.drop.blob.lobe, state.drop.blob.oval, state.drop.blob.ripple, 0],
           blue,
           ink,
           unit: fieldSize[0] / span[0]!,

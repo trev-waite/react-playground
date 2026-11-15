@@ -1,4 +1,4 @@
-import { DROP_RADIUS, PARK_GAP, RIDE_HEIGHT, layoutWord, type WordLayout } from "./timeline";
+import { DROP_RADIUS, PARK_GAP, RIDE_HEIGHT, layoutWord, type Blob, type WordLayout } from "./timeline";
 
 /** Layout units: the font is set at this size and the line scales to fit. */
 export const FONT_SIZE = 100;
@@ -82,8 +82,27 @@ export type LetterFrame = {
   bridge: BridgeFrame;
 };
 
-/** Everything one frame draws: word `word`'s letters and the drop at `x`, `y`, stretched `sx` by `sy`. */
-export type GooFrame = { word: number; letters: LetterFrame[]; drop: { x: number; y: number; sx: number; sy: number } };
+/** Everything one frame draws: word `word`'s letters and the drop at `x`, `y`, its outline bent to `blob`, then stretched `sx` by `sy`. */
+export type GooFrame = { word: number; letters: LetterFrame[]; drop: { x: number; y: number; sx: number; sy: number; blob: Blob } };
+
+/** The share of a lobe's reach that its far side gives up, so drawing out a point flattens the other side rather than only adding to the drop. */
+export const LOBE_MEAN = 2 / (3 * Math.PI);
+
+/** The drop's edge at `angle` (radians, from +x toward +y), as a share of its radius. */
+export function blobRadius(blob: Blob, angle: number): number {
+  const along = Math.max(0, Math.sign(blob.lobe) * Math.cos(angle));
+  return 1 + Math.abs(blob.lobe) * (along ** 3 - LOBE_MEAN) + blob.oval * Math.cos(2 * angle) + blob.ripple * Math.cos(3 * angle);
+}
+
+/** The drop's outline as an SVG path around the origin, `radius` across where round. */
+export function blobPath(blob: Blob, radius: number, steps = 48): string {
+  const points = Array.from({ length: steps }, (_, i) => {
+    const angle = (i / steps) * Math.PI * 2;
+    const r = radius * blobRadius(blob, angle);
+    return `${(r * Math.cos(angle)).toFixed(2)} ${(r * Math.sin(angle)).toFixed(2)}`;
+  });
+  return `M${points.join("L")}Z`;
+}
 
 /** The width at which the drain wipes across a letter, as a share of the letter. */
 export const DRAIN_SOFTNESS = 0.6;

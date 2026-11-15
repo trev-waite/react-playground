@@ -14,6 +14,7 @@ import {
   BLUE,
   DRAIN_SOFTNESS,
   INK,
+  blobPath,
   measureLines,
   SPILL_X,
   SPILL_Y,
@@ -21,7 +22,7 @@ import {
   type GooFrame,
   type Lines,
 } from "./scene";
-import { BEAD_RADIUS, phases, poseAt, restingPose, type Pose } from "./timeline";
+import { BEAD_RADIUS, phases, poseAt, restingPose, ROUND, type Pose } from "./timeline";
 
 /**
  * The SVG fallback's drain gradient runs across the wipe itself, from fully
@@ -56,7 +57,7 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
   const groups = Array.from(svg.querySelectorAll<SVGGElement>("[data-word]"));
   const slime = Array.from(svg.querySelectorAll<SVGGElement>("[data-slime]"));
   const inks = Array.from(svg.querySelectorAll<SVGDefsElement>("[data-inks]"));
-  const drop = svg.querySelector<SVGCircleElement>("[data-drop]") ?? undefined;
+  const drop = svg.querySelector<SVGPathElement>("[data-drop]") ?? undefined;
   return state => {
     const letters = groups[state.word]?.children;
     const bridges = slime[state.word]?.querySelectorAll("path");
@@ -76,6 +77,7 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
       write(beads?.[i], "r", letter.bridge.bead.toFixed(2));
     });
     write(drop, "transform", `translate(${state.drop.x.toFixed(2)} ${state.drop.y.toFixed(2)}) scale(${state.drop.sx.toFixed(4)} ${state.drop.sy.toFixed(4)})`);
+    write(drop, "d", blobPath(state.drop.blob, DROP_SIZE));
   };
 }
 
@@ -125,7 +127,13 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
       stretchVelocity += (DROP_STIFFNESS * (target - stretch) - DROP_DAMPING * stretchVelocity) * seconds;
       stretch = Math.min(0.5, Math.max(-0.3, stretch + stretchVelocity * seconds));
     }
-    const drop = { x: pose.dropX, y: DROP_Y + pose.dropSink, sx: (1 + stretch) * pose.dropScale, sy: pose.dropScale / (1 + stretch * 0.55) };
+    const drop = {
+      x: pose.dropX,
+      y: DROP_Y + pose.dropSink,
+      sx: (1 + stretch) * pose.dropScale,
+      sy: pose.dropScale / (1 + stretch * 0.55),
+      blob: pose.dropBlob,
+    };
     const letters = pose.letters.map((letter, i) => {
       const layout = word.letters[i]!;
       const center = layout.left + layout.width / 2;
@@ -348,7 +356,7 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
                 ))}
               </g>
             ))}
-            <circle data-drop="" r={DROP_SIZE} className={styles.drop} />
+            <path data-drop="" d={blobPath(ROUND, DROP_SIZE)} className={styles.drop} />
           </g>
         </svg>
       </div>
