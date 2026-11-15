@@ -26,7 +26,8 @@ function Silhouette({ className, pixels }: { className?: string; pixels?: number
 /**
  * The layers of one flight, played forward to open and backward to close.
  * `stale` marks a stage resized mid-flight; `trace` is the frame that redraws
- * the presence bead while the flight plays, from where the dot sat, `dot`.
+ * the presence bead while the flight plays, from where the dot sat, `dot`,
+ * toward the room (`heading` 1) or back out (-1).
  */
 type Flight = {
   animations: Animation[];
@@ -36,6 +37,7 @@ type Flight = {
   stale: boolean;
   trace: number;
   dot: Dot | null;
+  heading: 1 | -1;
 };
 
 type Layers = { stage: HTMLElement; avatar: HTMLElement; portal: HTMLElement; room: HTMLElement; portrait: HTMLElement; content: HTMLElement };
@@ -101,7 +103,7 @@ function launch(layers: Layers, g: Geometry, reduced: boolean): Flight {
       timing,
     ),
   );
-  return { animations, portal, geometry: g, reduced, stale: false, trace: 0, dot: null };
+  return { animations, portal, geometry: g, reduced, stale: false, trace: 0, dot: null, heading: 1 };
 }
 
 function prefersReducedMotion(): boolean {
@@ -115,15 +117,16 @@ function steer(flight: Flight, direction: 1 | -1) {
   }
 }
 
-/** Where the presence dot sits on screen right now, in stage px. */
+/** Where the presence dot sits on screen right now, in stage px, at its full size even while it is still scaling in. */
 function measureDot(stage: HTMLElement, presence: HTMLElement): Dot {
   const stageRect = stage.getBoundingClientRect();
   const rect = presence.getBoundingClientRect();
   const scale = stageScale(stage);
+  const own = Number.parseFloat(getComputedStyle(presence).scale) || 1;
   return {
     x: (rect.left + rect.width / 2 - stageRect.left) / scale,
     y: (rect.top + rect.height / 2 - stageRect.top) / scale,
-    radius: rect.width / 2 / scale,
+    radius: rect.width / 2 / scale / own,
   };
 }
 
@@ -141,7 +144,7 @@ function traceDot(flight: Flight, stage: HTMLElement, bead: SVGPathElement, dot:
       bead.setAttribute("d", d);
       bead.style.strokeWidth = `${(ringAt(ms / OPEN_MS) * 2).toFixed(2)}px`;
     }
-    const gone = d === "" && flight.portal.playbackRate > 0;
+    const gone = d === "" && flight.heading > 0;
     // perf-allow: runs only while a flight the viewer started plays, at most 1.3s, and stops once the bead has ridden off the stage.
     flight.trace = flight.portal.playState === "running" && !gone ? requestAnimationFrame(draw) : 0;
   };
@@ -256,6 +259,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     if (stage && presence && bead && online && !flight.reduced) {
       const dot = flight.trace && flight.dot ? flight.dot : measureDot(stage, presence);
       flight.dot = dot;
+      flight.heading = direction;
       steer(flight, direction);
       traceDot(flight, stage, bead, dot);
       return;

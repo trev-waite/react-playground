@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type CSSProperties } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useGpu } from "@/gpu";
 import { createGooRenderer, type GooRenderer } from "./gpuGoo";
 import {
@@ -22,6 +22,18 @@ import {
   type Lines,
 } from "./scene";
 import { BEAD_RADIUS, phases, poseAt, restingPose, type Pose } from "./timeline";
+
+/**
+ * Where the SVG fallback's drain gradient sets its stops, as a share of the
+ * wipe from fully set (1) to blue (0). The middle ones follow the GPU wipe's
+ * smoothstep, so both wipes ease the same way.
+ */
+const DRAIN_STOPS = [1, 0.75, 0.25, 0] as const;
+
+function drainColor(at: number): string {
+  const set = at * at * (3 - 2 * at);
+  return `rgb(${BLUE.map((blue, channel) => Math.round(blue + (INK[channel]! - blue) * set)).join(" ")})`;
+}
 
 /** How far either side of the bead (in bead radii) the thread thins before it breaks. */
 const PINCH_SPREAD = 2.1;
@@ -56,8 +68,8 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
       const drain = drains?.[i];
       write(drain, "x1", letter.toward > 0 ? "0" : "1");
       write(drain, "x2", letter.toward > 0 ? "1" : "0");
-      write(drain?.children[0], "offset", (letter.drain * (1 + DRAIN_SOFTNESS) - DRAIN_SOFTNESS).toFixed(3));
-      write(drain?.children[1], "offset", (letter.drain * (1 + DRAIN_SOFTNESS)).toFixed(3));
+      const front = letter.drain * (1 + DRAIN_SOFTNESS);
+      DRAIN_STOPS.forEach((at, stop) => write(drain?.children[stop], "offset", (front - DRAIN_SOFTNESS * at).toFixed(3)));
       write(bridges?.[i], "d", bridgePath(letter.bridge));
       write(beads?.[i], "cx", letter.bridge.beadX.toFixed(2));
       write(beads?.[i], "cy", letter.bridge.beadY.toFixed(2));
@@ -264,7 +276,7 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
     },
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     gpuShownRef.current = status === "running";
     if (!gpuShownRef.current && latestRef.current) paintSvgRef.current?.(latestRef.current);
   }, [status]);
@@ -309,8 +321,9 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
             <defs key={index} data-inks={index}>
               {word.letters.map((_, i) => (
                 <linearGradient key={i} id={`${filterId}-ink-${index}-${i}`}>
-                  <stop offset="0" stopColor={`rgb(${INK.join(" ")})`} />
-                  <stop offset="0" stopColor={`rgb(${BLUE.join(" ")})`} />
+                  {DRAIN_STOPS.map(at => (
+                    <stop key={at} offset="0" stopColor={drainColor(at)} />
+                  ))}
                 </linearGradient>
               ))}
             </defs>
