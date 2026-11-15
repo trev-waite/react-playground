@@ -24,15 +24,10 @@
   overflow: visible;
 }
 
-.strand {
-  stroke: #2448d8;
-  stroke-linecap: round;
-}
-
-.drop {
+.slime {
   fill: #2448d8;
 }
 
-.neck {
+.drop {
   fill: #2448d8;
 }
