@@ -10,7 +10,7 @@ export const meta: CardMeta = {
   },
 };
 
-const PROFILE = { name: "Sam Rivera", handle: "@blurryface" };
+const PROFILE = { name: "Bruce Wayne", handle: "@blurryface" };
 
 export default function ProfileButtonPreview() {
   return <ProfileButton profile={PROFILE} size={88} />;
