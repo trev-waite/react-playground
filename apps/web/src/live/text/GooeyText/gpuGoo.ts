@@ -8,8 +8,7 @@ import {
   fontAt,
   FONT_SIZE,
   GOO_BLUR,
-  GOO_CUT,
-  GOO_GAIN,
+  GOO_EDGE,
   HEIGHT,
   inkColor,
   SPILL_X,
@@ -107,8 +106,9 @@ const COMPOSITE_SHADER = /* wgsl */ `
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let goo = textureSampleLevel(field, fieldSampler, uv, 0.0);
+  let edge = max(fwidth(goo.a), 1e-4);
   if (goo.a <= 0.0) { return vec4f(0.0); }
-  let alpha = clamp(${GOO_GAIN.toFixed(1)} * goo.a - ${GOO_CUT.toFixed(1)}, 0.0, 1.0);
+  let alpha = clamp((goo.a - ${GOO_EDGE.toFixed(4)}) / edge + 0.5, 0.0, 1.0);
   return vec4f(goo.rgb / goo.a * alpha, alpha);
 }
 `;
@@ -167,7 +167,8 @@ export type GooRenderer = { paint(state: GooFrame): void; destroy(): void };
 /**
  * The goo on the GPU, matching the SVG filter, which costs WebKit about 10ms
  * a frame: the letters, strands, and drop are drawn into a half-size buffer,
- * blurred, then cut back to a hard edge at full size.
+ * blurred, then cut back at full size to an edge one pixel soft, even where
+ * two shapes are just pinching together.
  */
 export function createGooRenderer(gpu: Gpu, surface: Surface, lines: Lines): GooRenderer {
   if (lines.words.some(word => word.letters.length > MAX_LETTERS)) throw new Error("Gooey Text: word too long for the GPU goo");
@@ -214,7 +215,7 @@ export function createGooRenderer(gpu: Gpu, surface: Surface, lines: Lines): Goo
         scene: {
           origin,
           span,
-          drop: [state.drop.x, DROP_Y, DROP_SIZE * state.drop.sx, DROP_SIZE * state.drop.sy],
+          drop: [state.drop.x, state.drop.y, DROP_SIZE * state.drop.sx, DROP_SIZE * state.drop.sy],
           blue,
           unit: fieldSize[0] / span[0]!,
           count: Math.min(word.length, state.letters.length),

@@ -1,44 +1,53 @@
 /** The room's walls: the portrait fades to this at its edge, so it melts into the dark. */
 export const ROOM_COLOR = "#000000";
 
-/** The crisp sketch is drawn this small; scaling it up is the blur. */
-const SKETCH = 22;
-const MIDDLE = 88;
+/** The bust's soft edge, as a share of the picture's width. */
+const SOFTNESS = 0.017;
 
-function sketch(ctx: CanvasRenderingContext2D, s: number) {
-  const backlight = ctx.createRadialGradient(s * 0.5, s * 0.42, 0, s * 0.5, s * 0.5, s * 0.52);
-  backlight.addColorStop(0, "#5b616e");
-  backlight.addColorStop(0.5, "#33363e");
-  backlight.addColorStop(1, "#16171b");
-  ctx.fillStyle = backlight;
-  ctx.fillRect(0, 0, s, s);
-  const rim = ctx.createRadialGradient(s * 0.5, s * 0.36, 0, s * 0.5, s * 0.36, s * 0.3);
-  rim.addColorStop(0, "rgb(92 132 255 / 0.55)");
-  rim.addColorStop(1, "rgb(92 132 255 / 0)");
-  ctx.fillStyle = rim;
-  ctx.fillRect(0, 0, s, s);
+type Point = readonly [number, number];
+type Curve = readonly [Point, Point, Point];
 
-  ctx.fillStyle = ROOM_COLOR;
+/**
+ * Traces a shape that is the same on both sides of the picture's middle: its
+ * right half runs from `from` on the middle line through `curves` (two
+ * controls and an end each) back to the middle line, and is drawn mirrored too.
+ */
+function mirrored(ctx: CanvasRenderingContext2D, s: number, shift: number, from: Point, curves: readonly Curve[]) {
+  for (const flip of [1, -1]) {
+    const at = ([x, y]: Point) => [s * (0.5 + (x - 0.5) * flip) + shift, s * y] as const;
+    ctx.moveTo(...at(from));
+    for (const [c1, c2, end] of curves) ctx.bezierCurveTo(...at(c1), ...at(c2), ...at(end));
+    ctx.closePath();
+  }
+}
+
+/**
+ * Head and shoulders in a square `s` wide, `shift` along: an oval head that
+ * narrows to the jaw, a short neck, and shoulders that slope down from it and
+ * round over at the arms.
+ */
+function bust(ctx: CanvasRenderingContext2D, s: number, shift: number) {
   ctx.beginPath();
-  ctx.arc(s * 0.5, s * 0.4, s * 0.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(s * 0.43, s * 0.5);
-  ctx.lineTo(s * 0.57, s * 0.5);
-  ctx.lineTo(s * 0.58, s * 0.66);
-  ctx.bezierCurveTo(s * 0.74, s * 0.68, s * 0.86, s * 0.76, s * 0.9, s * 1.02);
-  ctx.lineTo(s * 0.1, s * 1.02);
-  ctx.bezierCurveTo(s * 0.14, s * 0.76, s * 0.26, s * 0.68, s * 0.42, s * 0.66);
-  ctx.closePath();
+  mirrored(ctx, s, shift, [0.5, 0.17], [
+    [[0.6, 0.17], [0.655, 0.25], [0.655, 0.35]],
+    [[0.655, 0.45], [0.6, 0.545], [0.5, 0.555]],
+  ]);
+  mirrored(ctx, s, shift, [0.5, 0.48], [
+    [[0.56, 0.48], [0.585, 0.48], [0.585, 0.5]],
+    [[0.585, 0.59], [0.6, 0.64], [0.66, 0.665]],
+    [[0.74, 0.69], [0.8, 0.71], [0.845, 0.745]],
+    [[0.905, 0.79], [0.935, 0.89], [0.945, 1.04]],
+    [[0.945, 1.04], [0.5, 1.04], [0.5, 1.04]],
+  ]);
   ctx.fill();
 }
 
 /**
- * Paints a blurry black silhouette, head and shoulders, against soft graphite
- * light with a faint blue rim behind the head, into
- * a square canvas, fading to ROOM_COLOR at the edge of its circle. The bust is
- * drawn crisp on a tiny canvas and scaled up twice with smoothing, which blurs
- * it the same in every browser, with no filter (Safari's canvas lacks one).
+ * Paints a soft black silhouette, head and shoulders, against a white light
+ * behind the head, into a square canvas `pixels` wide, fading to ROOM_COLOR
+ * at the edge of its circle. The bust is drawn off the canvas and only its
+ * shadow lands on it, which blurs it smoothly at full resolution in every
+ * browser, with no filter (Safari's canvas lacks one).
  */
 export function paintSilhouette(canvas: HTMLCanvasElement, pixels: number) {
   if (canvas.width !== pixels || canvas.height !== pixels) {
@@ -46,23 +55,28 @@ export function paintSilhouette(canvas: HTMLCanvasElement, pixels: number) {
     canvas.height = pixels;
   }
   const ctx = canvas.getContext("2d");
-  const small = document.createElement("canvas");
-  const middle = document.createElement("canvas");
-  small.width = small.height = SKETCH;
-  middle.width = middle.height = MIDDLE;
-  const smallCtx = small.getContext("2d");
-  const middleCtx = middle.getContext("2d");
-  if (!ctx || !smallCtx || !middleCtx) return;
+  if (!ctx) return;
 
-  sketch(smallCtx, SKETCH);
-  middleCtx.imageSmoothingQuality = "high";
-  middleCtx.drawImage(small, 0, 0, MIDDLE, MIDDLE);
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(middle, 0, 0, pixels, pixels);
+  const backlight = ctx.createRadialGradient(pixels * 0.5, pixels * 0.36, 0, pixels * 0.5, pixels * 0.42, pixels * 0.62);
+  backlight.addColorStop(0, "#f4f4f4");
+  backlight.addColorStop(0.4, "#d2d2d2");
+  backlight.addColorStop(1, "#808080");
+  ctx.fillStyle = backlight;
+  ctx.fillRect(0, 0, pixels, pixels);
+
+  ctx.save();
+  ctx.shadowOffsetX = pixels * 2;
+  ctx.shadowBlur = pixels * SOFTNESS * 2;
+  ctx.shadowColor = ROOM_COLOR;
+  ctx.fillStyle = ROOM_COLOR;
+  bust(ctx, pixels, -pixels * 2);
+  ctx.restore();
 
   const vignette = ctx.createRadialGradient(pixels / 2, pixels / 2, 0, pixels / 2, pixels / 2, pixels / 2);
   vignette.addColorStop(0, "rgb(0 0 0 / 0)");
-  vignette.addColorStop(0.74, "rgb(0 0 0 / 0)");
+  for (const [stop, alpha] of [[0.55, 0], [0.7, 0.08], [0.8, 0.24], [0.9, 0.58], [0.96, 0.86]] as const) {
+    vignette.addColorStop(stop, `rgb(0 0 0 / ${alpha})`);
+  }
   vignette.addColorStop(1, ROOM_COLOR);
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, pixels, pixels);

@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DROP_RADIUS,
+  ERASE_STEP_MS,
   HOLD_MS,
   LEAD,
+  PERIOD_MS,
+  PERIOD_SCALE,
+  RIDE_HEIGHT,
   SETTLE_MS,
   SETTLE_STAGGER_MS,
   SNAP_DISTANCE,
@@ -11,8 +16,10 @@ import {
   breath,
   ease,
   layoutWord,
+  periodAt,
   phases,
   poseAt,
+  restingPose,
   sway,
   tether,
   windup,
@@ -23,6 +30,12 @@ const measure = (text: string) => text.length * 60;
 const hello = layoutWord("hello", measure, 800);
 const flow = layoutWord("flow", measure, 800);
 const timing = phases(hello.letters.length);
+const lastEdge = hello.letters.at(-1)!.left + hello.letters.at(-1)!.width;
+
+/** Pose of `hello` `ms` into its hold. */
+const holding = (ms: number) => poseAt(hello, flow, FONT, timing.glide + timing.type + ms);
+/** Once the period has landed and its squash has died, until it lifts off again. */
+const PERCHED: [number, number] = [PERIOD_MS + 500, HOLD_MS - WINDUP_MS];
 
 /** Pose of `hello` `ms` into its typing phase. */
 const typing = (ms: number) => poseAt(hello, flow, FONT, timing.glide + ms);
@@ -97,11 +110,60 @@ describe("Gooey Text timeline", () => {
     expect(held.letters.every(letter => letter.scale === 1 && letter.ink === 1 && letter.strand === 0)).toBe(true);
   });
 
-  test("the hold starts at rest, so a reduced-motion frame drawn there is still", () => {
-    const start = poseAt(hello, flow, FONT, timing.glide + timing.type);
+  test("the hold starts where typing left the drop, at full size on its riding line", () => {
+    const start = holding(0);
     expect(start.letters.every(letter => letter.stretch === 1 && letter.dy === 0)).toBe(true);
+    expect(start.dropX).toBeCloseTo(typing(timing.type - 0.01).dropX, 0);
+    expect(start.dropSink).toBe(0);
     expect(start.dropScale).toBe(1);
     expect(start.dropSquash).toBe(0);
+  });
+
+  test("the drop rolls back and lands on the baseline just past the last letter, a period's size", () => {
+    const period = periodAt(hello, FONT);
+    const landed = holding(PERCHED[0]);
+    expect(landed.dropX).toBeCloseTo(period.x, 0);
+    expect(landed.dropX - lastEdge).toBeLessThan(0.25 * FONT);
+    expect(landed.dropX - DROP_RADIUS * PERIOD_SCALE * FONT).toBeGreaterThan(lastEdge);
+    expect(landed.dropSink).toBeCloseTo(period.sink, 5);
+    expect(period.sink + DROP_RADIUS * PERIOD_SCALE * FONT).toBeCloseTo(RIDE_HEIGHT * FONT, 5);
+    expect(landed.dropScale / PERIOD_SCALE).toBeCloseTo(1, 1);
+  });
+
+  test("the period lands with a flattening squash that dies away", () => {
+    const squashes = Array.from({ length: 200 }, (_, i) => holding(PERIOD_MS * 0.5 + i * 4).dropSquash);
+    expect(Math.max(...squashes)).toBeGreaterThan(0.2);
+    expect(holding(PERCHED[0]).dropSquash).toBe(0);
+  });
+
+  test("the reduced-motion still shows the word set black with its period", () => {
+    const still = restingPose(hello, FONT);
+    const period = periodAt(hello, FONT);
+    expect(still.letters.every(letter => letter.scale === 1 && letter.ink === 1 && letter.strand === 0 && letter.stretch === 1)).toBe(true);
+    expect([still.dropX, still.dropSink, still.dropScale, still.dropSquash]).toEqual([period.x, period.sink, PERIOD_SCALE, 0]);
+  });
+
+  test("the period lifts off to full size on its riding line before the erase, which starts from where it lifted", () => {
+    const lifted = holding(HOLD_MS - 0.01);
+    expect(lifted.dropSink).toBeCloseTo(0, 1);
+    expect(lifted.dropScale).toBeCloseTo(1, 1);
+    expect(lifted.dropX).toBeGreaterThan(periodAt(hello, FONT).x);
+    const erasing = poseAt(hello, flow, FONT, timing.glide + timing.type + HOLD_MS);
+    expect(erasing.dropX).toBeCloseTo(lifted.dropX, 0);
+    expect(erasing.dropSink).toBe(0);
+  });
+
+  test("the erase grips the word gradually, so no letter flashes blue the instant it starts", () => {
+    const erase = (ms: number) => poseAt(hello, flow, FONT, timing.glide + timing.type + HOLD_MS + ms).letters.at(-1)!;
+    expect(erase(0).ink).toBe(1);
+    expect(erase(0).strand).toBe(0);
+    let previous = erase(0).ink;
+    for (let ms = 4; ms <= ERASE_STEP_MS; ms += 4) {
+      const ink = erase(ms).ink;
+      expect(previous - ink).toBeLessThan(0.1);
+      previous = ink;
+    }
+    expect(erase(ERASE_STEP_MS * 1.5).strand).toBeGreaterThan(0);
   });
 
   test("as the drop parks, a wobble runs back through the word from the letter nearest it, then dies away", () => {
@@ -130,8 +192,9 @@ describe("Gooey Text timeline", () => {
     expect(sway(0, 0)).toBe(0);
   });
 
-  test("the drop breathes while the word holds, gently", () => {
-    const scales = Array.from({ length: 100 }, (_, i) => poseAt(hello, flow, FONT, timing.glide + timing.type + (i * HOLD_MS) / 100).dropScale);
+  test("the period breathes while the word holds, gently", () => {
+    const [from, to] = PERCHED;
+    const scales = Array.from({ length: 100 }, (_, i) => holding(from + ((to - from) * i) / 100).dropScale / PERIOD_SCALE);
     expect(Math.max(...scales)).toBeGreaterThan(1.02);
     expect(Math.min(...scales)).toBeLessThan(0.98);
     expect(scales.every(scale => Math.abs(scale - 1) <= 0.05)).toBe(true);

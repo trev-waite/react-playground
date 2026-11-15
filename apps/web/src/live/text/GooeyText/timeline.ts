@@ -3,9 +3,11 @@
  * start of a word, then along it. Each letter is born inside the drop and is
  * left behind as the drop moves on: it stretches toward the drop on a strand
  * of slime that thins as they part, the strand snaps, and the letter, free,
- * turns black. The word settles with a wobble and sways while the drop
- * breathes; then the drop gathers itself and slides back, the strands reach
- * out again, and it swallows the word letter by letter before gliding on.
+ * turns black. The drop rolls back and lands on the line as the word's
+ * period, and the word settles with a wobble and sways while the period
+ * breathes; then the drop lifts off, gathers itself and slides back, the
+ * strands reach out again, and it swallows the word letter by letter before
+ * gliding on.
  *
  * Distances are in font-size units (`em`), so the look holds at any size.
  */
@@ -21,12 +23,24 @@ export const SETTLE_MS = 900;
 export const SETTLE_STAGGER_MS = 70;
 /** While the word holds, the drop breathes: it swells and eases back over this period. */
 export const BREATH_MS = 1700;
-/** Before it slides back to swallow the word, the drop gathers itself for this long. */
-export const WINDUP_MS = 320;
+/** Before it slides back to swallow the word, the drop lifts off the line and gathers itself for this long. */
+export const WINDUP_MS = 380;
+/** Once the last letter snaps free, the drop rolls back and lands on the line as the word's period over this long. */
+export const PERIOD_MS = 620;
+/** The landing's squash wobbles out over this long. */
+const THUD_MS = 460;
 
 /** The drop's radius, and how far past the word's last letter it parks. */
 export const DROP_RADIUS = 0.17;
-export const PARK_GAP = 0.75;
+export const PARK_GAP = 0.6;
+/** The drop rides this high (em) above the baseline, through the middle of the lowercase letters. */
+export const RIDE_HEIGHT = 0.27;
+/** As the word's period, the drop shrinks to this share of its size. */
+export const PERIOD_SCALE = 0.52;
+/** Open space (em) between the last letter's advance and the period. */
+const PERIOD_GAP = 0.04;
+/** How far (em) the drop pulls back off the period as it winds up, so it lunges at the word from a little way off. */
+const WINDUP_PULL = 0.16;
 /** A strand stretches across this much open gap (em, letter edge to drop edge) before it snaps. */
 export const SNAP_DISTANCE = 0.4;
 /** The drop rides this far (em) past a newborn letter's center, so the strand has room to show. */
@@ -122,14 +136,23 @@ function passing(from: number, to: number, x: number): number {
   return (low + high) / 2;
 }
 
+/** Where the period sits: just past the word's last letter, `x`, and resting on the baseline, `sink` below the line the drop rides. */
+export function periodAt(word: WordLayout, fontSize: number): { x: number; sink: number } {
+  const last = word.letters.at(-1);
+  const radius = DROP_RADIUS * PERIOD_SCALE;
+  const edge = last ? last.left + last.width : word.left;
+  return { x: edge + (PERIOD_GAP + radius) * fontSize, sink: (RIDE_HEIGHT - radius) * fontSize };
+}
+
 /** `ink` runs from 0 (drop blue) to 1 (black). `strand` is a width in em, 0 when snapped. */
 export type LetterPose = { scale: number; stretch: number; dx: number; dy: number; ink: number; strand: number };
 /**
  * The drop's stretch from its speed comes from the caller, which knows it
- * across frames. `dropScale` is its breath (1 at rest), and `dropSquash` a
- * stretch it adds on its own: negative squeezes it narrow and tall.
+ * across frames. `dropSink` is how far below its riding line it sits,
+ * `dropScale` its size and breath (1 at full size), and `dropSquash` a stretch
+ * it adds on its own: negative squeezes it narrow and tall, positive flat.
  */
-export type Pose = { letters: LetterPose[]; dropX: number; dropScale: number; dropSquash: number };
+export type Pose = { letters: LetterPose[]; dropX: number; dropSink: number; dropScale: number; dropSquash: number };
 
 /** A wobble `t` (0 to 1) of the way through: a few swings that die away, 0 at both ends. */
 function jiggle(t: number): number {
@@ -152,6 +175,13 @@ export function sway(ms: number, index: number): number {
   const rise = smoothstep(SETTLE_MS * 0.6, SETTLE_MS * 1.4, ms);
   const fall = 1 - smoothstep(HOLD_MS - WINDUP_MS - 400, HOLD_MS - WINDUP_MS, ms);
   return rise * fall * Math.sin((ms / BREATH_MS) * Math.PI * 2 - index * 0.65);
+}
+
+/** The drop flattening as it lands on the line `ms` after impact: wide at first, then a few swings that die away. */
+export function thud(ms: number): number {
+  const t = ms / THUD_MS;
+  if (t <= 0 || t >= 1) return 0;
+  return 0.34 * Math.exp(-3.5 * t) * Math.cos(t * Math.PI * 2 * 1.6) * (1 - t);
 }
 
 /** The drop gathering itself `ms` into the hold: it squeezes narrow just before the run back, then lets go into it. */
@@ -210,7 +240,7 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
 
   if (ms < timing.glide) {
     const from = ends(previous, fontSize)[0];
-    return { letters: hidden, dropX: from + (start - from) * ease(ms / timing.glide), dropScale: 1, dropSquash: 0 };
+    return { letters: hidden, dropX: from + (start - from) * ease(ms / timing.glide), dropSink: 0, dropScale: 1, dropSquash: 0 };
   }
 
   let t = ms - timing.glide;
@@ -234,7 +264,7 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
         strand: pull.strand,
       };
     });
-    return { letters, dropX, dropScale: 1, dropSquash: 0 };
+    return { letters, dropX, dropSink: 0, dropScale: 1, dropSquash: 0 };
   }
 
   t -= timing.type;
@@ -251,11 +281,12 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
         strand: 0,
       };
     });
-    return { letters: settled, dropX: park, dropScale: breath(t), dropSquash: windup(t) };
+    return { letters: settled, ...perched(park, periodAt(word, fontSize), t, fontSize) };
   }
 
   t -= timing.hold;
-  const dropX = along(park, start, t / ((n + 1) * ERASE_STEP_MS));
+  const dropX = along(periodAt(word, fontSize).x + WINDUP_PULL * fontSize, start, t / ((n + 1) * ERASE_STEP_MS));
+  const grip = smoothstep(0, ERASE_STEP_MS * 1.5, t);
   const letters = word.letters.map(letter => {
     const center = letter.left + letter.width / 2;
     const swallowed = smoothstep(0.45, -0.3, (dropX - center) / fontSize);
@@ -263,12 +294,43 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
     const pull = tether(gap(letter, 0, dropX, fontSize), 1);
     return {
       scale: 1 - swallowed,
-      stretch: pull.stretch,
-      dx: (pull.lean * fontSize + (dropX - center) * swallowed) * 0.9,
+      stretch: 1 + (pull.stretch - 1) * grip,
+      dx: (pull.lean * grip * fontSize + (dropX - center) * swallowed) * 0.9,
       dy: 0,
-      ink: Math.min(pull.ink, 1 - swallowed),
-      strand: pull.strand,
+      ink: 1 - (1 - Math.min(pull.ink, 1 - swallowed)) * grip,
+      strand: pull.strand * grip,
     };
   });
-  return { letters, dropX, dropScale: 1, dropSquash: 0 };
+  return { letters, dropX, dropSink: 0, dropScale: 1, dropSquash: 0 };
+}
+
+/**
+ * The drop `ms` into the hold. It rolls back from where it parked and falls
+ * onto the line as the word's period, shrinking to a dot and landing with a
+ * squash, and breathes there. At the end it lifts off, swelling back to full
+ * size, pulls back a touch, and squeezes narrow to lunge at the word.
+ */
+function perched(park: number, period: { x: number; sink: number }, ms: number, fontSize: number) {
+  const land = ms / PERIOD_MS;
+  const fall = clamp01((land - 0.15) / 0.6);
+  const lift = ease((ms - (HOLD_MS - WINDUP_MS)) / WINDUP_MS);
+  const shrink = ease(land / 0.8) * (1 - lift);
+  return {
+    dropX: park + (period.x - park) * ease(land) + WINDUP_PULL * fontSize * lift,
+    dropSink: period.sink * fall * fall * (1 - lift),
+    dropScale: (1 - (1 - PERIOD_SCALE) * shrink) * breath(ms),
+    dropSquash: thud(ms - PERIOD_MS * 0.75) + windup(ms),
+  };
+}
+
+/** The word as it reads at rest, for a still frame: every letter set black, and the drop its period. */
+export function restingPose(word: WordLayout, fontSize: number): Pose {
+  const period = periodAt(word, fontSize);
+  return {
+    letters: word.letters.map(() => ({ scale: 1, stretch: 1, dx: 0, dy: 0, ink: 1, strand: 0 })),
+    dropX: period.x,
+    dropSink: period.sink,
+    dropScale: PERIOD_SCALE,
+    dropSquash: 0,
+  };
 }
