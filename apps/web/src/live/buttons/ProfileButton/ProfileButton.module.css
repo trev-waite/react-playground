@@ -83,18 +83,23 @@
   outline-color: transparent;
 }
 
+/* The bead's layer shares the window's box and scale, so the compositor carries it with the rim. */
 .trace {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+  transform-origin: 50% 50%;
   visibility: hidden;
   pointer-events: none;
 }
 
 .stage[data-trace] .trace {
   visibility: visible;
+}
+
+.trace svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
 .trace path {

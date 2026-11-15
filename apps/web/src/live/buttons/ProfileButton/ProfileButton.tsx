@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { SegmentedControl } from "@/live/controls/SegmentedControl/SegmentedControl";
 import { Switch } from "@/live/controls/Switch/Switch";
 import { CLOSE_RATE, MAX_PORTRAIT, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
-import { beadPath, ringAt, type Dot } from "./presence";
+import { beadAt, type Dot } from "./presence";
 import { ROOM_COLOR, paintSilhouette } from "./silhouette";
 import styles from "./ProfileButton.module.css";
 
@@ -40,7 +40,15 @@ type Flight = {
   heading: 1 | -1;
 };
 
-type Layers = { stage: HTMLElement; avatar: HTMLElement; portal: HTMLElement; room: HTMLElement; portrait: HTMLElement; content: HTMLElement };
+type Layers = {
+  stage: HTMLElement;
+  avatar: HTMLElement;
+  portal: HTMLElement;
+  room: HTMLElement;
+  portrait: HTMLElement;
+  content: HTMLElement;
+  trace: HTMLElement;
+};
 
 /** The stage's on-screen scale, for a stage drawn inside a transformed card. */
 function stageScale(stage: HTMLElement): number {
@@ -61,9 +69,11 @@ function measure({ stage, avatar }: Layers): Geometry {
   );
 }
 
-function place({ portal, room, portrait, content }: Layers, g: Geometry) {
+function place({ portal, room, portrait, content, trace }: Layers, g: Geometry) {
   const { avatar: a, reach, stage } = g;
-  Object.assign(portal.style, { left: `${a.x - reach}px`, top: `${a.y - reach}px`, width: `${reach * 2}px`, height: `${reach * 2}px` });
+  const box = { left: `${a.x - reach}px`, top: `${a.y - reach}px`, width: `${reach * 2}px`, height: `${reach * 2}px` };
+  Object.assign(portal.style, box);
+  Object.assign(trace.style, box);
   Object.assign(room.style, { left: `${reach - a.x}px`, top: `${reach - a.y}px`, width: `${stage.width}px`, height: `${stage.height}px` });
   Object.assign(portrait.style, {
     left: `${g.portrait.x - g.portraitSize / 2}px`,
@@ -91,7 +101,7 @@ function launch(layers: Layers, g: Geometry, reduced: boolean): Flight {
   } else {
     const track = tracks(g);
     portal = layers.portal.animate(track.portal, timing);
-    animations.push(portal, layers.room.animate(track.room, timing));
+    animations.push(portal, layers.room.animate(track.room, timing), layers.trace.animate(track.portal, timing));
   }
   animations.push(
     layers.content.animate(
@@ -139,12 +149,12 @@ function traceDot(flight: Flight, stage: HTMLElement, bead: SVGPathElement, dot:
   cancelAnimationFrame(flight.trace);
   const draw = () => {
     const ms = Number(flight.portal.currentTime ?? 0);
-    const d = beadPath(flight.geometry, dot, ms);
-    if (bead.getAttribute("d") !== d) {
-      bead.setAttribute("d", d);
-      bead.style.strokeWidth = `${(ringAt(ms / OPEN_MS) * 2).toFixed(2)}px`;
+    const { path, stroke } = beadAt(flight.geometry, dot, ms);
+    if (bead.getAttribute("d") !== path) {
+      bead.setAttribute("d", path);
+      bead.style.strokeWidth = `${stroke.toFixed(2)}px`;
     }
-    const gone = d === "" && flight.heading > 0;
+    const gone = path === "" && flight.heading > 0;
     // perf-allow: runs only while a flight the viewer started plays, at most 1.3s, and stops once the bead has ridden off the stage.
     flight.trace = flight.portal.playState === "running" && !gone ? requestAnimationFrame(draw) : 0;
   };
@@ -226,6 +236,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
   const portraitRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const presenceRef = useRef<HTMLSpanElement>(null);
+  const traceRef = useRef<HTMLDivElement>(null);
   const beadRef = useRef<SVGPathElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
   const cockpit = useRef<Cockpit>({ flight: null });
@@ -233,15 +244,16 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
   const [online, setOnline] = useState(true);
 
   function layers(): Layers | null {
-    const [stage, avatar, portal, room, portrait, content] = [
+    const [stage, avatar, portal, room, portrait, content, trace] = [
       stageRef.current,
       avatarRef.current,
       portalRef.current,
       roomRef.current,
       portraitRef.current,
       contentRef.current,
+      traceRef.current,
     ];
-    return stage && avatar && portal && room && portrait && content ? { stage, avatar, portal, room, portrait, content } : null;
+    return stage && avatar && portal && room && portrait && content && trace ? { stage, avatar, portal, room, portrait, content, trace } : null;
   }
 
   function prime() {
@@ -368,9 +380,11 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
           </div>
         </div>
       </div>
-      <svg className={styles.trace} aria-hidden="true">
-        <path ref={beadRef} />
-      </svg>
+      <div ref={traceRef} className={styles.trace} aria-hidden="true">
+        <svg>
+          <path ref={beadRef} />
+        </svg>
+      </div>
     </div>
   );
 }

@@ -27,10 +27,20 @@ export const SETTLE_STAGGER_MS = 70;
 export const BREATH_MS = 1700;
 /** Before it slides back to swallow the word, the drop lifts off the line and gathers itself for this long. */
 export const WINDUP_MS = 380;
-/** The moment the drop turns past the last letter, it swings back and drops onto the line as the period over this long. */
-export const LAND_MS = 390;
+/** The moment the drop turns past the last letter, it swings back, hops, and drops onto the line as the period over this long. */
+export const LAND_MS = 440;
 /** How far into the landing swing the period touches the line, finishing its shrink as it does. */
 export const TOUCH = 0.9;
+/**
+ * The drop hops this high (em) above its riding line on its way to the period.
+ * It starts rising this long before it turns, so it is already climbing as it
+ * reverses and its path rounds over instead of turning a corner, and peaks
+ * this long after. The rise and the fall run about as long, so the drop eases
+ * over the top on one even arc.
+ */
+const HOP = 0.1;
+const HOP_LEAD_MS = 120;
+const HOP_APEX_MS = 140;
 /** The landing's squash wobbles out over this long. */
 const THUD_MS = 460;
 
@@ -352,7 +362,7 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
   let t = ms - timing.glide;
   if (t < timing.type + timing.hold) {
     const typed = word.letters.map((_, index) => typedLetter(word, index, start, park, timing.run, fontSize)(t));
-    if (t < timing.run) return { letters: typed, dropX: along(start, park, t / timing.run), dropSink: 0, dropScale: 1, dropSquash: 0 };
+    if (t < timing.run) return { letters: typed, dropX: along(start, park, t / timing.run), dropSink: hop(t - timing.run, 0, fontSize), dropScale: 1, dropSquash: 0 };
     const sinceTouch = t - timing.run - LAND_MS * TOUCH;
     const letters = typed.map((pose, index) => {
       const wobble = jiggle((sinceTouch - (n - 1 - index) * SETTLE_STAGGER_MS) / SETTLE_MS);
@@ -389,24 +399,35 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
 }
 
 /**
- * The drop `ms` after it turned past the last letter. It swings back and
- * drops onto the line as the word's period, shrinking to a dot and landing
+ * The drop `ms` after it turned past the last letter. It swings back, hops
+ * up, and drops onto the line as the word's period, shrinking to a dot and landing
  * with a squash, and breathes there. At the end it lifts off, swelling back to
  * full size, pulls back a touch, and squeezes narrow to lunge at the word.
  */
 function perched(park: number, period: { x: number; sink: number }, ms: number, fontSize: number) {
   const u = ms / LAND_MS;
-  const fall = clamp01((u - 0.08) / (TOUCH - 0.08));
   const held = ms - LAND_MS;
   const lift = ease((held - (HOLD_MS - WINDUP_MS)) / WINDUP_MS);
   const shrink = smoothstep(0.12, TOUCH, u) * (1 - lift);
   const sinceTouch = ms - LAND_MS * TOUCH;
   return {
     dropX: park + (period.x - park) * ease(u) + WINDUP_PULL * fontSize * lift,
-    dropSink: period.sink * fall * fall * (1 - lift),
+    dropSink: hop(ms, period.sink, fontSize) * (1 - lift),
     dropScale: (1 - (1 - PERIOD_SCALE) * shrink) * breath(sinceTouch),
     dropSquash: thud(sinceTouch) + windup(held),
   };
+}
+
+/**
+ * How far below its riding line the drop sits `ms` after it turns (negative
+ * before), landing at `sink`: it eases up off the line, slows over the top of
+ * its hop, and falls onto the line, gathering speed as it goes.
+ */
+function hop(ms: number, sink: number, fontSize: number): number {
+  const height = HOP * fontSize;
+  if (ms < HOP_APEX_MS) return -height * ease((ms + HOP_LEAD_MS) / (HOP_LEAD_MS + HOP_APEX_MS));
+  const fall = clamp01((ms - HOP_APEX_MS) / (LAND_MS * TOUCH - HOP_APEX_MS));
+  return -height + (sink + height) * fall * fall;
 }
 
 /** The word as it reads at rest, for a still frame: every letter set black, and the drop its period. */
