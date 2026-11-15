@@ -117,7 +117,7 @@ function steer(flight: Flight, direction: 1 | -1) {
   }
 }
 
-/** Where the presence dot sits on screen right now, in stage px, at its full size even while it is still scaling in. */
+/** Divides out the dot's own scale, so a dot still scaling in does not shrink the bead. */
 function measureDot(stage: HTMLElement, presence: HTMLElement): Dot {
   const stageRect = stage.getBoundingClientRect();
   const rect = presence.getBoundingClientRect();
@@ -253,7 +253,6 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     if (stageRef.current) releaseFlight(cockpit.current, stageRef.current);
   }
 
-  /** Plays the flight toward the room (1) or back out (-1), the presence dot riding the window's rim when it shows. */
   function fly(flight: Flight, direction: 1 | -1) {
     const [stage, presence, bead] = [stageRef.current, presenceRef.current, beadRef.current];
     if (stage && presence && bead && online && !flight.reduced) {

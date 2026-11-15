@@ -32,7 +32,6 @@ const BEND = 0.19;
 const SQUASH = 0.5;
 /** As it swirls, the bead carries its weight at the trailing end and thins toward the leading one, by this share. */
 const LEAN = 0.28;
-/** Points traced around the bead's outline. */
 const POINTS = 56;
 
 function clamp01(t: number) {
@@ -91,7 +90,6 @@ export function beadOutline(g: Geometry, dot: Dot, t: number): Point[] {
   return points;
 }
 
-/** The width of the white ring around the bead `t` of the way through the flight. */
 export function ringAt(t: number): number {
   return RING + (MELTED_RING - RING) * melted(t);
 }
