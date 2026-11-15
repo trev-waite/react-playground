@@ -1,8 +1,10 @@
 /**
  * The choreography, as a pure function of time. A blue drop glides to the
- * start of a word, then along it. Each letter is born inside the drop and is
- * left behind as the drop moves on: a fat bridge of slime holds it to the
- * drop and necks down as they part until it pinches off, flinging a bead of
+ * start of a word, then along it. Each letter is born inside the drop, which
+ * is drawn out toward it into a point and shrinks as it gives the letter up,
+ * then sloshes forward and swells back round. The letter is left behind as the
+ * drop moves on: a fat bridge of slime holds it to the drop and necks down as
+ * they part until it pinches off, flinging a bead of
  * slime back into the drop, while the blue drains out of the letter toward
  * the drop and leaves it black. Without stopping, the drop swings back and
  * drops onto the line as the word's period, and the landing sends a wobble
@@ -87,6 +89,9 @@ const PINCHING_MS = 120;
 const PINCH_DEPTH = 0.05;
 /** A freed letter springs back from its stretch on this beat. */
 const RECOIL_MS = 100;
+/** Each time a letter oozes out, the drop gives up a little of itself and swells back, over this long or until the next letter comes, if sooner. */
+export const GULP_MS = 240;
+const SHORTEST_GULP_MS = 110;
 
 export type Letter = { char: string; left: number; width: number };
 export type WordLayout = { letters: Letter[]; left: number; width: number };
@@ -203,7 +208,16 @@ export type LetterPose = { scale: number; stretch: number; dx: number; dy: numbe
  * `dropScale` its size and breath (1 at full size), and `dropSquash` a stretch
  * it adds on its own: negative squeezes it narrow and tall, positive flat.
  */
-export type Pose = { letters: LetterPose[]; dropX: number; dropSink: number; dropScale: number; dropSquash: number };
+export type Pose = { letters: LetterPose[]; dropX: number; dropSink: number; dropScale: number; dropSquash: number; dropBlob: Blob };
+
+/**
+ * The drop's outline as bends in its round edge, as shares of its radius:
+ * `lobe` draws it out into a point (toward +x when positive, -x when
+ * negative) while its far side flattens, `oval` widens it (below zero,
+ * narrows and heightens it), and `ripple` rumples it in thirds. All zero is round.
+ */
+export type Blob = { lobe: number; oval: number; ripple: number };
+export const ROUND: Blob = { lobe: 0, oval: 0, ripple: 0 };
 
 const HIDDEN: LetterPose = { scale: 0, stretch: 1, dx: 0, dy: 0, drain: 0, bridge: NO_BRIDGE };
 const SET: LetterPose = { scale: 1, stretch: 1, dx: 0, dy: 0, drain: 1, bridge: NO_BRIDGE };
@@ -258,6 +272,28 @@ export function recoil(ms: number): number {
   return Math.exp(-s * 2.2) * Math.cos(s * 2.6) * (1 - s / 6);
 }
 
+/** A swing `u` (0 to 1) of the way through a gulp: `swings` full swings that die away, 0 at both ends. */
+function slosh(u: number, swings: number, decay: number): number {
+  if (u <= 0 || u >= 1) return 0;
+  return Math.exp(-decay * u) * Math.sin(u * Math.PI * 2 * swings) * Math.sqrt(1 - u);
+}
+
+/** The drop's size, against its own, `ms` into a gulp `length` long after a letter oozes out of it: it shrinks as the letter takes its share, then swells back a touch past full and settles. */
+export function gulp(ms: number, length = GULP_MS): number {
+  return 1 - 0.2 * slosh(ms / length, 1, 1.2);
+}
+
+/**
+ * The drop's outline `ms` into the same gulp, the letter lying toward `side`
+ * (+1 right, -1 left): it is drawn out toward the letter into a point and
+ * stretched along it, then sloshes forward past round, heightening, and
+ * wobbles back to round, rumpling as it goes.
+ */
+export function gulpShape(ms: number, length: number, side: number): Blob {
+  const u = ms / length;
+  return { lobe: side * 0.5 * slosh(u, 1, 1.4), oval: 0.13 * slosh(u, 1.5, 1.5), ripple: 0.06 * slosh(u, 2, 1) };
+}
+
 /** The bridge across an open gap `d` (em; 0 or less where drop and letter overlap), necking down until it pinches at SNAP_DISTANCE. */
 export function bridgeAcross(d: number): Bridge {
   const pull = clamp01((d + NECK_START) / (SNAP_DISTANCE + NECK_START));
@@ -294,6 +330,11 @@ function gap(letter: Letter, dx: number, dropX: number, fontSize: number): numbe
   return (Math.abs(dropX - center) - letter.width / 2) / fontSize - DROP_RADIUS;
 }
 
+/** When (ms into typing) `letter` oozes out of the drop: as the drop leads past its center. */
+function birthOf(letter: Letter, start: number, park: number, run: number, fontSize: number): number {
+  return passing(start, park, letter.left + letter.width / 2 + LEAD * fontSize) * run;
+}
+
 /**
  * How the typing pass leaves one letter, `ms` into typing (past the run too,
  * where the drop has turned and only the letter's own clock runs). The drop
@@ -303,7 +344,7 @@ function gap(letter: Letter, dx: number, dropX: number, fontSize: number): numbe
 function typedLetter(word: WordLayout, index: number, start: number, park: number, run: number, fontSize: number) {
   const letter = word.letters[index]!;
   const center = letter.left + letter.width / 2;
-  const bornAt = passing(start, park, center + LEAD * fontSize) * run;
+  const bornAt = birthOf(letter, start, park, run, fontSize);
   const reach = (ms: number) => {
     const age = ms - bornAt;
     const dropX = along(start, park, Math.min(ms, run) / run);
@@ -356,13 +397,26 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
       dropSink: 0,
       dropScale: 1,
       dropSquash: gather(ms - (timing.glide - WINDUP_MS)),
+      dropBlob: ROUND,
     };
   }
 
   let t = ms - timing.glide;
   if (t < timing.type + timing.hold) {
     const typed = word.letters.map((_, index) => typedLetter(word, index, start, park, timing.run, fontSize)(t));
-    if (t < timing.run) return { letters: typed, dropX: along(start, park, t / timing.run), dropSink: hop(t - timing.run, 0, fontSize), dropScale: 1, dropSquash: 0 };
+    const births = word.letters.map(letter => birthOf(letter, start, park, timing.run, fontSize));
+    const side = Math.sign(start - park);
+    let gulped = 1;
+    const dropBlob = { ...ROUND };
+    births.forEach((born, i) => {
+      const length = Math.min(GULP_MS, Math.max(SHORTEST_GULP_MS, (births[i + 1] ?? Infinity) - born));
+      gulped *= gulp(t - born, length);
+      const shape = gulpShape(t - born, length, side);
+      dropBlob.lobe += shape.lobe;
+      dropBlob.oval += shape.oval;
+      dropBlob.ripple += shape.ripple;
+    });
+    if (t < timing.run) return { letters: typed, dropX: along(start, park, t / timing.run), dropSink: hop(t - timing.run, 0, fontSize), dropScale: gulped, dropSquash: 0, dropBlob };
     const sinceTouch = t - timing.run - LAND_MS * TOUCH;
     const letters = typed.map((pose, index) => {
       const wobble = jiggle((sinceTouch - (n - 1 - index) * SETTLE_STAGGER_MS) / SETTLE_MS);
@@ -370,7 +424,8 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
       if (wobble === 0 && wave === 0) return pose;
       return { ...pose, stretch: pose.stretch + 0.06 * wobble + 0.02 * wave, dy: pose.dy + (-0.05 * wobble - 0.012 * wave) * fontSize };
     });
-    return { letters, ...perched(park, period, t - timing.run, fontSize) };
+    const drop = perched(park, period, t - timing.run, fontSize);
+    return { letters, ...drop, dropScale: drop.dropScale * gulped, dropBlob };
   }
 
   t -= timing.type + timing.hold;
@@ -395,7 +450,7 @@ export function poseAt(word: WordLayout, previous: WordLayout, fontSize: number,
         reach > 0 ? { ...bridge, drop: bridge.drop * reach, letter: bridge.letter * reach, waist: bridge.waist - 0.04 * pull - 0.1 * (1 - reach) } : NO_BRIDGE,
     };
   });
-  return { letters, dropX, dropSink: 0, dropScale: 1, dropSquash: 0 };
+  return { letters, dropX, dropSink: 0, dropScale: 1, dropSquash: 0, dropBlob: ROUND };
 }
 
 /**
@@ -439,5 +494,6 @@ export function restingPose(word: WordLayout, fontSize: number): Pose {
     dropSink: period.sink,
     dropScale: PERIOD_SCALE,
     dropSquash: 0,
+    dropBlob: ROUND,
   };
 }

@@ -5,6 +5,7 @@ import {
   BRIDGE_DROP,
   DROP_RADIUS,
   ERASE_STEP_MS,
+  GULP_MS,
   HOLD_MS,
   LAND_MS,
   LEAD,
@@ -12,6 +13,7 @@ import {
   PERIOD_SCALE,
   RETRACT_MS,
   RIDE_HEIGHT,
+  ROUND,
   SETTLE_MS,
   SETTLE_STAGGER_MS,
   TOUCH,
@@ -20,6 +22,7 @@ import {
   bloom,
   breath,
   ease,
+  gulp,
   layoutWord,
   periodAt,
   phases,
@@ -31,6 +34,7 @@ import {
   windup,
   type LetterPose,
 } from "./timeline";
+import { blobRadius } from "./scene";
 
 const FONT = 100;
 const measure = (text: string) => text.length * 60;
@@ -292,6 +296,35 @@ describe("Gooey Text timeline", () => {
       const letter = hello.letters[i]!;
       expect(Math.abs(born.dropX - (letter.left + letter.width / 2 + LEAD * FONT))).toBeLessThan(3);
     }
+  });
+
+  test("each time a letter oozes out, the drop shrinks, then swells back past full and settles", () => {
+    for (let i = 0; i < hello.letters.length; i++) {
+      const scales = Array.from({ length: 60 }, (_, k) => typing(birth(i) + (GULP_MS * k) / 60).dropScale);
+      const low = scales.indexOf(Math.min(...scales));
+      expect(scales[low]!).toBeLessThan(0.92);
+      expect(Math.max(...scales.slice(low))).toBeGreaterThan(1.02);
+    }
+    expect(typing(birth(0) - 1).dropScale).toBe(1);
+    expect([gulp(0), gulp(GULP_MS)]).toEqual([1, 1]);
+  });
+
+  test("as a letter oozes out, the drop is drawn out toward it, then sloshes forward, and comes back round", () => {
+    const reach = (ms: number, angle: number) => blobRadius(typing(ms).dropBlob, angle);
+    for (let i = 0; i < hello.letters.length; i++) {
+      const length = Math.min(GULP_MS, (i + 1 < hello.letters.length ? birth(i + 1) : Infinity) - birth(i));
+      const times = Array.from({ length: 60 }, (_, k) => birth(i) + (length * k) / 60);
+      const lean = times.map(ms => reach(ms, Math.PI) - reach(ms, 0));
+      const back = lean.indexOf(Math.max(...lean));
+      expect(lean[back]!).toBeGreaterThan(0.15);
+      expect(Math.min(...lean.slice(back))).toBeLessThan(-0.05);
+      const rims = times.map(ms => Array.from({ length: 12 }, (_, a) => reach(ms, (a / 12) * Math.PI * 2)));
+      expect(rims.some(rim => Math.max(...rim) - Math.min(...rim) > 0.25)).toBe(true);
+    }
+    expect(typing(birth(0) - 1).dropBlob).toEqual(ROUND);
+    expect(holding(PERCHED[0]).dropBlob).toEqual(ROUND);
+    expect(restingPose(hello, FONT).dropBlob).toEqual(ROUND);
+    expect(Array.from({ length: 8 }, (_, a) => blobRadius(ROUND, a))).toEqual(Array(8).fill(1));
   });
 
   test("the drop keeps its momentum past each letter, slowing only at the ends", () => {
