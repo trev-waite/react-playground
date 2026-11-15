@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { geometry, type Point } from "./portal";
-import { RING, beadOutline, beadPath, rimAt, ringAt } from "./presence";
+import { RING, beadAt, beadOutline, rimAt, ringAt } from "./presence";
 
 const stage = { width: 560, height: 420 };
 const avatar = { x: 280, y: 210 };
@@ -69,7 +69,25 @@ describe("Profile Button presence bead", () => {
   });
 
   test("it draws as one closed outline, and nothing once it has left the stage", () => {
-    expect(beadPath(g, dot, 300)).toMatch(/^M[\d. -]+(L[\d. -]+)+Z$/);
-    expect(beadPath(g, dot, 1000)).toBe("");
+    expect(beadAt(g, dot, 300).path).toMatch(/^M[\d. -]+(L[\d. -]+)+Z$/);
+    expect(beadAt(g, dot, 1000).path).toBe("");
+  });
+
+  test("drawn in the window's space, the window's own scale carries it onto its outline", () => {
+    for (const ms of [0, 150, 300, 450]) {
+      const t = ms / 1000;
+      const scale = rimAt(g, t) / g.reach;
+      const bead = beadAt(g, dot, ms);
+      const drawn = bead.path
+        .slice(1, -1)
+        .split("L")
+        .map(pair => pair.split(" ").map(Number) as [number, number])
+        .map(([x, y]) => ({ x: avatar.x + (x - g.reach) * scale, y: avatar.y + (y - g.reach) * scale }));
+      beadOutline(g, dot, t).forEach((p, i) => {
+        expect(drawn[i]!.x).toBeCloseTo(p.x, 1);
+        expect(drawn[i]!.y).toBeCloseTo(p.y, 1);
+      });
+      expect(bead.stroke * scale).toBeCloseTo(ringAt(t) * 2, 2);
+    }
   });
 });

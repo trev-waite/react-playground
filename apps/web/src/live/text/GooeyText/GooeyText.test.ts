@@ -159,6 +159,28 @@ describe("Gooey Text timeline", () => {
     expect(still).toBeLessThanOrEqual(2);
   });
 
+  test("swinging back, the drop hops up off its line before it falls onto the period", () => {
+    const landing = Array.from({ length: 100 }, (_, i) => typing(timing.run + (LAND_MS * TOUCH * i) / 100));
+    const sinks = landing.map(pose => pose.dropSink);
+    const apex = sinks.indexOf(Math.min(...sinks));
+    expect(sinks[apex]!).toBeLessThan(-0.08 * FONT);
+    expect(sinks.slice(0, apex).every(sink => sink <= 0)).toBe(true);
+    expect(landing[apex]!.dropX).toBeGreaterThan(periodAt(hello, FONT).x);
+    expect(landing[apex]!.dropX).toBeLessThan(landing[0]!.dropX);
+  });
+
+  test("through the turn and the hop the drop draws one smooth curve: it never stops, and never turns a corner", () => {
+    const point = (ms: number) => ({ x: typing(ms).dropX, y: typing(ms).dropSink });
+    let heading: number | null = null;
+    for (let ms = timing.run - 200; ms < timing.run + LAND_MS * TOUCH; ms += 1) {
+      const [a, b] = [point(ms - 1), point(ms + 1)];
+      expect(Math.hypot(b.x - a.x, b.y - a.y) / 2).toBeGreaterThan(0.0003 * FONT);
+      const now = Math.atan2(b.y - a.y, b.x - a.x);
+      if (heading !== null) expect(Math.abs(Math.atan2(Math.sin(now - heading), Math.cos(now - heading)))).toBeLessThan((5 * Math.PI) / 180);
+      heading = now;
+    }
+  });
+
   test("the landing hands over to the hold without a jump", () => {
     const before = typing(timing.type - 0.01);
     const after = holding(0);

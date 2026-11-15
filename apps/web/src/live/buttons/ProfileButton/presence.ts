@@ -98,10 +98,21 @@ function melted(t: number): number {
   return 1 - Math.pow(1 - clamp01(t / MELT), 3);
 }
 
-/** The bead's outline as an SVG path, `ms` into the flight; empty once it has ridden off the stage. */
-export function beadPath(g: Geometry, dot: Dot, ms: number): string {
-  const points = beadOutline(g, dot, ms / OPEN_MS);
+/** The bead's outline and the width of its white ring, in the window's space. */
+export type Bead = { path: string; stroke: number };
+
+/**
+ * The bead `ms` into the flight, drawn in the window's own space: a box the
+ * window's open size, centered on the avatar, that scales with the window.
+ * Riding the window's own scale keeps the bead on the rim even when it is
+ * redrawn a frame or two behind the window. Empty once it has left the stage.
+ */
+export function beadAt(g: Geometry, dot: Dot, ms: number): Bead {
+  const t = ms / OPEN_MS;
+  const points = beadOutline(g, dot, t);
   const margin = RING;
   const onStage = points.some(p => p.x > -margin && p.y > -margin && p.x < g.stage.width + margin && p.y < g.stage.height + margin);
-  return onStage ? `M${points.map(p => `${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join("L")}Z` : "";
+  const scale = rimAt(g, t) / g.reach;
+  const local = (p: Point) => `${(g.reach + (p.x - g.avatar.x) / scale).toFixed(2)} ${(g.reach + (p.y - g.avatar.y) / scale).toFixed(2)}`;
+  return { path: onStage ? `M${points.map(local).join("L")}Z` : "", stroke: (ringAt(t) * 2) / scale };
 }
