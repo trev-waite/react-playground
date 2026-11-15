@@ -24,9 +24,9 @@ import {
 import { BEAD_RADIUS, phases, poseAt, restingPose, type Pose } from "./timeline";
 
 /**
- * Where the SVG fallback's drain gradient sets its stops, as a share of the
- * wipe from fully set (1) to blue (0). The middle ones follow the GPU wipe's
- * smoothstep, so both wipes ease the same way.
+ * The SVG fallback's drain gradient runs across the wipe itself, from fully
+ * set (1) to blue (0), and pads beyond it; its middle stops follow the GPU
+ * wipe's smoothstep, so both wipes ease the same way.
  */
 const DRAIN_STOPS = [1, 0.75, 0.25, 0] as const;
 
@@ -66,10 +66,10 @@ function svgPainter(svg: SVGSVGElement): (state: GooFrame) => void {
       const transform = `translate(${letter.x.toFixed(2)} ${letter.y.toFixed(2)}) scale(${letter.sx.toFixed(4)} ${letter.sy.toFixed(4)}) translate(${(-letter.center).toFixed(2)} ${-DROP_Y})`;
       write(letters?.[i], "transform", transform);
       const drain = drains?.[i];
-      write(drain, "x1", letter.toward > 0 ? "0" : "1");
-      write(drain, "x2", letter.toward > 0 ? "1" : "0");
       const front = letter.drain * (1 + DRAIN_SOFTNESS);
-      DRAIN_STOPS.forEach((at, stop) => write(drain?.children[stop], "offset", (front - DRAIN_SOFTNESS * at).toFixed(3)));
+      const across = (u: number) => (letter.toward > 0 ? u : 1 - u).toFixed(3);
+      write(drain, "x1", across(front - DRAIN_SOFTNESS));
+      write(drain, "x2", across(front));
       write(bridges?.[i], "d", bridgePath(letter.bridge));
       write(beads?.[i], "cx", letter.bridge.beadX.toFixed(2));
       write(beads?.[i], "cy", letter.bridge.beadY.toFixed(2));
@@ -322,7 +322,7 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
               {word.letters.map((_, i) => (
                 <linearGradient key={i} id={`${filterId}-ink-${index}-${i}`}>
                   {DRAIN_STOPS.map(at => (
-                    <stop key={at} offset="0" stopColor={drainColor(at)} />
+                    <stop key={at} offset={1 - at} stopColor={drainColor(at)} />
                   ))}
                 </linearGradient>
               ))}
