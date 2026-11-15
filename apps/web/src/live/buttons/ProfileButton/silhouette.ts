@@ -4,18 +4,41 @@ export const ROOM_COLOR = "#000000";
 /** The bust's soft edge, as a share of the picture's width. */
 const SOFTNESS = 0.017;
 
-/** Head and shoulders in a square `s` wide, `shift` along: a large head on a neck that flares into sloping shoulders. */
+type Point = readonly [number, number];
+type Curve = readonly [Point, Point, Point];
+
+/**
+ * Traces a shape that is the same on both sides of the picture's middle: its
+ * right half runs from `from` on the middle line through `curves` (two
+ * controls and an end each) back to the middle line, and is drawn mirrored too.
+ */
+function mirrored(ctx: CanvasRenderingContext2D, s: number, shift: number, from: Point, curves: readonly Curve[]) {
+  for (const flip of [1, -1]) {
+    const at = ([x, y]: Point) => [s * (0.5 + (x - 0.5) * flip) + shift, s * y] as const;
+    ctx.moveTo(...at(from));
+    for (const [c1, c2, end] of curves) ctx.bezierCurveTo(...at(c1), ...at(c2), ...at(end));
+    ctx.closePath();
+  }
+}
+
+/**
+ * Head and shoulders in a square `s` wide, `shift` along: an oval head that
+ * narrows to the jaw, a short neck, and shoulders that slope down from it and
+ * round over at the arms.
+ */
 function bust(ctx: CanvasRenderingContext2D, s: number, shift: number) {
-  const at = (x: number, y: number) => [s * x + shift, s * y] as const;
   ctx.beginPath();
-  ctx.arc(...at(0.5, 0.385), s * 0.185, 0, Math.PI * 2);
-  ctx.moveTo(...at(0.06, 1.04));
-  ctx.bezierCurveTo(...at(0.08, 0.8), ...at(0.24, 0.7), ...at(0.4, 0.68));
-  ctx.bezierCurveTo(...at(0.43, 0.675), ...at(0.44, 0.62), ...at(0.44, 0.54));
-  ctx.lineTo(...at(0.56, 0.54));
-  ctx.bezierCurveTo(...at(0.56, 0.62), ...at(0.57, 0.675), ...at(0.6, 0.68));
-  ctx.bezierCurveTo(...at(0.76, 0.7), ...at(0.92, 0.8), ...at(0.94, 1.04));
-  ctx.closePath();
+  mirrored(ctx, s, shift, [0.5, 0.17], [
+    [[0.6, 0.17], [0.655, 0.25], [0.655, 0.35]],
+    [[0.655, 0.45], [0.6, 0.545], [0.5, 0.555]],
+  ]);
+  mirrored(ctx, s, shift, [0.5, 0.48], [
+    [[0.56, 0.48], [0.585, 0.48], [0.585, 0.5]],
+    [[0.585, 0.59], [0.6, 0.64], [0.66, 0.665]],
+    [[0.74, 0.69], [0.8, 0.71], [0.845, 0.745]],
+    [[0.905, 0.79], [0.935, 0.89], [0.945, 1.04]],
+    [[0.945, 1.04], [0.5, 1.04], [0.5, 1.04]],
+  ]);
   ctx.fill();
 }
 
