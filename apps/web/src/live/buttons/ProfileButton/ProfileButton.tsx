@@ -353,8 +353,8 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
         onClick={enter}
       >
         <Silhouette className={styles.avatarFace} />
-        <span ref={presenceRef} className={styles.presence} data-online={online || undefined} aria-hidden="true" />
       </button>
+      <span ref={presenceRef} className={styles.presence} data-online={online || undefined} aria-hidden="true" />
       <div ref={portalRef} className={styles.portal}>
         <div ref={roomRef} className={styles.room} role="dialog" aria-label={`${profile.name}'s profile`} inert={!open}>
           <div ref={portraitRef} className={styles.portrait}>
