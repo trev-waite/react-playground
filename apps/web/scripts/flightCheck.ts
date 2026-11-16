@@ -5,24 +5,17 @@ import { judgeFlight } from "./flight/judge.ts";
 import { installFlightRecorder, type Flight, type FlightRecorder } from "./flight/recorder.ts";
 
 /**
- * Flies cards between the grid and their pages in the built app and holds the
- * flight to what the eye expects of it: a preview arrives at the size it rests
- * at, with nothing left to lay out; and the browser scores no layout shift
- * for the cards around the one flying. One card is opened after the window has changed height in the grid,
- * which changes its page but resizes nothing on screen. On a small phone a
- * canvas card flies twice, the second time in steps, with a single stop
- * between its layouts. Last, on both, a flight is turned back in the very
- * frame its landing hides the pages it places, and every card must be showing
- * again in the grid. Run it after `bun run build`.
+ * Flies cards between the grid and their pages in the built app: a preview
+ * must arrive at its rest size with nothing left to lay out, and the cards
+ * around it must score no layout shift. Run it after `bun run build`.
  */
 
 const DESKTOP = { viewport: { width: 1280, height: 800 } };
 const SHORTER = { width: 1280, height: 560 };
 const PHONE = { viewport: { width: 400, height: 700 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
-/** A canvas that resizes with its stage: its first flight is how the deck finds that out, and from the second it steps. */
+/** A canvas that resizes with its stage, so its second flight steps. */
 const STEPPED = "Moon Phase";
 const SETTLE_TIMEOUT_MS = 15_000;
-/** A family, a control, a navigation bar, and a canvas that redraws when it is resized. */
 const CARDS = ["Controls", "Profile Button", "Menu Pill", "Moon Phase"];
 const AFTER_RESIZE = ["Controls", "Spacing Tidy"];
 const BACK = "Show all components";
@@ -36,7 +29,6 @@ if (!url) throw new Error("vite preview did not report a local URL.");
 
 const browser = await chromium.launch();
 const failures: string[] = [];
-/** Every flight's layout shift, the flying card's own included: not judged, since it depends on how fast the runner draws. */
 let shiftInAll = 0;
 
 async function atRest(page: Page, layout: "pages" | "grid") {

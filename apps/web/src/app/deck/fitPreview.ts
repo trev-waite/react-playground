@@ -41,23 +41,17 @@ export function flightLayout(area: Size, tile: Size, page: Size, progress: numbe
   return { width, height, scale: Math.min(area.width / width, area.height / height) };
 }
 
-/** The most either side of a stepped preview's layout changes from one stop to the next. */
 export const FLIGHT_STEP = 1.2;
 
 /**
- * The progress values a stepped preview lays out at: its two rest layouts and
- * stops between them, each as far from the last as either side may change.
- * The step is evened out for the side that changes most, so the stops are
- * equal for it and no closer than they need be. Between stops only the scale
- * changes, which the compositor draws, so a canvas that redraws on resize
- * does so a handful of times per flight, not every frame, and its last
- * relayout is the layout it lands on.
+ * The progress values a stepped preview lays out at: both ends, and even stops
+ * between them where neither side changes by more than `FLIGHT_STEP`. Between
+ * stops only the scale changes, so a canvas redraws a few times per flight.
  */
 export function flightStops(tile: Size, page: Size): number[] {
   const change = (a: number, b: number) => Math.max(a / b, b / a);
   const most = Math.max(change(tile.width, page.width), change(tile.height, page.height));
   const step = most ** (1 / Math.ceil(Math.log(most) / Math.log(FLIGHT_STEP)));
-  /** The progress at which a side has changed by one step from where it is at `from`. */
   const reach = (tileSide: number, pageSide: number, from: number) => {
     if (tileSide === pageSide) return Infinity;
     const side = tileSide * (1 - from) + pageSide * from;
@@ -74,13 +68,9 @@ export function flightStops(tile: Size, page: Size): number[] {
 }
 
 /**
- * The stop a stepped preview lays out at when its card is at `progress`: the
- * nearest, except within a step of either end, where the end's own layout is
- * in place. So nothing is laid out as the card takes off, and the layout it
- * lands on goes in a whole step before it arrives, while it is still moving.
- * A flight with a single stop between its ends has no room for that without
- * passing the stop over, and no need: its steps are long, so the nearest
- * stop changes well short of either end.
+ * The nearest stop, except within a step of either end, where that end's layout
+ * is used: the layout a card lands on goes in while it is still moving. A
+ * flight with one stop between its ends would skip it, so it takes the nearest.
  */
 export function stopAt(stops: readonly number[], progress: number): number {
   if (stops.length > 3) {
@@ -90,28 +80,22 @@ export function stopAt(stops: readonly number[], progress: number): number {
   return stops.reduce((nearest, stop) => (Math.abs(stop - progress) < Math.abs(nearest - progress) ? stop : nearest));
 }
 
-/** A layout scaled to fit `area`: the same layout drawn larger or smaller, never laid out again. */
 export function heldLayout(layout: Size, area: Size): FitLayout {
   return { width: layout.width, height: layout.height, scale: Math.min(area.width / layout.width, area.height / layout.height) };
 }
 
 type End = "tile" | "page";
 
-/** The card's morph, as its preview follows it. */
-export type FitFlight = {
-  /** From tile (0) to page (1). The stage's padding moves with it, by the same share of the way. */
+type FitFlight = {
+  /** From tile (0) to page (1). The stage's padding moves with it. */
   progress: MotionValue;
   /** The card's width and height, which go on springing to rest after `progress` lands. */
   box: readonly [width: MotionValue, height: MotionValue];
-  /** The card's size at rest as a tile and as a page, as the deck lays them out now. */
+  /** The card's size at rest as a tile and as a page, for the current viewport. */
   ends: () => Record<End, Size>;
 };
 
-/**
- * How a preview rested at one end: how much smaller than its card the stage
- * was, and how far the content overflowed it. Kept against the card, not as a
- * size, so it still holds once the deck lays the card out for a new viewport.
- */
+/** How a preview rested at one end, relative to its card so it still holds after a resize. */
 type Rest = { pad: Size; spill: number };
 
 type Fit = {
@@ -119,23 +103,20 @@ type Fit = {
   content: HTMLElement;
   width: number;
   height: number;
-  /** The layout in place, before any overflow correction. A fit to the same size only rescales it. */
+  /** The layout in place, before any overflow correction. */
   layout: FitLayout;
-  /** How far the content overflowed `layout`, which is laid out that much larger and drawn that much smaller. */
   spill: number;
   flight: FitFlight | undefined;
   rest: Partial<Record<End, Rest>>;
-  /** The pixel sizes of its canvases at the last fit of a flight; null at rest. */
   canvases: string | null;
-  /** A canvas was seen to resize with the layout in flight, so the layout moves in steps from then on. */
+  /** A canvas resized with the layout in flight, so the layout moves in steps from then on. */
   stepped: boolean;
-  /** The end the card is coming to rest at, once the layout to land on there has gone in; null otherwise. */
+  /** The end whose landing layout has gone in while the card springs to rest there. */
   landing: End | null;
 };
 
 const fits = new Map<Element, Fit>();
 let observer: ResizeObserver | null = null;
-/** Previews whose cards moved this frame, fitted together once they are found at rest. */
 const settling = new Set<Fit>();
 
 function spilled({ width, height, scale }: FitLayout, spill: number): FitLayout {
@@ -146,7 +127,6 @@ function inset(card: Size, pad: Size): Size {
   return { width: Math.max(card.width - pad.width, 1), height: Math.max(card.height - pad.height, 1) };
 }
 
-/** Whether two sizes are the same to within what a settling spring and rounding leave between them. */
 function near(a: Size, b: Size, within = 0.5): boolean {
   return Math.abs(a.width - b.width) < within && Math.abs(a.height - b.height) < within;
 }
@@ -154,11 +134,7 @@ function near(a: Size, b: Size, within = 0.5): boolean {
 /** Less than a browser can lay out apart. */
 const HAIR = 0.05;
 
-/**
- * The layout a preview has where its card rests. A layout worked out from the
- * card on the way in can sit a hair off the one measured here: too little to
- * see, so it stays rather than be laid out once more.
- */
+/** A landing layout a hair off the measured rest layout stays, rather than be laid out again. */
 function settledLayout(fit: Fit, area: Size): FitLayout {
   const rest = restLayout(area);
   return near(rest, fit.layout, HAIR) ? { width: fit.layout.width, height: fit.layout.height, scale: rest.scale } : rest;
@@ -181,29 +157,22 @@ type Progress = number | End | undefined;
 function progressOf(fit: Fit): Progress {
   const at = fit.flight?.progress.get();
   if (at === undefined) return undefined;
-  // At an end or sprung past it, the morph has landed, though it may still be easing back to rest there.
+  // Sprung past an end, the morph has still landed there.
   return at <= 0 ? "tile" : at >= 1 ? "page" : at;
 }
 
-/** The card has yet to come to rest: its morph or its box is still animating. */
 function moving(fit: Fit): boolean {
   const { flight } = fit;
   return flight ? Boolean(flight.progress.animation) || flight.box.some(value => value.animation) : false;
 }
 
-/** The layout the preview rests at on `end`, worked out for the card's size there now. */
 function restAt(flight: FitFlight, rest: Rest, end: End): FitLayout {
   return spilled(restLayout(inset(flight.ends()[end], rest.pad)), rest.spill);
 }
 
 /**
- * The padding the stage will have once the morph rests at `end`, read from
- * the padding it has now. The deck moves the padding in step with the morph,
- * so one measurement, and how the preview rested at the other end, give where
- * it is heading, even while the morph is sprung past its end and the padding
- * with it. It is close, not exact: the footer's height is part of the padding
- * and changes with the card's width. With no other end to go by, the padding
- * now is the best there is.
+ * The stage's padding once the morph rests at `end`, extrapolated from the
+ * padding now and at the other end, since the deck moves it with the morph.
  */
 function padAt(fit: Fit, flight: FitFlight, end: End, area: Size): Size {
   const now = { width: flight.box[0].get() - area.width, height: flight.box[1].get() - area.height };
@@ -220,12 +189,7 @@ function padAt(fit: Fit, flight: FitFlight, end: End, area: Size): Size {
 /** Less than a line of footer text, the least a footer that wraps moves the padding by, and more than a sprung morph does. */
 const UNDER_A_LINE = 8;
 
-/**
- * The layout to land on, as the morph reaches `end`: where the card will rest
- * gives it. A rest kept from last time serves while its padding still holds;
- * one that does not (a footer that has since wrapped onto another line) is
- * not trusted, and the layout is worked out from the padding instead.
- */
+/** A kept rest is used only while its padding still holds; a footer may have wrapped since. */
 function landingLayout(fit: Fit, flight: FitFlight, end: End, area: Size): FitLayout {
   const pad = padAt(fit, flight, end, area);
   const rest = fit.rest[end];
@@ -236,13 +200,13 @@ function landingLayout(fit: Fit, flight: FitFlight, end: End, area: Size): FitLa
 function layoutFor(fit: Fit, progress: Progress): FitLayout {
   const area = { width: fit.width, height: fit.height };
   const { flight, rest } = fit;
-  // The morph has landed, and it and the box spring on for a moment: the layout to land on goes in once, and only its scale follows.
+  // Landed but still springing: the landing layout goes in once, then only its scale follows.
   const landing = flight && (progress === "tile" || progress === "page") && moving(fit) ? progress : null;
   const arrived = landing !== null && landing !== fit.landing;
   fit.landing = landing;
   if (flight && landing) return heldLayout(arrived ? landingLayout(fit, flight, landing, area) : fit.layout, area);
   if (!flight || typeof progress !== "number") return settledLayout(fit, area);
-  // An end the preview has not rested at yet gives nothing to blend toward: it fits each frame on its own.
+  // Nothing to blend toward until the preview has rested at both ends.
   if (!rest.tile || !rest.page) return restLayout(area);
   const tile = restAt(flight, rest.tile, "tile");
   const page = restAt(flight, rest.page, "page");
@@ -254,11 +218,7 @@ function canvasSizes(content: HTMLElement): string {
   return Array.from(content.querySelectorAll("canvas"), canvas => `${canvas.width}x${canvas.height}`).join();
 }
 
-/**
- * A preview lays out every frame of a flight, so its content never jumps in
- * size, unless that makes a canvas redraw every frame. A canvas whose pixel
- * size changed between two fits of one flight does: its preview steps.
- */
+/** A preview lays out every frame of a flight unless a canvas redraws with it; then it steps. */
 function watchCanvases(fit: Fit, flying: boolean) {
   if (fit.stepped) return;
   const sizes = flying ? canvasSizes(fit.content) : null;
@@ -269,8 +229,7 @@ function watchCanvases(fit: Fit, flying: boolean) {
 /**
  * Fits every changed preview in three passes (write sizes, read overflow once,
  * correct), so opening the grid costs one forced layout, not one per card.
- * `measured` says the areas are as the browser last laid them out, which makes
- * them fit to keep as how a preview rests.
+ * Rests are kept only from `measured` sizes.
  */
 function refit(batch: Fit[], { measured = true, newContent = false } = {}) {
   const progress = batch.map(progressOf);
@@ -300,7 +259,6 @@ function refit(batch: Fit[], { measured = true, newContent = false } = {}) {
     const end = progress[index];
     watchCanvases(fit, typeof end === "number");
     if (!measured || !fit.flight || (end !== "tile" && end !== "page")) return;
-    // Kept once the morph is all but at its end, where the padding read from it is exact; the box may still spring on.
     if (Math.abs(fit.flight.progress.get() - (end === "page" ? 1 : 0)) > 0.001) return;
     fit.rest[end] = { pad: padAt(fit, fit.flight, end, { width: fit.width, height: fit.height }), spill: fit.spill };
   });
@@ -322,12 +280,9 @@ function sharedObserver(): ResizeObserver {
 }
 
 /**
- * Coming to rest may leave an area's size as it was a frame before, so no
- * resize reports it. Every card that stopped this frame is fitted in one pass.
- * The areas are as last reported, and may be about to change: a card the deck
- * has just placed has not been laid out there yet, and one placed off screen
- * is not laid out at all until it nears the screen. So nothing here is kept as
- * how a preview rests; only a resize report is.
+ * Coming to rest may leave an area's size as it was, so no resize reports it.
+ * These sizes may be stale (a card placed off screen is not laid out), so no
+ * rest is kept from them.
  */
 function fitSettled() {
   const batch: Fit[] = [];
@@ -338,7 +293,7 @@ function fitSettled() {
       batch.push(fit);
     }
   }
-  // A spring can reach its target a step before it ends, and ending tells no listener: look again next frame.
+  // A spring can reach its target a frame before it ends, and ending notifies no listener.
   if (settling.size > 0) frame.render(fitSettled);
   if (batch.length > 0) refit(batch, { measured: false });
 }

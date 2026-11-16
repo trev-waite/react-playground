@@ -1,32 +1,20 @@
-/** One painted frame of a card's flight. */
 export type Frame = {
   at: number;
   flying: boolean;
   /** How far the card's box moved since the frame before, in pixels. */
   moved: number;
-  /** The size its preview is laid out at. */
   layout: [width: number, height: number];
   /** The preview's content, as shares of the card's width and height. */
   sizes: number[];
 };
 
-/**
- * A flight's frames, and the layout shift the browser scored during it: `shift` for cards other than the one flying,
- * which a flight is held to, and `shiftInAll` with the flying card's own, which is what a visitor's page is scored.
- */
+/** `shift` leaves out the flying card's own, which depends on how fast the runner draws; `shiftInAll` does not. */
 export type Flight = { frames: Frame[]; shift: number; shiftInAll: number };
 export type FlightRecorder = { record: (title: string) => void; stop: () => Flight };
 
 /**
- * Runs in the page (it is handed over as source, so it stands alone): samples
- * a card's flight a frame at a time and totals the layout shifts the browser
- * scores for the cards around it. The flying card's own motion is left out:
- * it moves by layout, which the browser excuses for half a second after the
- * click and scores after, by how far each frame carries it, so a slow runner
- * scores more for the same flight. Each recording owns its frames and its
- * sampler, and starting or stopping one ends the last for good: a sampler
- * left waiting on a frame would otherwise wake inside the next recording and
- * add its own.
+ * Runs in the page, handed over as source, so it stands alone. Each recording
+ * owns its sampler: one left waiting on a frame would add to the next.
  */
 export function installFlightRecorder() {
   type Shift = PerformanceEntry & { value: number; hadRecentInput: boolean; sources: { node: Node | null }[] };

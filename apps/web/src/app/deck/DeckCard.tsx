@@ -105,8 +105,7 @@ export function DeckCard({
 
   const ends = useEffectEvent(() => ({ tile, page }));
 
-  // Here, not in the stage: a child's effect would run before the footer has measured itself, and the footer's
-  // height sets the stage's. A new card is fitted first as a page, the layout its first flight heads for.
+  // Here, not in the stage: a child's effect would run before the footer measures the height the stage depends on.
   useLayoutEffect(() => {
     const area = areaRef.current;
     const fit = fitRef.current;

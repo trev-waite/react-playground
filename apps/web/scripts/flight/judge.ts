@@ -2,22 +2,18 @@ import type { Flight } from "./recorder.ts";
 
 /** A layout this far from the last is a new one; less is rounding. */
 const RELAID_PX = 0.5;
-/** A card moving less than this between frames is close enough to still for a jump in its preview to show. */
+/** A card moving less than this per frame is still enough for a jump in its preview to show. */
 const NEARLY_STILL_PX = 3;
-/** The most a preview's content may change size, against its card, between two such frames. Rounding accounts for under 2%. */
+/** Rounding accounts for under 2%. */
 const MAX_LANDING_JUMP = 0.05;
-/** How long before a flight ends its preview must already be laid out for good. The morph lands some 400ms before the box rests. */
+/** The preview must be laid out for good this long before the flight ends. */
 const SETTLED_FOR_MS = 250;
-/** Chrome calls a page's shifts good below 0.1; the cards around a flight should add nothing. */
 const MAX_LAYOUT_SHIFT = 0.02;
 
 /**
- * What a recorded flight got wrong, in words; nothing if it flew clean. A jump
- * is a change in the content's size that comes with a new layout while the
- * card has all but stopped: a new layout while it still moves fast is a
- * stepped preview's step, and a change with no new layout is the component's
- * own doing. Judging only near-still frames holds a slow runner, which sees
- * fewer frames, to the same thing.
+ * What a recorded flight got wrong. A jump is a new layout that changes the
+ * content's size while the card is all but still: earlier, it is a stepped
+ * preview's step; without a new layout, it is the component's own doing.
  */
 export function judgeFlight(what: string, { frames, shift }: Flight): string[] {
   const took = frames.findIndex(frame => frame.flying);

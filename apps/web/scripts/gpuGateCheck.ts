@@ -4,10 +4,9 @@ import { chromium, type Browser } from "playwright";
 import { preview } from "vite";
 
 /**
- * Loads the built app in a browser with WebGPU and in one without, and holds
- * the build to the split `src/gpu/vgpuGate.ts` promises: the GPU library is a
- * script of its own, fetched where `navigator.gpu` exists and never where it
- * does not, and every card still mounts there. Run it after `bun run build`.
+ * Checks the split `src/gpu/vgpuGate.ts` promises: the GPU library is fetched
+ * only where `navigator.gpu` exists, and every card mounts either way.
+ * Run it after `bun run build`.
  */
 
 const SETTLE_TIMEOUT_MS = 15_000;
@@ -25,11 +24,9 @@ if (!url) throw new Error("vite preview did not report a local URL.");
 
 const failures: string[] = [];
 
-/** Loads the grid until every card has its preview, and reports what it fetched and what broke. */
 async function load(browser: Browser, webGpu: boolean) {
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
-  // The gate goes by whether navigator.gpu exists, not whether it works. So each run sets it one way or the other, and
-  // a runner whose browser lacks WebGPU (Linux CI) is given one with no adapter, as a machine without a usable GPU has.
+  // The gate checks only that navigator.gpu exists; CI's browser lacks it, so it gets one with no adapter.
   await page.addInitScript(present => {
     if (!present) {
       Object.defineProperty(Navigator.prototype, "gpu", { get: () => undefined, configurable: true });
@@ -53,7 +50,7 @@ async function load(browser: Browser, webGpu: boolean) {
     null,
     { timeout: SETTLE_TIMEOUT_MS },
   );
-  // The library is asked for as the first GPU preview's module runs, which has happened once its card has mounted.
+  // The library is requested once the first GPU card mounts.
   const broken = await page.evaluate(() =>
     Array.from(document.querySelectorAll('article [role="alert"]'), alert => alert.textContent ?? ""),
   );

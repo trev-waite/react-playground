@@ -11,11 +11,7 @@ function exportedNames(code: string): string[] {
   return names.map(name => name.trim()).filter(Boolean).sort();
 }
 
-/**
- * The names a module takes from vgpu at run time. An import of the whole
- * package (`import * as vgpu`, a default import) comes back as `*`, which the
- * gate never offers: it names what it loads.
- */
+/** The names a module takes from vgpu at run time; a whole-package import comes back as `*`, which the gate never offers. */
 function importedFromVgpu(code: string): string[] {
   return Array.from(code.matchAll(/import\s+(type\s+)?([^;]*?)\s+from\s*["']vgpu["']/g)).flatMap(([, typeOnly, clause]) => {
     if (typeOnly) return [];

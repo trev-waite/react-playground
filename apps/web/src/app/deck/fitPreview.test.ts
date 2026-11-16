@@ -37,7 +37,7 @@ describe("stepping a layout in flight", () => {
     ["a tile growing by two fifths, with one stop between", { width: 320, height: 320 }, { width: 448, height: 448 }],
     ["a tile growing by two thirds, with two stops between", { width: 320, height: 320 }, { width: 320, height: 540 }],
   ];
-  /** The stops a flight lays out at, in the order it takes them, sweeping its progress finely from one end to the other. */
+  /** The stops a flight lays out at, in order, sweeping its progress from one end to the other. */
   const taken = (tile: Size, page: Size, to: 0 | 1) => {
     const stops = flightStops(tile, page);
     const sequence: number[] = [];
@@ -269,12 +269,7 @@ describe("observeFit", () => {
 
   type Laid = { width: string; height: string; transform: string };
 
-  /**
-   * A card's preview on a fake DOM, driven the way the deck drives it: the
-   * card's box and the stage's padding morph together, then the box springs
-   * on past its end. `canvas` gives it a canvas that takes the stage's size.
-   * `mounted` is the end the card was at when its preview mounted.
-   */
+  /** A card's preview on a fake DOM, driven the way the deck drives it. `canvas` gives it a canvas that takes the stage's size. */
   async function flyingPreview({ canvas = false, mounted = "page" as "tile" | "page" } = {}) {
     const { observeFit } = await import("./fitPreview");
 
@@ -312,10 +307,7 @@ describe("observeFit", () => {
       ends: () => cards,
     };
     const area = { clientWidth: cards[mounted].width - pads[mounted].width, clientHeight: cards[mounted].height - pads[mounted].height };
-    /**
-     * Puts the card `t` of the way from tile to page, `past` pixels beyond it, and reports the stage's new size.
-     * The padding goes by the morph itself, which may be sprung past its end.
-     */
+    /** Puts the card `t` of the way from tile to page, `past` pixels beyond it, and reports the stage's new size. */
     const move = (t: number, past = 0, morph = t) => {
       const card = mix(cards.tile, cards.page, t);
       const narrow = 1 - Math.min(1, Math.max(0, t * 2));
@@ -336,7 +328,7 @@ describe("observeFit", () => {
       move(0);
     }
 
-    /** Flies to the page (1) or back to the tile (0), then lets the box spring on before it rests. `during` runs before each frame. */
+    /** Flies to the page (1) or the tile (0), springing past it before it rests. `during` runs before each frame. */
     const fly = (to: 0 | 1, frames = 30, during: (frame: number) => void = () => {}) => {
       animating(true, [flight.progress, ...flight.box]);
       const flying: Laid[] = [];
@@ -361,17 +353,14 @@ describe("observeFit", () => {
       flight.progress.set(to);
       return { flying, springing, rest: move(to) };
     };
-    /** The deck places the card at an end while it is off screen: the browser lays nothing out there, so no resize is reported. */
+    /** Places the card at an end off screen, where no resize is reported. */
     const placeOffScreen = (end: "tile" | "page") => {
       flight.progress.jump(end === "page" ? 1 : 0);
       flight.box[0].jump(cards[end].width);
       flight.box[1].jump(cards[end].height);
       while (frames.length > 0) frames.shift()!(performance.now());
     };
-    /**
-     * Flies to the page as a spring can end: its last frames reach the target and set nothing new, and the
-     * animation then ends with no value changing. The stage reports its last size while the card still counts as moving.
-     */
+    /** Flies to the page, its springs ending with no value changing: the last resize comes while the card still moves. */
     const flyEndingQuietly = () => {
       animating(true, [flight.progress, ...flight.box]);
       const runFrames = () => {
