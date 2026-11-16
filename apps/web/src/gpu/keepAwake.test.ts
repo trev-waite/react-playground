@@ -153,6 +153,19 @@ describe("keepGpuAwake", () => {
     expect(second.submissions).toEqual([[]]);
   });
 
+  test("stops the timer when the last device is lost, though its session is still open", async () => {
+    const { keepAwake, state, detected } = host();
+    const only = device();
+    const release = keepAwake(only);
+    await detected(true);
+    only.lose();
+    await new Promise(resolve => setTimeout(resolve));
+    expect(state.timers[0]!.stopped).toBe(true);
+    // Released later, as its session closes: nothing left to stop, and nothing breaks.
+    release();
+    expect(state.timers).toHaveLength(1);
+  });
+
   test("takes two GPUs that describe themselves alike, or not at all, for one: it cannot tell, and does not guess", async () => {
     const unknowns: [GpuIdentity | null | undefined, GpuIdentity | null | undefined][] = [
       [{ vendor: "", architecture: "" }, { vendor: "", architecture: "" }],

@@ -52,10 +52,18 @@ export function gpuWaker(host: WakerHost): (device: Device) => () => void {
     device?.queue.submit([]);
   };
 
+  /** Stops pulsing `device`, and stops the timer once no device is left to pulse. */
+  const remove = (device: Device) => {
+    devices.delete(device);
+    if (devices.size > 0) return;
+    stop?.();
+    stop = undefined;
+  };
+
   return device => {
     devices.add(device);
     // A lost device keeps no GPU awake: the next one in the set is pulsed instead.
-    void device.lost.then(() => devices.delete(device));
+    void device.lost.then(() => remove(device));
     // An answer is kept for good; a request that failed is asked again by the next session.
     separate ??= findSeparateFastGpu().catch(() => {
       separate = undefined;
@@ -64,12 +72,7 @@ export function gpuWaker(host: WakerHost): (device: Device) => () => void {
     void separate.then(found => {
       if (found && devices.size > 0) stop ??= host.every(PULSE_MS, pulse);
     });
-    return () => {
-      devices.delete(device);
-      if (devices.size > 0) return;
-      stop?.();
-      stop = undefined;
-    };
+    return () => remove(device);
   };
 }
 
