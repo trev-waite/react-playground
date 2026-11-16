@@ -16,6 +16,8 @@ export const RING = 3;
 const MELTED_RING = 2;
 /** The share of the flight over which the dot melts onto the rim: it answers the press at once, then settles onto the rim. */
 const MELT = 0.42;
+/** How long the dot takes to melt onto the avatar's rim under the pointer: as long as it takes in flight. */
+export const HOVER_MS = MELT * OPEN_MS;
 /** How far the dot spreads along the rim: its half-length, in dot radii, once it has melted. */
 const SPREAD = 3.2;
 /** How far (radians) the bead swirls around the rim as the window pulls the viewer in. */
@@ -48,15 +50,25 @@ export function rimAt(g: Geometry, t: number): number {
   return g.reach * frameAt(g, PULL(clamp01(t))).portal;
 }
 
+/** How far the dot has melted and bent onto the rim: by the flight, or already under the pointer (`held`, 0 to 1). */
+function shapeAt(t: number, held: number) {
+  const hover = held * MELT;
+  return {
+    melt: 1 - (1 - melted(hover)) * (1 - melted(t)),
+    bend: 1 - (1 - ease(hover / BEND)) * (1 - ease(t / BEND)),
+  };
+}
+
 /**
  * The bead's outline `t` of the way through the flight, as points around it.
  * At 0 it is the dot exactly. As it melts it spreads along the rim, keeping
  * its area, with its inner edge one ring's width off the window and its outer
- * edge swelling like a drop resting on a curve.
+ * edge swelling like a drop resting on a curve. Under the pointer it melts
+ * onto the avatar's rim the same way, and a flight goes on from there.
  */
-export function beadOutline(g: Geometry, dot: Dot, t: number): Point[] {
+export function beadOutline(g: Geometry, dot: Dot, t: number, held = 0): Point[] {
   const { avatar } = g;
-  const melt = melted(t);
+  const { melt, bend } = shapeAt(t, held);
   const angle = Math.atan2(dot.y - avatar.y, dot.x - avatar.x) + SWIRL * ease(t);
   const resting = Math.hypot(dot.x - avatar.x, dot.y - avatar.y);
   const inner = 0.5 - 0.3 * melt;
@@ -65,9 +77,8 @@ export function beadOutline(g: Geometry, dot: Dot, t: number): Point[] {
   const floor = MIN_THICKNESS * 2 * dot.radius;
   const length = Math.min(reach * Math.sqrt(Math.max(1, (rim + RING) / resting)), (MAX_AREA * 2 * dot.radius * dot.radius) / floor);
   const thickness = Math.max(floor, (2 * dot.radius * dot.radius) / length);
-  const ring = ringAt(t);
+  const ring = ringAt(t, held);
   const middle = resting + (rim + ring + inner * thickness - resting) * melt;
-  const bend = ease(t / BEND);
   const squash = 1 + SQUASH * melt;
   const tangent = { x: -Math.sin(angle), y: Math.cos(angle) };
   const normal = { x: Math.cos(angle), y: Math.sin(angle) };
@@ -90,8 +101,8 @@ export function beadOutline(g: Geometry, dot: Dot, t: number): Point[] {
   return points;
 }
 
-export function ringAt(t: number): number {
-  return RING + (MELTED_RING - RING) * melted(t);
+export function ringAt(t: number, held = 0): number {
+  return RING + (MELTED_RING - RING) * shapeAt(t, held).melt;
 }
 
 function melted(t: number): number {
@@ -107,12 +118,12 @@ export type Bead = { path: string; stroke: number };
  * Riding the window's own scale keeps the bead on the rim even when it is
  * redrawn a frame or two behind the window. Empty once it has left the stage.
  */
-export function beadAt(g: Geometry, dot: Dot, ms: number): Bead {
+export function beadAt(g: Geometry, dot: Dot, ms: number, held = 0): Bead {
   const t = ms / OPEN_MS;
-  const points = beadOutline(g, dot, t);
+  const points = beadOutline(g, dot, t, held);
   const margin = RING;
   const onStage = points.some(p => p.x > -margin && p.y > -margin && p.x < g.stage.width + margin && p.y < g.stage.height + margin);
   const scale = rimAt(g, t) / g.reach;
   const local = (p: Point) => `${(g.reach + (p.x - g.avatar.x) / scale).toFixed(2)} ${(g.reach + (p.y - g.avatar.y) / scale).toFixed(2)}`;
-  return { path: onStage ? `M${points.map(local).join("L")}Z` : "", stroke: (ringAt(t) * 2) / scale };
+  return { path: onStage ? `M${points.map(local).join("L")}Z` : "", stroke: (ringAt(t, held) * 2) / scale };
 }
