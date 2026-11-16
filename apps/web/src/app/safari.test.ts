@@ -96,8 +96,7 @@ describe("Safari frame rate", () => {
 
   test("previews blend their tile and page layouts as the card flies, so an elastic preview never pops", async () => {
     const card = await read("src/app/deck/DeckCard.tsx");
-    expect(card).toMatch(/<FitStage[^>]*progress=\{chrome\}/);
-    expect(card).toContain("observeFit(area, content, progress)");
+    expect(card).toContain("observeFit(area, fit, { progress: chrome, box: [width, height], ends })");
   });
 
   test("paging never moves the raise between page cards, which made Safari repaint both", async () => {

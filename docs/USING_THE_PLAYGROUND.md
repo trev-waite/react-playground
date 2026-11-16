@@ -71,6 +71,8 @@ The repo pins **Bun 1.4**. Prefer `./node_modules/.bin/bun` for tests and one-of
 | `bun run smoke:local` | Build Live, serve it with `wrangler dev`, run the smoke checks, and stop the server |
 | `bun run --cwd apps/web check:routes` | After a build, drive it in a browser: tile links, Back and Forward, paging, and every card's own path |
 | `bun run --cwd apps/web check:phone` | After a build, open every card's page on a phone-sized screen, fail if a preview had to shrink to fit, and drag a Spacing Tidy square by touch |
+| `bun run --cwd apps/web check:flights` | After a build, fly cards between the grid and their pages, one after resizing the window in the grid and a canvas card on a small phone, and fail if a preview jumps in size as it lands, is still laying out as it arrives, or the browser scores a layout shift for the cards around the one flying; then turn a flight back as it lands, on a desktop and a phone, and fail if any card is left hidden |
+| `bun run --cwd apps/web check:gpu` | After a build, load it with and without WebGPU and fail unless the GPU library is fetched only where WebGPU exists and every card mounts either way |
 
 ## Deploy
 

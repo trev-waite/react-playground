@@ -218,3 +218,25 @@ describe("performance lint: Live components", () => {
     report(violations);
   });
 });
+
+describe("performance lint: GPU host", () => {
+  test("GPU sessions ask for the fast GPU and keep it awake while they live, so a card coming back on screen never waits for it to wake", async () => {
+    const host = await readSource("gpu/useGpu.ts");
+    expect(host).toContain('powerPreference: "high-performance"');
+    expect(host).toContain("session.rest = keepGpuAwake(gpu.gpu);");
+    // Released with the session it was taken for, so a machine with no GPU in use is let sleep.
+    expect(host).toMatch(/const disposeSession = \(\) => \{(?:(?!\n {2}\};)[\s\S])*session\.rest\(\);/);
+  });
+
+  test("vgpu is reached only through the gate, so a browser without WebGPU never downloads it", async () => {
+    expect(await readSource("../vite.config.ts")).toContain("vgpuGatePlugin()");
+    const violations: string[] = [];
+    for (const { file, text } of await sources(["."], "**/*.{ts,tsx}")) {
+      if (file.endsWith("gpu/vgpuGate.ts")) continue;
+      for (const match of text.matchAll(/from\s+["'][^"']*vgpuLibrary(\.ts)?["']|import\(\s*["'][^"']*vgpuLibrary(\.ts)?["']\s*\)/g)) {
+        violations.push(`${file}:${lineOf(text, match.index!)} imports the vgpu library module directly; import from "vgpu" and let the gate load it.`);
+      }
+    }
+    report(violations);
+  });
+});

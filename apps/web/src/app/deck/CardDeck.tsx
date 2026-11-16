@@ -8,6 +8,7 @@ import { DeckCard } from "./DeckCard";
 import { nearCards, nextToWarm, type DeckPlace, type GridWindow } from "./mountPolicy";
 import { useDocumentScroll } from "./useDocumentScroll";
 import { commitDistance, EDGE_PULL, PageScroll } from "./pageScroll";
+import { placeUnseen } from "./placeUnseen";
 import { usePaging } from "./usePaging";
 import {
   anchoredScrollTop,
@@ -376,6 +377,7 @@ export function CardDeck({
      * below are placed at once: Safari shows their edges under its toolbars.
      */
     const landPages = () => {
+      placeUnseen(scroller);
       const flown = landing.current;
       // The reader paged on while the camera flew: the card it brought in is not the one to show, so nothing eases.
       if (!flown || flown.slug !== cards[activeIndex]?.slug) {
@@ -626,7 +628,7 @@ export function CardDeck({
               card={card}
               motion={motionFor(card, index)}
               tile={grid.rects[index]!}
-              pageWidth={frame.width}
+              page={frame}
               mounted={warm.has(card.slug) || near.has(index)}
               interactive={layout === "pages"}
               current={index === activeIndex}
