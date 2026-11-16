@@ -255,10 +255,6 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .avatar:hover {
-    transform: scale(1.04);
-  }
-
   .back:hover {
     color: var(--accent);
   }
