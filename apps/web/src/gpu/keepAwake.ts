@@ -33,8 +33,10 @@ export type WakerHost = {
  * taken for one and get no pulse: a guess would wake machines that have
  * nothing to keep awake.
  */
-export function gpuWaker(host: WakerHost): (device: Pick<GPUDevice, "queue">) => () => void {
-  const devices = new Set<Pick<GPUDevice, "queue">>();
+type Device = Pick<GPUDevice, "queue" | "lost">;
+
+export function gpuWaker(host: WakerHost): (device: Device) => () => void {
+  const devices = new Set<Device>();
   let separate: Promise<boolean> | undefined;
   let stop: (() => void) | undefined;
 
@@ -52,6 +54,8 @@ export function gpuWaker(host: WakerHost): (device: Pick<GPUDevice, "queue">) =>
 
   return device => {
     devices.add(device);
+    // A lost device keeps no GPU awake: the next one in the set is pulsed instead.
+    void device.lost.then(() => devices.delete(device));
     // An answer is kept for good; a request that failed is asked again by the next session.
     separate ??= findSeparateFastGpu().catch(() => {
       separate = undefined;

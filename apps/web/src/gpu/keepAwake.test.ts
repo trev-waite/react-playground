@@ -70,9 +70,12 @@ function host() {
 
 function device() {
   const submissions: unknown[][] = [];
-  return { queue: { submit: (buffers: unknown[]) => void submissions.push(buffers) }, submissions } as unknown as Pick<GPUDevice, "queue"> & {
-    submissions: unknown[][];
-  };
+  let lose!: () => void;
+  const lost = new Promise<GPUDeviceLostInfo>(resolve => (lose = () => resolve({ reason: "unknown", message: "" } as GPUDeviceLostInfo)));
+  return { queue: { submit: (buffers: unknown[]) => void submissions.push(buffers) }, lost, submissions, lose } as unknown as Pick<
+    GPUDevice,
+    "queue" | "lost"
+  > & { submissions: unknown[][]; lose: () => void };
 }
 
 describe("keepGpuAwake", () => {
@@ -135,6 +138,19 @@ describe("keepGpuAwake", () => {
     expect(state.timers).toHaveLength(1);
     release();
     expect(state.timers[0]!.stopped).toBe(true);
+  });
+
+  test("pulses a session's device only while it lives: a lost one hands the pulse to the next", async () => {
+    const { keepAwake, state, detected } = host();
+    const [first, second] = [device(), device()];
+    keepAwake(first);
+    keepAwake(second);
+    await detected(true);
+    first.lose();
+    await new Promise(resolve => setTimeout(resolve));
+    state.timers[0]!.pulse();
+    expect(first.submissions).toEqual([]);
+    expect(second.submissions).toEqual([[]]);
   });
 
   test("takes two GPUs that describe themselves alike, or not at all, for one: it cannot tell, and does not guess", async () => {

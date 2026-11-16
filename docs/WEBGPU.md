@@ -14,9 +14,9 @@ apps/web/src/studio/StudioApp  stacks the Live and Experimental layers
 
 GPU ideas import `@/gpu`. That is the exception to "don't import from lib". `app/` and `lib/` stay off limits. After Make Live the published component keeps the `@/gpu` import so it still runs in this repo. Copying that Live folder into another app also needs the `vgpu` package and `apps/web/src/gpu/`.
 
-`import … from "vgpu"` does not reach the package directly. `vite/vgpuGatePlugin.ts` resolves it to `src/gpu/vgpuGate.ts`, which loads the library (`src/gpu/vgpuLibrary.ts`) only where `navigator.gpu` exists, so a browser without WebGPU never downloads it and the component still shows its fallback. Two things follow:
+`import … from "vgpu"` does not reach the package directly. `vite/vgpuGatePlugin.ts` resolves it to `src/gpu/vgpuGate.ts`, which starts loading the library (`src/gpu/vgpuLibrary.ts`) as soon as a GPU component's module loads, and only where `navigator.gpu` exists, so a browser without WebGPU never downloads it and the component still shows its fallback. `init` waits for the library. Two things follow:
 
-- Call vgpu only from `start` or later, never at module scope: without WebGPU its functions are stand-ins that throw.
+- Call vgpu only from `start` or later, never at module scope: its functions work once `init` has loaded the library, and without WebGPU they are stand-ins that throw.
 - The gate offers the vgpu functions the app uses today (`clock`, `effect`, `frame`, `frameLoop`, `init`, `sampler`, `surface`, `target`). To use another, such as `pingPong` or `timer`, add its name to `vgpuLibrary.ts` and `vgpuGate.ts`; `vite/vgpuGatePlugin.test.ts` fails until both have it. Types come straight from the package.
 
 ## Write a GPU idea

@@ -330,8 +330,16 @@ function sharedObserver(): ResizeObserver {
  * how a preview rests; only a resize report is.
  */
 function fitSettled() {
-  const batch = [...settling].filter(fit => fits.get(fit.area) === fit && !moving(fit));
-  settling.clear();
+  const batch: Fit[] = [];
+  for (const fit of settling) {
+    if (fits.get(fit.area) !== fit) settling.delete(fit);
+    else if (!moving(fit)) {
+      settling.delete(fit);
+      batch.push(fit);
+    }
+  }
+  // A spring can reach its target a step before it ends, and ending tells no listener: look again next frame.
+  if (settling.size > 0) frame.render(fitSettled);
   if (batch.length > 0) refit(batch, { measured: false });
 }
 

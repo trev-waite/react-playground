@@ -368,7 +368,27 @@ describe("observeFit", () => {
       flight.box[1].jump(cards[end].height);
       while (frames.length > 0) frames.shift()!(performance.now());
     };
-    return { fly, cards, pads, placeOffScreen, move };
+    /**
+     * Flies to the page as a spring can end: its last frames reach the target and set nothing new, and the
+     * animation then ends with no value changing. The stage reports its last size while the card still counts as moving.
+     */
+    const flyEndingQuietly = () => {
+      animating(true, [flight.progress, ...flight.box]);
+      const runFrames = () => {
+        for (let frame = frames.length; frame > 0; frame--) frames.shift()!(performance.now());
+      };
+      for (let frame = 1; frame <= 30; frame++) {
+        flight.progress.set(frame / 30);
+        move(frame / 30);
+        runFrames();
+      }
+      // A few more frames at the target, then the animations end.
+      runFrames();
+      animating(false, [flight.progress, ...flight.box]);
+      runFrames();
+      return { width: style.width!, height: style.height!, transform: style.transform! };
+    };
+    return { fly, cards, pads, placeOffScreen, move, flyEndingQuietly };
   }
 
   const widths = (frames: Laid[]) => frames.map(frame => frame.width);
@@ -479,5 +499,14 @@ describe("observeFit", () => {
     const page = fly(1);
     expect(new Set(sizes(page.flying)).size).toBe(30);
     expect(new Set(sizes([...page.springing, page.rest]))).toEqual(new Set(["1360px x 672px"]));
+  });
+
+  test("a card whose spring ends without a last change still has its preview fitted to where it rests", async () => {
+    const { fly, pads, flyEndingQuietly } = await flyingPreview();
+    fly(1);
+    fly(0);
+    // The page's padding is now a fraction off what was remembered: the landing layout is a hair out, and is set right at rest.
+    pads.page = { width: 48, height: 196.6 };
+    expect(flyEndingQuietly()).toMatchObject({ width: "1360px", height: "671.4px", transform: "" });
   });
 });
