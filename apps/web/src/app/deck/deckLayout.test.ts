@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { springGenerator } from "../motion/generators";
+import { SPRING } from "../motion/transitions";
 import {
   anchoredScrollTop,
   CAMERA_MAX_SCALE,
   cameraPose,
   centeredScrollTop,
+  footerOpacity,
   GRID_GAP,
   GRID_TOP,
   gridAnchor,
@@ -171,5 +174,33 @@ describe("cameraPose", () => {
         box.top >= desktop.height;
       expect(outside).toBe(true);
     });
+  });
+});
+
+describe("footerOpacity", () => {
+  const close = springGenerator(1, 0, SPRING.morph, 0);
+  const open = springGenerator(0, 1, SPRING.morph, 0);
+  const firstHidden = (curve: typeof close) => {
+    for (let at = 0; at <= curve.duration; at += 5) if (footerOpacity(curve.value(at)) === 0) return at;
+    return Infinity;
+  };
+
+  test("is gone within the first fifth of a flight back to the grid", () => {
+    expect(firstHidden(close)).toBeLessThanOrEqual(close.duration / 5);
+  });
+
+  test("only falls as the card closes, so it never flickers back", () => {
+    let last = 1;
+    for (let at = 0; at <= close.duration; at += 5) {
+      const shown = footerOpacity(close.value(at));
+      expect(shown).toBeLessThanOrEqual(last);
+      last = shown;
+    }
+  });
+
+  test("stays hidden for most of an opening and is fully shown once the page lands", () => {
+    expect(footerOpacity(open.value(open.duration / 3))).toBe(0);
+    expect(footerOpacity(open.value(open.duration))).toBe(1);
+    expect(footerOpacity(1.04)).toBe(1);
   });
 });

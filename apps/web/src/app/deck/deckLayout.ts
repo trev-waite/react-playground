@@ -21,6 +21,13 @@ export type CardPose = {
   chrome: number;
 };
 
+/** The footer shows only over the last stretch of `chrome`, so it is gone early in a flight back to the grid and arrives as a page lands. */
+export const FOOTER_FADE_FROM = 0.75;
+
+export function footerOpacity(chrome: number): number {
+  return Math.min(1, Math.max(0, (chrome - FOOTER_FADE_FROM) / (1 - FOOTER_FADE_FROM)));
+}
+
 /** Keep in sync with the `--page-*` and `--grid-*` tokens in app.css. */
 export const PAGE_INSET = 16;
 export const PAGE_RADIUS = 32;
