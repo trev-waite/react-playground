@@ -86,14 +86,13 @@ export function keyValue(key: string, value: number, large: boolean): number | n
   }
 }
 
-/** A drag this close to full (where it would read 99) is pulled to 100, so the edge never flickers between the two. */
-export const MAGNET_CATCH = 98.5;
-/** Once full, a drag lets go only below this, well short of where it caught. */
-export const MAGNET_RELEASE = 97;
-
-/** The value a drag at `raw` (0 to 100, unrounded) lands on, pulled to full near the end; `full` is whether it is full now. */
-export function magnet(raw: number, full: boolean): number {
-  return raw >= (full ? MAGNET_RELEASE : MAGNET_CATCH) ? MAX_VALUE : raw;
+/**
+ * The value a drag at `raw` (0 to 100, unrounded) shows, with `showing` on
+ * screen now: it changes only once the drag is a whole step away, so a pointer
+ * wavering between two values never flickers, and every value can be reached.
+ */
+export function settle(raw: number, showing: number): number {
+  return Math.abs(raw - showing) >= 1 ? clampValue(raw) : showing;
 }
 
 /** True when a change fills the slider: the moment it pops. */

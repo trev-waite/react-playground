@@ -12,7 +12,7 @@ import {
   fills,
   fractionAt,
   keyValue,
-  magnet,
+  settle,
   layoutX,
   pillShape,
   shapedX,
@@ -168,7 +168,7 @@ type Press = { pointerId: number; x: number; y: number; sliding: boolean };
 /**
  * A pill slider. Drag the line, or anywhere on the pill: the grey fill follows
  * smoothly, a fast flick stretches the pill like rubber, and filling it to 100
- * turns it green with a springy pop. Near the end a drag is pulled to 100.
+ * turns it green with a springy pop.
  */
 export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSliderProps) {
   const [value, setValue] = useState(() => clampValue(defaultValue));
@@ -216,9 +216,9 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
   }
 
   function dragTo(clientX: number) {
-    const value = magnet(fractionUnder(clientX) * MAX_VALUE, latest.current === MAX_VALUE);
-    pill.current?.aim(value / MAX_VALUE, true);
-    commit(clampValue(value));
+    const fraction = fractionUnder(clientX);
+    pill.current?.aim(fraction, true);
+    commit(settle(fraction * MAX_VALUE, latest.current));
   }
 
   function letGo() {

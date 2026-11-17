@@ -7,9 +7,7 @@ import {
   atRest,
   fills,
   keyValue,
-  magnet,
-  MAGNET_CATCH,
-  MAGNET_RELEASE,
+  settle,
   pillShape,
   shapedX,
   stepSpring,
@@ -36,25 +34,36 @@ function run(spring: typeof POP_SPRING, start: SpringState, target: number, seco
 }
 
 describe("Stretch Slider value", () => {
-  test("a drag near the end is pulled to full, and lets go only once pulled well back", () => {
-    expect(magnet(98, false)).toBe(98);
-    expect(magnet(MAGNET_CATCH, false)).toBe(100);
-    expect(magnet(99.4, false)).toBe(100);
-    expect(magnet(98, true)).toBe(100);
-    expect(magnet(MAGNET_RELEASE, true)).toBe(100);
-    expect(magnet(96.9, true)).toBe(96.9);
+  test("a slow drag reaches every value, 99 included, both ways", () => {
+    const seen = (from: number, to: number) => {
+      const values = new Set<number>();
+      let value = from;
+      for (let step = 0; step <= 400; step++) {
+        value = settle(from + ((to - from) * step) / 400, value);
+        values.add(value);
+      }
+      return values;
+    };
+    const up = seen(90, 100);
+    const down = seen(100, 90);
+    for (let value = 90; value <= 100; value++) {
+      expect(up.has(value)).toBe(true);
+      expect(down.has(value)).toBe(true);
+    }
   });
 
-  test("a pointer wavering at the edge fills it once and stays full, so it pops once", () => {
-    let value = 97;
-    let pops = 0;
-    for (const raw of [98, 98.6, 99.2, 98.4, 99.6, 98.1, 99.9, 98.5, 97.6, 99.1]) {
-      const next = Math.round(magnet(raw, value === 100));
-      if (fills(value, next)) pops++;
-      value = next;
+  test("a pointer wavering between two values holds one, so the slider never flickers or pops twice", () => {
+    for (const [start, wobble] of [[99, [99.4, 99.6, 99.2, 99.8, 99.5, 99.9, 99.3]], [100, [99.6, 99.1, 99.9, 99.2, 100, 99.4]]] as const) {
+      let value = start;
+      let pops = 0;
+      for (const raw of wobble) {
+        const next = settle(raw, value);
+        if (fills(value, next)) pops++;
+        value = next;
+      }
+      expect(value).toBe(start);
+      expect(pops).toBe(0);
     }
-    expect(value).toBe(100);
-    expect(pops).toBe(1);
   });
 
   test("puts the handle under the pointer, and clamps past either end", () => {
