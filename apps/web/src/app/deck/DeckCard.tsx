@@ -19,7 +19,7 @@ import type { MotionValue } from "../motion/motionValue";
 import type { PreviewModule } from "../../lib/types";
 import { useTheme } from "../theme/theme";
 import type { CardMotion } from "./cardMotion";
-import type { Size } from "./deckLayout";
+import { footerOpacity, type Size } from "./deckLayout";
 import { familyLayoutWidth, observeFit, refitArea } from "./fitPreview";
 import styles from "./DeckCard.module.css";
 
@@ -182,7 +182,7 @@ export function DeckCard({
 function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; interactive: boolean; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   const footerStyle = useMotionStyle(ref, [chrome], style => {
-    style("opacity", opacity(chrome.get()));
+    style("opacity", opacity(footerOpacity(chrome.get())));
     style("transform", transform({ y: (1 - chrome.get()) * 16 }));
   });
 

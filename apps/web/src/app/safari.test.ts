@@ -111,4 +111,8 @@ describe("Safari frame rate", () => {
       expect(await read(file)).toContain('willChange: "transform"');
     }
   });
+
+  test("the Stretch Slider's handle halves move on their own layers, so a slow drag leaves no trails", async () => {
+    expect(await rule("src/live/inputs/StretchSlider/StretchSlider.module.css", ".half")).toContain("will-change: transform");
+  });
 });

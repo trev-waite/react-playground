@@ -79,6 +79,8 @@
   height: calc(22% + 1.5px);
   border-radius: 2px;
   background: var(--ink);
+  /* Own layers: Safari repaints a scaled half moved by a fraction of a pixel short of its old edge, leaving grey trails. */
+  will-change: transform;
 }
 
 .number {
