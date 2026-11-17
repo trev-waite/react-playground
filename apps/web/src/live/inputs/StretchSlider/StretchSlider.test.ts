@@ -54,7 +54,7 @@ describe("Stretch Slider value", () => {
 
   test("a pointer wavering between two values holds one, so the slider never flickers or pops twice", () => {
     for (const [start, wobble] of [[99, [99.4, 99.6, 99.2, 99.8, 99.5, 99.9, 99.3]], [100, [99.6, 99.1, 99.9, 99.2, 100, 99.4]]] as const) {
-      let value = start;
+      let value: number = start;
       let pops = 0;
       for (const raw of wobble) {
         const next = settle(raw, value);
