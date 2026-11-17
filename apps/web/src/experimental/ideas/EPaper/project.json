@@ -1,9 +1,9 @@
 {
   "id": "08434d11-9971-4633-a2b3-52170e70bde5",
-  "revision": 5,
+  "revision": 6,
   "name": "E Paper",
   "componentName": "EPaper",
-  "updatedAt": "2026-11-13T20:25:42.416Z",
+  "updatedAt": "2026-11-17T01:26:17.142Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "55508d1a2147b56ee504c1311023769d49792f7bb84145e56c0ba3323c2437fd",
+  "sourceDigest": "40394721ef1d1e288157ff870d4deec6445064e6cff9ed28bc0e9416b27f9f56",
   "createdAt": "2026-11-13T18:41:10.084Z"
 }

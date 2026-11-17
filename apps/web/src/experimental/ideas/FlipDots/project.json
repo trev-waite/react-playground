@@ -1,9 +1,9 @@
 {
   "id": "bab56f5b-ba09-40d3-bf92-37740a19653c",
-  "revision": 4,
+  "revision": 5,
   "name": "Flip Dots",
   "componentName": "FlipDots",
-  "updatedAt": "2026-11-13T20:25:11.929Z",
+  "updatedAt": "2026-11-17T01:26:17.138Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "0931a20d923262bf43a8e94a0cda45979c176c28025451dd0f6cf90f257a8f5a",
+  "sourceDigest": "745e13dc7cf806ed0d6669078828d4292d4710ba7c66d35da928532025714c5d",
   "createdAt": "2026-11-13T18:41:10.081Z"
 }

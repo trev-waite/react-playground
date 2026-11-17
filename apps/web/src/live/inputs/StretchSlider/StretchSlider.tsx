@@ -12,6 +12,7 @@ import {
   fills,
   fractionAt,
   keyValue,
+  magnet,
   layoutX,
   pillShape,
   shapedX,
@@ -32,7 +33,7 @@ type StretchSliderProps = {
 type Pill = {
   /** Carries the fill toward `fraction` (0 to 1); `held` while a pointer drags it. A press is not a flick: its jump never stretches the pill. */
   aim: (fraction: number, held: boolean) => void;
-  /** Where a point `x` px into the pill would sit with the pill at rest, so the handle stays under the pointer while it stretches. */
+  /** Where a point `x` px into the pill would sit unstretched, so the handle stays under the pointer while it stretches. The pop swells in place and is not undone: a still pointer must not read it as a move. */
   rest: (x: number) => number;
   pop: () => void;
   stop: () => void;
@@ -145,8 +146,9 @@ function startPill({ body, channel, fill, number }: PillParts, start: number): P
       wake();
     },
     rest(x) {
+      const pulled = pillShape(stretch.value, 0, width);
       const center = width / 2;
-      return center + (x - center - shape.shiftX) / shape.scaleX;
+      return center + (x - center - pulled.shiftX) / pulled.scaleX;
     },
     pop() {
       if (reducedMotion.matches) return;
@@ -166,7 +168,7 @@ type Press = { pointerId: number; x: number; y: number; sliding: boolean };
 /**
  * A pill slider. Drag the line, or anywhere on the pill: the grey fill follows
  * smoothly, a fast flick stretches the pill like rubber, and filling it to 100
- * turns it green with a springy pop.
+ * turns it green with a springy pop. Near the end a drag is pulled to 100.
  */
 export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSliderProps) {
   const [value, setValue] = useState(() => clampValue(defaultValue));
@@ -214,9 +216,9 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
   }
 
   function dragTo(clientX: number) {
-    const fraction = fractionUnder(clientX);
-    pill.current?.aim(fraction, true);
-    commit(clampValue(fraction * MAX_VALUE));
+    const value = magnet(fractionUnder(clientX) * MAX_VALUE, latest.current === MAX_VALUE);
+    pill.current?.aim(value / MAX_VALUE, true);
+    commit(clampValue(value));
   }
 
   function letGo() {

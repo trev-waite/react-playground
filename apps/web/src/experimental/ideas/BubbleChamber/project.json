@@ -1,9 +1,9 @@
 {
   "id": "a122d746-362d-46f0-9f23-8f9ae1e91cec",
-  "revision": 4,
+  "revision": 5,
   "name": "Bubble Chamber",
   "componentName": "BubbleChamber",
-  "updatedAt": "2026-11-13T19:00:54.346Z",
+  "updatedAt": "2026-11-17T01:26:17.147Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "a32f87c7c899cf775ca976f6cfea97cda793f921407045f52690f93d564ce4ee",
+  "sourceDigest": "7e9dfd6b4c51ebeb5f46713a9b69c6b70f488a74e4140e387d20ab9498089bf9",
   "createdAt": "2026-11-13T18:41:10.086Z"
 }

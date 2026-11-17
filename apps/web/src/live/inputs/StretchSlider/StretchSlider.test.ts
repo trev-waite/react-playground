@@ -7,6 +7,9 @@ import {
   atRest,
   fills,
   keyValue,
+  magnet,
+  MAGNET_CATCH,
+  MAGNET_RELEASE,
   pillShape,
   shapedX,
   stepSpring,
@@ -33,6 +36,27 @@ function run(spring: typeof POP_SPRING, start: SpringState, target: number, seco
 }
 
 describe("Stretch Slider value", () => {
+  test("a drag near the end is pulled to full, and lets go only once pulled well back", () => {
+    expect(magnet(98, false)).toBe(98);
+    expect(magnet(MAGNET_CATCH, false)).toBe(100);
+    expect(magnet(99.4, false)).toBe(100);
+    expect(magnet(98, true)).toBe(100);
+    expect(magnet(MAGNET_RELEASE, true)).toBe(100);
+    expect(magnet(96.9, true)).toBe(96.9);
+  });
+
+  test("a pointer wavering at the edge fills it once and stays full, so it pops once", () => {
+    let value = 97;
+    let pops = 0;
+    for (const raw of [98, 98.6, 99.2, 98.4, 99.6, 98.1, 99.9, 98.5, 97.6, 99.1]) {
+      const next = Math.round(magnet(raw, value === 100));
+      if (fills(value, next)) pops++;
+      value = next;
+    }
+    expect(value).toBe(100);
+    expect(pops).toBe(1);
+  });
+
   test("puts the handle under the pointer, and clamps past either end", () => {
     const width = 300;
     for (const fraction of [0, 0.25, 0.5, 1]) {
