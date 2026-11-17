@@ -23,8 +23,10 @@ import {
   HANDLE_HEIGHT,
   PARK_GAP,
   PARK_SPRING,
+  dragValue,
   fillOpacity,
   halfLength,
+  scrubAt,
   parkedX,
   retracted,
   splitAt,
@@ -141,6 +143,34 @@ describe("Stretch Slider at 0", () => {
       expect(splitAt(MIN_FILL - HANDLE_INSET + (travel * value) / 100, parked, number, width)).toBe(0);
       for (let x = number.left - width / 2; x <= number.right + width / 2; x += 0.5) expect(splitAt(x, parked, number, width)).toBe(1);
     }
+  });
+
+  test("past the fill's emptiest, a drag holds the line under the pointer, over the number to the very left", () => {
+    const number = box(1);
+    const parked = parkedX(number, width);
+    const edge = MIN_FILL - HANDLE_INSET;
+    expect(scrubAt(edge, parked)).toBe(0);
+    expect(scrubAt(edge + 30, parked)).toBe(0);
+    expect(scrubAt(parked, parked)).toBe(1);
+    expect(scrubAt(parked - 20, parked)).toBe(1);
+    for (let x = parked; x <= edge; x += 3) expect(edge + (parked - edge) * scrubAt(x, parked)).toBeCloseTo(x);
+  });
+
+  test("a drag reads 0 only with the line at the very left, never on the fill's edge, and does not flicker there", () => {
+    expect(dragValue(0, 0, 5)).toBe(1);
+    expect(dragValue(0, 0.5, 1)).toBe(1);
+    expect(dragValue(0, 0.96, 1)).toBe(1);
+    expect(dragValue(0, 1, 1)).toBe(0);
+    let value = 1;
+    const seen: number[] = [];
+    for (const scrub of [0.95, 0.98, 0.94, 1, 0.92, 0.97, 0.91]) {
+      value = dragValue(0, scrub, value);
+      seen.push(value);
+    }
+    expect(seen).toEqual([1, 0, 0, 0, 0, 0, 0]);
+    expect(dragValue(0, 0.85, 0)).toBe(1);
+    expect(dragValue(0.37, 0, 0)).toBe(37);
+    expect(dragValue(0.004, 0, 0)).toBe(1);
   });
 
   test("at 0 the line rests a clear 8px left of the number", () => {

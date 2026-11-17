@@ -181,6 +181,30 @@ export function splitAt(x: number, parked: number, number: NumberBox, width: num
   return left > parked ? smooth((x - parked) / (left - parked)) : 0;
 }
 
+/**
+ * How far (0 to 1) a drag has carried the handle from the fill's edge at its
+ * emptiest toward its place at 0, with the handle at `x` (px into the channel).
+ * Past that edge a drag moves the handle itself, over the number.
+ */
+export function scrubAt(x: number, parked: number): number {
+  const edge = MIN_FILL - HANDLE_INSET;
+  return edge > parked ? Math.min(1, Math.max(0, (edge - x) / (edge - parked))) : 0;
+}
+
+/** A drag reads 0 once it has carried the handle this far to its place at 0, and lets go of 0 only back below `ZERO_LEAVE`. */
+const ZERO_AT = 0.97;
+const ZERO_LEAVE = 0.9;
+
+/**
+ * The value a drag shows, at `fraction` of the travel and `scrub` of the way
+ * past the fill's edge, with `showing` on screen now. 0 is the handle's place
+ * at the very left; anywhere short of it the slider reads at least 1.
+ */
+export function dragValue(fraction: number, scrub: number, showing: number): number {
+  if (scrub >= (showing === 0 ? ZERO_LEAVE : ZERO_AT)) return 0;
+  return Math.max(1, settle(fraction * MAX_VALUE, Math.max(1, showing)));
+}
+
 /** The handle's place at 0: just left of the number, `PARK_GAP` clear of it. */
 export function parkedX(number: NumberBox, width: number): number {
   return number.left - PARK_GAP - width / 2;
