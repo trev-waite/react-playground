@@ -369,9 +369,9 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
   });
 
   /**
-   * Reduced motion turned on while the room zooms: the zoom stops where it is
-   * and fades out (closing) or the room lands and fades in (opening), as the
-   * reduced flight would. Otherwise the flight is rebuilt for the preference.
+   * Reduced motion turned on mid-zoom ends the flight at once where it was
+   * heading, without travel: back at the avatar, or landed in a room rebuilt
+   * for the preference. Otherwise the flight is rebuilt for it.
    */
   const followMotion = useEffectEvent(() => {
     const found = layers();
@@ -381,18 +381,8 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
       return;
     }
     stopTracing(current, found.stage);
-    const fade: KeyframeAnimationOptions = { duration: REDUCED_MS, easing: "ease-out" };
-    if (current.heading > 0) {
-      for (const animation of current.animations) animation.finish();
-      found.portal.animate([{ opacity: 0 }, { opacity: 1 }], fade);
-      return;
-    }
-    for (const animation of current.animations) animation.pause();
-    const out = found.portal.animate([{ opacity: 1 }, { opacity: 0 }], { ...fade, fill: "forwards" });
-    out.addEventListener("finish", () => {
-      if (cockpit.current.flight === current && current.portal.playState === "paused") releaseFlight(cockpit.current, found.stage, true);
-      out.cancel();
-    });
+    Object.assign(current, { held: 0, holding: false, stale: true });
+    for (const animation of current.animations) animation.finish();
   });
 
   const leaveOnEscape = useEffectEvent((event: KeyboardEvent) => {
