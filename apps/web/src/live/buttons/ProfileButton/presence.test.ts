@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { geometry, type Point } from "./portal";
-import { RING, TRACE_MARGIN, beadAt, beadOutline, rimAt, ringAt } from "./presence";
+import { RING, TRACE_MARGIN, beadAt, beadOutline, meltIn, rimAt, ringAt } from "./presence";
 
 const stage = { width: 560, height: 420 };
 const avatar = { x: 280, y: 210 };
@@ -80,6 +80,28 @@ describe("Profile Button presence bead", () => {
     expect(area(hovered) / (Math.PI * dot.radius * dot.radius)).toBeLessThan(1.25);
     const along = hovered.map(p => (p.x - dot.x) * Math.SQRT1_2 - (p.y - dot.y) * Math.SQRT1_2);
     expect(Math.max(...along) - Math.min(...along)).toBeGreaterThan(2 * dot.radius * 2.5);
+  });
+
+  test("under the pointer it eases onto the rim, never jumping a frame, and is there in half a second", () => {
+    const moved = (from: number, to: number) => {
+      const a = beadOutline(g, dot, 0, from);
+      const b = beadOutline(g, dot, 0, to);
+      return Math.max(...a.map((p, i) => Math.hypot(b[i]!.x - p.x, b[i]!.y - p.y)));
+    };
+    let held = 0;
+    const steps: number[] = [];
+    for (let frame = 0; frame < 30; frame++) {
+      const next = meltIn(held, 1000 / 60);
+      steps.push(moved(held, next));
+      held = next;
+    }
+    expect(held).toBe(1);
+    expect(steps[0]!).toBeLessThan(dot.radius * 0.05);
+    expect(Math.max(...steps)).toBeLessThan(dot.radius * 0.35);
+  });
+
+  test("melting under the pointer carries on from wherever the dot had gathered back to", () => {
+    for (const held of [0, 0.2, 0.6, 0.95, 1]) expect(meltIn(held, 0)).toBeCloseTo(held, 6);
   });
 
   test("a flight goes on from the melted bead without a jump, whatever share it had melted", () => {

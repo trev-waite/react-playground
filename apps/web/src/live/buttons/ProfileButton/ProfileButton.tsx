@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { SegmentedControl } from "@/live/controls/SegmentedControl/SegmentedControl";
 import { Switch } from "@/live/controls/Switch/Switch";
 import { CLOSE_RATE, MAX_PORTRAIT, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
-import { HOVER_MS, TRACE_MARGIN, beadAt, type Dot } from "./presence";
+import { HOVER_MS, TRACE_MARGIN, beadAt, meltIn, type Dot } from "./presence";
 import { ROOM_COLOR, paintSilhouette } from "./silhouette";
 import styles from "./ProfileButton.module.css";
 
@@ -161,8 +161,7 @@ function traceDot(flight: Flight, stage: HTMLElement, bead: SVGPathElement, dot:
     if (ms >= HOVER_MS) flight.held = 0;
     else if (playing && flight.heading < 0) flight.held = Math.min(flight.held, ms / HOVER_MS);
     else if (!playing) {
-      const step = (now - last) / HOVER_MS;
-      flight.held = flight.holding ? Math.min(1, flight.held + step) : Math.max(0, flight.held - step * CLOSE_RATE);
+      flight.held = flight.holding ? meltIn(flight.held, now - last) : Math.max(0, flight.held - ((now - last) / HOVER_MS) * CLOSE_RATE);
     }
     last = now;
     const { path, stroke } = beadAt(flight.geometry, dot, ms, flight.held);

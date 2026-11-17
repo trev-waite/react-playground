@@ -16,8 +16,10 @@ export const RING = 3;
 const MELTED_RING = 2;
 /** The share of the flight over which the dot melts onto the rim: it answers the press at once, then settles onto the rim. */
 const MELT = 0.42;
-/** How long the dot takes to melt onto the avatar's rim under the pointer: as long as it takes in flight. */
+/** How long the dot takes to gather back off the rim once the pointer leaves: as long as it takes to melt in flight. */
 export const HOVER_MS = MELT * OPEN_MS;
+/** How long it takes to melt onto the rim under the pointer, easing in and out rather than at a press's sudden pace. */
+const MELT_IN_MS = 500;
 /** How far the dot spreads along the rim: its half-length, in dot radii, once it has melted. */
 const SPREAD = 3.2;
 /** How far (radians) the bead swirls around the rim as the window pulls the viewer in. */
@@ -109,6 +111,17 @@ export function ringAt(t: number, held = 0): number {
 
 function melted(t: number): number {
   return 1 - Math.pow(1 - clamp01(t / MELT), 3);
+}
+
+/** The inverse of `ease`. */
+function uneased(y: number): number {
+  return 0.5 - Math.sin(Math.asin(1 - 2 * clamp01(y)) / 3);
+}
+
+/** How far the dot has melted under the pointer `ms` after `held`: its melt follows `ease`, from wherever it was. */
+export function meltIn(held: number, ms: number): number {
+  const at = uneased(melted(held * MELT));
+  return 1 - Math.cbrt(1 - ease(at + ms / MELT_IN_MS));
 }
 
 /** The bead's outline and the width of its white ring, in the window's space. */
