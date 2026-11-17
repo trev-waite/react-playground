@@ -20,6 +20,7 @@ Copy this and track it:
 - [ ] one Params struct: resolution, time, pointer first, then idea fields; sliders read from
       settingsRef every frame, normalised to 0..1; defaults come from SLIDERS
 - [ ] pausableLoop instead of frameLoop
+- [ ] vgpu is called only from `start` or later; a vgpu function not yet in `src/gpu/vgpuGate.ts` is added there and to `vgpuLibrary.ts`
 - [ ] cleanup: stop the loop, unsubscribe resize/error, destroy textures and chains you created
 - [ ] reduced motion honoured: time frozen, pointer influence off
 - [ ] transparent output is premultiplied (rgb <= alpha)

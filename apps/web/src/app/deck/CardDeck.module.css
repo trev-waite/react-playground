@@ -92,6 +92,11 @@
   -webkit-backdrop-filter: none !important;
 }
 
+/* For one frame as a flight lands: see placeUnseen.ts. */
+.scroller[data-placing] .content > :not([data-current]) {
+  visibility: hidden;
+}
+
 .scroller[data-flying] .content > [data-raised] {
   box-shadow: var(--card-shadow-contact);
 }

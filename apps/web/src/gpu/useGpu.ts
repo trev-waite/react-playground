@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useState, type RefObject } from "react";
 import { init, surface, type Surface } from "vgpu";
+import { keepGpuAwake } from "./keepAwake";
 import {
   canvasHasLayout,
   GPU_DPR_RANGE,
@@ -84,15 +85,18 @@ function runGpu(
   setError: (error: string | null) => void,
 ): () => void {
   const abort = new AbortController();
-  const session: { epoch: number; cleanup: () => void; gpu: GpuClient | undefined } = {
+  const session: { epoch: number; cleanup: () => void; rest: () => void; gpu: GpuClient | undefined } = {
     epoch: 0,
     cleanup: () => {},
+    rest: () => {},
     gpu: undefined,
   };
 
   const disposeSession = () => {
     session.cleanup();
     session.cleanup = () => {};
+    session.rest();
+    session.rest = () => {};
     session.gpu?.dispose();
     session.gpu = undefined;
   };
@@ -112,6 +116,7 @@ function runGpu(
 
       const gpu = created;
       session.gpu = gpu;
+      session.rest = keepGpuAwake(gpu.gpu);
       const gpuSurface = surface(gpu, canvas, {
         alphaMode: readOptions().alphaMode ?? "premultiplied",
         clearColor: readOptions().clearColor ?? TRANSPARENT,

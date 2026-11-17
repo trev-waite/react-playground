@@ -7,18 +7,27 @@ import {
   atRest,
   fills,
   keyValue,
+  settle,
   pillShape,
   shapedX,
   stepSpring,
   stretchFor,
   touchIntent,
-  fractionAt,
   layoutX,
-  fillOffset,
+  lineFraction,
+  lineX,
+  fillFor,
   MIN_FILL,
   HANDLE_INSET,
   CALM_SPEED,
   FOLLOW_SPRING,
+  HANDLE_HEIGHT,
+  PARK_GAP,
+  halfLength,
+  parkedX,
+  splitAt,
+  topHalf,
+  type NumberBox,
   type SpringState,
 } from "./stretch";
 
@@ -33,29 +42,75 @@ function run(spring: typeof POP_SPRING, start: SpringState, target: number, seco
 }
 
 describe("Stretch Slider value", () => {
-  test("puts the handle under the pointer, and clamps past either end", () => {
-    const width = 300;
-    for (const fraction of [0, 0.25, 0.5, 1]) {
-      const handle = 10 + width + fillOffset(fraction, width) - HANDLE_INSET;
-      expect(fractionAt(handle, 10, width)).toBeCloseTo(fraction);
+  test("a slow drag reaches every value, 99 included, both ways", () => {
+    const seen = (from: number, to: number) => {
+      const values = new Set<number>();
+      let value = from;
+      for (let step = 0; step <= 400; step++) {
+        value = settle(from + ((to - from) * step) / 400, value);
+        values.add(value);
+      }
+      return values;
+    };
+    const up = seen(90, 100);
+    const down = seen(100, 90);
+    for (let value = 90; value <= 100; value++) {
+      expect(up.has(value)).toBe(true);
+      expect(down.has(value)).toBe(true);
     }
-    expect(fractionAt(-40, 10, width)).toBe(0);
-    expect(fractionAt(900, 10, width)).toBe(1);
-    expect(fractionAt(50, 10, MIN_FILL)).toBe(0);
+  });
+
+  test("a pointer wavering between two values holds one, so the slider never flickers or pops twice", () => {
+    for (const [start, wobble] of [[99, [99.4, 99.6, 99.2, 99.8, 99.5, 99.9, 99.3]], [100, [99.6, 99.1, 99.9, 99.2, 100, 99.4]]] as const) {
+      let value: number = start;
+      let pops = 0;
+      for (const raw of wobble) {
+        const next = settle(raw, value);
+        if (fills(value, next)) pops++;
+        value = next;
+      }
+      expect(value).toBe(start);
+      expect(pops).toBe(0);
+    }
+  });
+
+  test("puts the line under the pointer on one even scale, 0 at the very left, and clamps past either end", () => {
+    const width = 300;
+    const parked = 6.75;
+    for (const fraction of [0, 0.01, 0.25, 0.5, 1]) expect(lineFraction(lineX(fraction, parked, width), parked, width)).toBeCloseTo(fraction);
+    expect(lineX(0, parked, width)).toBe(parked);
+    expect(lineX(1, parked, width)).toBe(width - HANDLE_INSET);
+    const percent = (at: number) => lineX(at + 0.01, parked, width) - lineX(at, parked, width);
+    for (const at of [0, 0.05, 0.5, 0.98]) expect(percent(at)).toBeCloseTo(percent(0.5));
+    expect(lineFraction(-40, parked, width)).toBe(0);
+    expect(lineFraction(900, parked, width)).toBe(1);
   });
 
   test("reads the pointer in layout px when the deck draws the slider scaled down", () => {
     const width = 360;
     const scale = 0.75;
-    const end = 10 + width + fillOffset(1, width) - HANDLE_INSET;
+    const end = 10 + lineX(1, 6.75, width);
     const onScreen = 100 + end * scale;
-    expect(fractionAt(layoutX(onScreen, 100, width * scale, width), 10, width)).toBeCloseTo(1);
+    expect(lineFraction(layoutX(onScreen, 100, width * scale, width) - 10, 6.75, width)).toBeCloseTo(1);
     expect(layoutX(140, 100, 0, 0)).toBe(40);
   });
 
-  test("the fill never shrinks past room for the number and the handle", () => {
-    expect(300 + fillOffset(0, 300)).toBe(MIN_FILL);
-    expect(fillOffset(1, 300)).toBeCloseTo(0);
+  test("the grey rides just past the line, keeps room for the number, then slides away to nothing at 0", () => {
+    const width = 300;
+    const parked = 6.75;
+    const edge = (x: number) => width + fillFor(x, parked, width).offset;
+    expect(edge(lineX(1, parked, width))).toBe(width);
+    expect(edge(150)).toBe(150 + HANDLE_INSET);
+    expect(edge(MIN_FILL - HANDLE_INSET)).toBe(MIN_FILL);
+    expect(edge(MIN_FILL - HANDLE_INSET - 0.01)).toBeCloseTo(MIN_FILL, 1);
+    expect(fillFor(150, parked, width).opacity).toBe(1);
+    expect(fillFor(parked, parked, width).opacity).toBe(0);
+    expect(edge(parked)).toBe(0);
+    let last = edge(MIN_FILL - HANDLE_INSET);
+    for (let x = MIN_FILL - HANDLE_INSET; x >= parked; x -= 0.5) {
+      expect(edge(x)).toBeLessThanOrEqual(last + 1e-9);
+      last = edge(x);
+    }
   });
 
   test("keys step by one, Shift and Page keys by ten, Home and End jump to the ends", () => {
@@ -80,6 +135,53 @@ describe("Stretch Slider value", () => {
     expect(touchIntent(3, 2)).toBeNull();
     expect(touchIntent(10, 4)).toBe("slide");
     expect(touchIntent(4, 10)).toBe("scroll");
+  });
+});
+
+describe("Stretch Slider at 0", () => {
+  const channel = 47;
+  const width = 2.5;
+  const box = (digits: number): NumberBox => ({ left: 15.5, right: 15.5 + 17 + digits * 10.5, half: 9 });
+  const lineTop = -(channel * HANDLE_HEIGHT) / 2;
+
+  test("the line is whole at 0 and well clear of the number, and parted wherever it would cross it", () => {
+    for (const digits of [1, 2, 3]) {
+      const number = box(digits);
+      const parked = parkedX(number, width);
+      expect(splitAt(parked, parked, number, width)).toBe(0);
+      expect(splitAt(number.right + width / 2 + 1 + 14, parked, number, width)).toBe(0);
+      expect(splitAt(number.right + 60, parked, number, width)).toBe(0);
+      for (let x = number.left - width / 2; x <= number.right + width / 2; x += 0.5) expect(splitAt(x, parked, number, width)).toBe(1);
+    }
+  });
+
+  test("at 0 the line rests a clear 8px left of the number", () => {
+    const number = box(1);
+    expect(number.left - (parkedX(number, width) + width / 2)).toBe(PARK_GAP);
+  });
+
+  test("joined, the halves make the one line with no seam; parted, they clear the number inside the pill", () => {
+    const number = box(1);
+    const length = halfLength(channel);
+    const joined = topHalf(0, channel, number);
+    expect(joined.y - length / 2).toBeCloseTo(lineTop);
+    expect(joined.y + length / 2).toBeGreaterThan(0);
+    const apart = topHalf(1, channel, number);
+    expect(apart.y + (length * apart.scale) / 2).toBeLessThanOrEqual(-number.half + 1e-9);
+    expect(apart.y - (length * apart.scale) / 2).toBeGreaterThan(-channel / 2 + 3);
+  });
+
+  test("as the line moves, its halves part and close smoothly, never jumping ahead of it", () => {
+    const number = box(1);
+    const parked = parkedX(number, width);
+    let last = topHalf(splitAt(parked, parked, number, width), channel, number).y;
+    let steepest = 0;
+    for (let x = parked + 0.25; x <= 120; x += 0.25) {
+      const y = topHalf(splitAt(x, parked, number, width), channel, number).y;
+      steepest = Math.max(steepest, Math.abs(y - last) / 0.25);
+      last = y;
+    }
+    expect(steepest).toBeLessThan(2.5);
   });
 });
 

@@ -37,6 +37,7 @@
 }
 
 .channel {
+  position: relative;
   height: 100%;
   overflow: hidden;
   border-radius: 999px;
@@ -51,22 +52,33 @@
   height: 100%;
   border-radius: 12px;
   background: var(--fill);
-  transition: background-color 200ms ease-out;
 }
 
-.slider[data-full] .fill {
-  background: var(--full);
-}
-
-.handle {
+/* Full, the green fades in over the grey, by opacity alone. */
+.fill::after {
+  content: "";
   position: absolute;
-  top: 50%;
-  right: 13px;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--full);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.slider[data-full] .fill::after {
+  opacity: 1;
+}
+
+/* The grab line, in two halves placed by script: joined (overlapping, so no seam shows) on the fill's
+   edge, parted around the number on the way to 0. Each is centered on the channel's middle before its transform. */
+.half {
+  position: absolute;
+  top: calc(50% - 11% - 0.75px);
+  left: -1.25px;
   width: 2.5px;
-  height: 44%;
+  height: calc(22% + 1.5px);
   border-radius: 2px;
   background: var(--ink);
-  translate: 0 -50%;
 }
 
 .number {
@@ -86,7 +98,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fill {
+  .fill::after {
     transition: none;
   }
 }

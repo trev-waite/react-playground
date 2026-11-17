@@ -1,9 +1,9 @@
 {
   "id": "23fd9fd3-a998-4948-a2a1-13985129920b",
-  "revision": 7,
+  "revision": 8,
   "name": "Wind Tunnel",
   "componentName": "WindTunnel",
-  "updatedAt": "2026-11-13T20:24:42.065Z",
+  "updatedAt": "2026-11-17T01:26:17.149Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "1f75f93b926088a54593eedf6742e3774a1c01a4fde84a879c2fb82267784697",
+  "sourceDigest": "50c76468330d52119faedd138926f4000503291332a563a99bc93a83e2492f8d",
   "createdAt": "2026-11-13T18:41:10.087Z"
 }

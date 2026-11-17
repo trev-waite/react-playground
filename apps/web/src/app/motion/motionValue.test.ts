@@ -57,6 +57,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  // The frame loop is shared with every other test file: run what is still asked of it, so it is left idle.
+  for (let frame = 0; frame < 1000 && frames.length > 0; frame++) {
+    clock += 1000 / 60;
+    for (const callback of frames.splice(0)) callback(clock);
+  }
   if (realNow) Object.defineProperty(performance, "now", realNow);
   else delete (performance as { now?: unknown }).now;
   globalThis.requestAnimationFrame = realFrame;

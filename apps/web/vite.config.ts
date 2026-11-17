@@ -10,6 +10,7 @@ import { liveSourcePlugin } from "./vite/liveSourcePlugin.ts";
 import { previewMetaPlugin } from "./vite/previewMetaPlugin.ts";
 import { previewPreloadPlugin } from "./vite/previewPreloadPlugin.ts";
 import { themeTogglePlugin } from "./vite/themeTogglePlugin.ts";
+import { vgpuGatePlugin } from "./vite/vgpuGatePlugin.ts";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +27,7 @@ export default defineConfig(({ mode }) => {
       previewPreloadPlugin(),
       themeTogglePlugin(env),
       liveRoutesPlugin(env),
+      vgpuGatePlugin(),
       assetHeadersPlugin(),
     ],
     resolve: {

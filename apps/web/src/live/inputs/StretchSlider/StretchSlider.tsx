@@ -2,22 +2,27 @@ import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type Poin
 import {
   FOLLOW_SPRING,
   MAX_VALUE,
-  MIN_FILL,
   POP_KICK,
   POP_SPRING,
   STRETCH_SPRING,
   atRest,
   clampValue,
-  fillOffset,
+  fillFor,
   fills,
-  fractionAt,
   keyValue,
   layoutX,
+  lineFraction,
+  lineX,
+  parkedX,
   pillShape,
+  settle,
   shapedX,
+  splitAt,
   stepSpring,
   stretchFor,
+  topHalf,
   touchIntent,
+  type NumberBox,
   type SpringState,
 } from "./stretch";
 import styles from "./StretchSlider.module.css";
@@ -30,24 +35,30 @@ type StretchSliderProps = {
 
 /** Moves the fill and bends the pill, on one frame loop. */
 type Pill = {
-  /** Carries the fill toward `fraction` (0 to 1); `held` while a pointer drags it. A press is not a flick: its jump never stretches the pill. */
+  /** Carries the line toward `fraction` (0 to 1); `held` while a pointer drags it. A press is not a flick: its jump never stretches the pill. */
   aim: (fraction: number, held: boolean) => void;
-  /** Where a point `x` px into the pill would sit with the pill at rest, so the handle stays under the pointer while it stretches. */
+  /** How full the slider is with the line at `x` px into the channel. */
+  fractionAt: (x: number) => number;
+  /** Where a point `x` px into the pill would sit unstretched, so the handle stays under the pointer while it stretches. The pop swells in place and is not undone: a still pointer must not read it as a move. */
   rest: (x: number) => number;
   pop: () => void;
   stop: () => void;
 };
 
+const HANDLE_WIDTH = 2.5;
+
 /** Drag speed is smoothed over about this long, so one uneven pointer event cannot jerk the pill. */
 const DRAG_SMOOTHING_S = 0.05;
 
-type PillParts = { body: HTMLElement; channel: HTMLElement; fill: HTMLElement; number: HTMLElement };
+type PillParts = { body: HTMLElement; channel: HTMLElement; fill: HTMLElement; number: HTMLElement; top: HTMLElement; bottom: HTMLElement };
 
-function startPill({ body, channel, fill, number }: PillParts, start: number): Pill {
+function startPill({ body, channel, fill, number, top, bottom }: PillParts, start: number): Pill {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let width = body.offsetWidth;
   let travel = channel.offsetWidth;
   let anchor = number.offsetLeft;
+  let height = channel.offsetHeight;
+  let box = numberBox();
   let position: SpringState = { value: start, velocity: 0 };
   let target = start;
   /** Where the pointer asked for last frame, and how fast its asks are moving: the drag's own speed, not the fill's. */
@@ -60,8 +71,20 @@ function startPill({ body, channel, fill, number }: PillParts, start: number): P
   let frame = 0;
   let previous = 0;
 
+  function numberBox(): NumberBox {
+    const left = number.offsetLeft - body.offsetLeft - body.clientLeft - channel.offsetLeft;
+    return { left, right: left + number.offsetWidth, half: number.offsetHeight / 2 };
+  }
+
   function paintFill() {
-    fill.style.transform = `translateX(${fillOffset(position.value, travel)}px)`;
+    const parked = parkedX(box, HANDLE_WIDTH);
+    const x = lineX(position.value, parked, travel);
+    const { offset, opacity } = fillFor(x, parked, travel);
+    fill.style.transform = `translateX(${offset}px)`;
+    fill.style.opacity = opacity === 1 ? "" : String(opacity);
+    const half = topHalf(splitAt(x, parked, box, HANDLE_WIDTH), height, box);
+    top.style.transform = `translate(${x}px, ${half.y}px) scaleY(${half.scale})`;
+    bottom.style.transform = `translate(${x}px, ${-half.y}px) scaleY(${half.scale})`;
   }
 
   function paintShape() {
@@ -86,11 +109,10 @@ function startPill({ body, channel, fill, number }: PillParts, start: number): P
     }
     lastTarget = target;
     position = stepSpring(position, target, FOLLOW_SPRING, dt);
-    const speed = (dragVelocity * Math.max(0, travel - MIN_FILL)) / Math.max(1, width);
+    const speed = (dragVelocity * (lineX(1, parkedX(box, HANDLE_WIDTH), travel) - parkedX(box, HANDLE_WIDTH))) / Math.max(1, width);
     stretch = stepSpring(stretch, held ? stretchFor(speed) : 0, STRETCH_SPRING, dt);
     pop = stepSpring(pop, 0, POP_SPRING, dt);
-    const resting =
-      atRest(position, target) && atRest(stretch, 0) && atRest(pop, 0) && Math.abs(dragVelocity) < 0.005;
+    const resting = atRest(position, target) && atRest(stretch, 0) && atRest(pop, 0) && Math.abs(dragVelocity) < 0.005;
     if (resting) {
       position = { value: target, velocity: 0 };
       dragVelocity = 0;
@@ -101,7 +123,7 @@ function startPill({ body, channel, fill, number }: PillParts, start: number): P
   }
 
   function schedule() {
-    // perf-allow: runs only while the fill moves or the pill is stretched or ringing, and sleeps at rest, even under a held pointer.
+    // perf-allow: runs only while the fill or handle moves or the pill is stretched or ringing, and sleeps at rest, even under a held pointer.
     frame = requestAnimationFrame(tick);
   }
 
@@ -131,9 +153,12 @@ function startPill({ body, channel, fill, number }: PillParts, start: number): P
     width = body.offsetWidth;
     travel = channel.offsetWidth;
     anchor = number.offsetLeft;
+    height = channel.offsetHeight;
+    box = numberBox();
     paintFill();
   });
   resizeObserver.observe(body);
+  resizeObserver.observe(number);
   reducedMotion.addEventListener("change", onMotionPreference);
   paintFill();
 
@@ -144,9 +169,13 @@ function startPill({ body, channel, fill, number }: PillParts, start: number): P
       held = holding;
       wake();
     },
+    fractionAt(x) {
+      return lineFraction(x, parkedX(box, HANDLE_WIDTH), travel);
+    },
     rest(x) {
+      const pulled = pillShape(stretch.value, 0, width);
       const center = width / 2;
-      return center + (x - center - shape.shiftX) / shape.scaleX;
+      return center + (x - center - pulled.shiftX) / pulled.scaleX;
     },
     pop() {
       if (reducedMotion.matches) return;
@@ -166,7 +195,8 @@ type Press = { pointerId: number; x: number; y: number; sliding: boolean };
 /**
  * A pill slider. Drag the line, or anywhere on the pill: the grey fill follows
  * smoothly, a fast flick stretches the pill like rubber, and filling it to 100
- * turns it green with a springy pop.
+ * turns it green with a springy pop. The line's place is the value, evenly from
+ * 0 at the very left: near 0 it parts around the number as the grey slides away.
  */
 export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSliderProps) {
   const [value, setValue] = useState(() => clampValue(defaultValue));
@@ -176,6 +206,8 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
   const channelRef = useRef<HTMLDivElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
   const numberRef = useRef<HTMLSpanElement>(null);
+  const topRef = useRef<HTMLSpanElement>(null);
+  const bottomRef = useRef<HTMLSpanElement>(null);
   const pill = useRef<Pill | null>(null);
   const press = useRef<Press | null>(null);
   const latest = useRef(value);
@@ -183,9 +215,16 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
   const startFraction = useEffectEvent(() => latest.current / MAX_VALUE);
 
   useLayoutEffect(() => {
-    const [body, channel, fill, number] = [bodyRef.current, channelRef.current, fillRef.current, numberRef.current];
-    if (!body || !channel || !fill || !number) return;
-    const started = startPill({ body, channel, fill, number }, startFraction());
+    const [body, channel, fill, number, top, bottom] = [
+      bodyRef.current,
+      channelRef.current,
+      fillRef.current,
+      numberRef.current,
+      topRef.current,
+      bottomRef.current,
+    ];
+    if (!body || !channel || !fill || !number || !top || !bottom) return;
+    const started = startPill({ body, channel, fill, number, top, bottom }, startFraction());
     pill.current = started;
     return () => {
       pill.current = null;
@@ -210,13 +249,13 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
     const rendered = root.getBoundingClientRect();
     const local = layoutX(clientX, rendered.left, rendered.width, root.offsetWidth) - body.offsetLeft;
     const x = pill.current?.rest(local) ?? local;
-    return fractionAt(x, body.clientLeft + channel.offsetLeft, channel.offsetWidth);
+    return pill.current?.fractionAt(x - body.clientLeft - channel.offsetLeft) ?? latest.current / MAX_VALUE;
   }
 
   function dragTo(clientX: number) {
     const fraction = fractionUnder(clientX);
     pill.current?.aim(fraction, true);
-    commit(clampValue(fraction * MAX_VALUE));
+    commit(settle(fraction * MAX_VALUE, latest.current));
   }
 
   function letGo() {
@@ -309,9 +348,9 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
     >
       <div ref={bodyRef} className={styles.body} aria-hidden="true">
         <div ref={channelRef} className={styles.channel}>
-          <div ref={fillRef} className={styles.fill}>
-            <span className={styles.handle} />
-          </div>
+          <div ref={fillRef} className={styles.fill} />
+          <span ref={topRef} className={styles.half} />
+          <span ref={bottomRef} className={styles.half} />
         </div>
       </div>
       <span ref={numberRef} className={styles.number} aria-hidden="true">

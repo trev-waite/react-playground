@@ -1,9 +1,9 @@
 {
   "id": "cbc471db-4403-4a88-933b-df28cb6be4cc",
-  "revision": 4,
+  "revision": 5,
   "name": "Moon Phase",
   "componentName": "MoonPhase",
-  "updatedAt": "2026-11-13T19:00:54.349Z",
+  "updatedAt": "2026-11-17T01:26:17.145Z",
   "schemaVersion": 3,
   "draft": {
     "version": 1,
@@ -52,6 +52,6 @@
     ]
   },
   "sourceFile": "source.tsx",
-  "sourceDigest": "50ba94ca8894b0bc98cae753bff9360cd012aabf59d0f3df3e12fc19f9d26f1e",
+  "sourceDigest": "f239e4091b3d241b99520b6c1c0523bd7d832feed8be53e9b4f7c9c68078263a",
   "createdAt": "2026-11-13T18:41:10.085Z"
 }

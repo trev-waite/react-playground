@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { geometry, type Point } from "./portal";
-import { RING, beadAt, beadOutline, rimAt, ringAt } from "./presence";
+import { RING, TRACE_MARGIN, beadAt, beadOutline, gathered, meltIn, rimAt, ringAt } from "./presence";
 
 const stage = { width: 560, height: 420 };
 const avatar = { x: 280, y: 210 };
@@ -73,6 +73,93 @@ describe("Profile Button presence bead", () => {
     expect(beadAt(g, dot, 1000).path).toBe("");
   });
 
+  test("under the pointer it melts onto the avatar's rim as it would in flight, keeping the dot's area", () => {
+    const hovered = beadOutline(g, dot, 0, 1);
+    expect(Math.min(...hovered.map(fromAvatar)) - g.avatarRadius).toBeCloseTo(ringAt(0, 1), 0);
+    expect(area(hovered) / (Math.PI * dot.radius * dot.radius)).toBeGreaterThan(0.85);
+    expect(area(hovered) / (Math.PI * dot.radius * dot.radius)).toBeLessThan(1.25);
+    const along = hovered.map(p => (p.x - dot.x) * Math.SQRT1_2 - (p.y - dot.y) * Math.SQRT1_2);
+    expect(Math.max(...along) - Math.min(...along)).toBeGreaterThan(2 * dot.radius * 2.5);
+  });
+
+  test("under the pointer it starts onto the rim at once, never lurching, and is there as fast as in flight", () => {
+    const moved = (from: number, to: number) => {
+      const a = beadOutline(g, dot, 0, from);
+      const b = beadOutline(g, dot, 0, to);
+      return Math.max(...a.map((p, i) => Math.hypot(b[i]!.x - p.x, b[i]!.y - p.y)));
+    };
+    let held = 0;
+    const steps: number[] = [];
+    for (let frame = 0; frame < 26; frame++) {
+      const next = meltIn(held, 1000 / 60);
+      steps.push(moved(held, next));
+      held = next;
+    }
+    expect(held).toBe(1);
+    expect(steps[0]!).toBeGreaterThan(dot.radius * 0.02);
+    expect(Math.max(...steps)).toBeLessThan(dot.radius * 0.2);
+  });
+
+  test("a flight turned back just after leaving gathers the melted dot at its own pace, without a jump", () => {
+    const frame = 1000 / 60;
+    for (const turnAt of [frame, 2 * frame, 5 * frame]) {
+      let ms = turnAt;
+      let held = 1;
+      let last = beadOutline(g, dot, ms / 1000, held);
+      let largest = 0;
+      while (held > 0 || ms > 0) {
+        ms = Math.max(0, ms - frame * 1.3);
+        held = gathered(held, frame);
+        const next = beadOutline(g, dot, ms / 1000, held);
+        largest = Math.max(largest, ...next.map((p, i) => Math.hypot(p.x - last[i]!.x, p.y - last[i]!.y)));
+        last = next;
+      }
+      expect(largest).toBeLessThan(dot.radius * 0.5);
+    }
+    expect(gathered(1, 0)).toBe(1);
+    expect(gathered(0.2, 10_000)).toBe(0);
+  });
+
+  test("melting under the pointer carries on from wherever the dot had gathered back to", () => {
+    for (const held of [0, 0.2, 0.6, 0.95, 1]) expect(meltIn(held, 0)).toBeCloseTo(held, 6);
+  });
+
+  test("a flight goes on from the melted bead without a jump, whatever share it had melted", () => {
+    for (const held of [0, 0.3, 1]) {
+      const from = beadOutline(g, dot, 0, held);
+      const next = beadOutline(g, dot, 0.016, held);
+      for (let i = 0; i < from.length; i++) expect(Math.hypot(next[i]!.x - from[i]!.x, next[i]!.y - from[i]!.y)).toBeLessThan(dot.radius * 0.4);
+    }
+  });
+
+  test("melting under the pointer is the flight's own melt, so it is all one shape once the flight has melted", () => {
+    const flown = beadOutline(g, dot, 0.5);
+    beadOutline(g, dot, 0.5, 1).forEach((p, i) => {
+      expect(p.x).toBeCloseTo(flown[i]!.x, 6);
+      expect(p.y).toBeCloseTo(flown[i]!.y, 6);
+    });
+  });
+
+  test("its layer holds all of it, ring and all, melted under the pointer or not, on any stage", () => {
+    for (const [width, height, radius] of [[560, 420, 44], [1280, 760, 44], [582, 1500, 44], [360, 600, 36], [400, 300, 60]] as const) {
+      const centre = { x: width / 2, y: height / 2 };
+      const on = geometry({ width, height }, centre, radius);
+      const sat = { x: centre.x + 0.74 * radius, y: centre.y + 0.74 * radius, radius: 0.18 * radius };
+      for (const held of [0, 1]) {
+        for (let ms = 0; ms <= 1000; ms += 10) {
+          const bead = beadAt(on, sat, ms, held);
+          const side = on.reach * (1 + TRACE_MARGIN) * 2;
+          for (const pair of bead.path.slice(1, -1).split("L").filter(Boolean)) {
+            for (const value of pair.split(" ").map(Number)) {
+              expect(value).toBeGreaterThan(bead.stroke / 2);
+              expect(value).toBeLessThan(side - bead.stroke / 2);
+            }
+          }
+        }
+      }
+    }
+  });
+
   test("drawn in the window's space, the window's own scale carries it onto its outline", () => {
     for (const ms of [0, 150, 300, 450]) {
       const t = ms / 1000;
@@ -82,7 +169,7 @@ describe("Profile Button presence bead", () => {
         .slice(1, -1)
         .split("L")
         .map(pair => pair.split(" ").map(Number) as [number, number])
-        .map(([x, y]) => ({ x: avatar.x + (x - g.reach) * scale, y: avatar.y + (y - g.reach) * scale }));
+        .map(([x, y]) => ({ x: avatar.x + (x - g.reach * (1 + TRACE_MARGIN)) * scale, y: avatar.y + (y - g.reach * (1 + TRACE_MARGIN)) * scale }));
       beadOutline(g, dot, t).forEach((p, i) => {
         expect(drawn[i]!.x).toBeCloseTo(p.x, 1);
         expect(drawn[i]!.y).toBeCloseTo(p.y, 1);

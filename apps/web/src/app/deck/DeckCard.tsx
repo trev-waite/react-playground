@@ -4,11 +4,13 @@ import {
   Suspense,
   use,
   useCallback,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
+  type RefObject,
 } from "react";
 import type { LiveCard, LiveCardMember } from "../../lib/catalog";
 import { livePath } from "../../lib/liveRoutes";
@@ -42,8 +44,8 @@ type DeckCardProps = {
   motion: CardMotion;
   /** The card's size as a grid tile. */
   tile: Size;
-  /** The card's width as a full page. */
-  pageWidth: number;
+  /** The card's size as a full page. */
+  page: Size;
   /** Render the previews. Off for pages far from view. */
   mounted: boolean;
   /** Previews take input; off while the card is a tile or in flight. */
@@ -62,7 +64,7 @@ export function DeckCard({
   card,
   motion: values,
   tile,
-  pageWidth,
+  page,
   mounted,
   interactive,
   current,
@@ -74,12 +76,14 @@ export function DeckCard({
   const [resetKey, setResetKey] = useState(0);
   const cardRef = useRef<HTMLElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const fitRef = useRef<HTMLDivElement>(null);
   const { left, top, width, height, x, y, scale, radius, chrome } = values;
   const theme = useTheme();
   const surface = card.surface[theme];
   const membersWidth = familyLayoutWidth(
     { width: tile.width - TILE_PADDING * 2, height: tile.height - TILE_PADDING * 2 },
-    pageWidth - PAGE_PADDING.inline * 2,
+    page.width - PAGE_PADDING.inline * 2,
   );
 
   const cardStyle = useMotionStyle(cardRef, [left, top, width, height, x, y, scale, radius], style => {
@@ -99,17 +103,28 @@ export function DeckCard({
     style("paddingRight", inline);
   });
 
+  const ends = useEffectEvent(() => ({ tile, page }));
+
+  // Here, not in the stage: a child's effect would run before the footer measures the height the stage depends on.
+  useLayoutEffect(() => {
+    const area = areaRef.current;
+    const fit = fitRef.current;
+    if (!area || !fit) return;
+    return observeFit(area, fit, { progress: chrome, box: [width, height], ends });
+  }, [mounted, resetKey, chrome, width, height]);
+
   return (
     <article
       ref={cardRef}
       className={styles.card}
       data-theme={surface.theme}
       data-raised={raised || undefined}
+      data-current={current || undefined}
       aria-label={card.title}
       style={{ ...cardStyle, "--card-background": surface.background } as CSSProperties}
     >
       <div ref={previewRef} className={styles.preview} style={previewStyle} inert={interactive ? undefined : true}>
-        <FitStage contentKey={`${mounted}-${resetKey}`} progress={chrome}>
+        <FitStage areaRef={areaRef} fitRef={fitRef}>
           {mounted ? <Members key={resetKey} members={card.members} familyWidth={membersWidth} /> : null}
         </FitStage>
       </div>
@@ -196,25 +211,15 @@ function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; in
 }
 
 /** Shows a preview as it looks on the page, only smaller when the card is a tile. */
-function FitStage({ contentKey, progress, children }: { contentKey: string; progress: MotionValue; children: ReactNode }) {
-  const areaRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const area = areaRef.current;
-    const content = contentRef.current;
-    if (!area || !content) return;
-    return observeFit(area, content, progress);
-  }, [contentKey, progress]);
-
+function FitStage({ areaRef, fitRef, children }: { areaRef: RefObject<HTMLDivElement | null>; fitRef: RefObject<HTMLDivElement | null>; children: ReactNode }) {
   // The loaded preview can overflow where the placeholder did not, and the area never resized.
   const refit = useCallback(() => {
     if (areaRef.current) refitArea(areaRef.current);
-  }, []);
+  }, [areaRef]);
 
   return (
     <div ref={areaRef} className={styles.area}>
-      <div ref={contentRef} className={styles.fit}>
+      <div ref={fitRef} className={styles.fit}>
         <Suspense fallback={<div className={styles.loading} aria-hidden="true" />}>
           {children}
           <Revealed onReveal={refit} />

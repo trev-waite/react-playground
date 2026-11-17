@@ -14,6 +14,11 @@ apps/web/src/studio/StudioApp  stacks the Live and Experimental layers
 
 GPU ideas import `@/gpu`. That is the exception to "don't import from lib". `app/` and `lib/` stay off limits. After Make Live the published component keeps the `@/gpu` import so it still runs in this repo. Copying that Live folder into another app also needs the `vgpu` package and `apps/web/src/gpu/`.
 
+`import … from "vgpu"` does not reach the package directly. `vite/vgpuGatePlugin.ts` resolves it to `src/gpu/vgpuGate.ts`, which starts loading the library (`src/gpu/vgpuLibrary.ts`) as soon as a GPU component's module loads, and only where `navigator.gpu` exists, so a browser without WebGPU never downloads it and the component still shows its fallback. `init` waits for the library. Two things follow:
+
+- Call vgpu only from `start` or later, never at module scope: its functions work once `init` has loaded the library, and without WebGPU they are stand-ins that throw.
+- The gate offers the vgpu functions the app uses today (`clock`, `effect`, `frame`, `frameLoop`, `init`, `sampler`, `surface`, `target`). To use another, such as `pingPong` or `timer`, add its name to `vgpuLibrary.ts` and `vgpuGate.ts`; `vite/vgpuGatePlugin.test.ts` fails until both have it. Types come straight from the package.
+
 ## Write a GPU idea
 
 ```tsx
@@ -69,7 +74,7 @@ vgpu UV is top-origin. `GPUTextureUsage` exists only after WebGPU is present, so
 | `createBlurChain(gpu, { levels, radius, format })` | Wide blur or glow of any texture. Half-resolution levels blurred separably; bind `chain.levels[i]` and read it with one `textureSampleLevel`. |
 | `gaussianKernel`, `bilinearGaussianTaps` | Pure weight math behind the blur chain, if you build your own kernel. |
 
-vgpu pieces ideas use directly: `effect`, `sampler`, `clock`, `target` (offscreen pass), `pingPong` (feedback, fluids, trails), `frame`, `timer`.
+vgpu pieces ideas use directly: `effect`, `sampler`, `clock`, `target` (offscreen pass), `pingPong` (feedback, fluids, trails), `frame`, `timer`. `pingPong` and `timer` are not in the gate yet (see Layout).
 
 ## Precompute on resize, sample per frame
 
@@ -106,6 +111,8 @@ Pass `features: ["timestamp-query"]` to `useGpu`, then `timer(gpu)` from vgpu: `
 ## Defaults that matter
 
 `useGpu` waits for a real `clientWidth`/`clientHeight`, times out `init()` after 10s (some embedded browsers hang on `requestAdapter`), and skips the stacked Experimental layer while it is `inert` or `aria-hidden`. vgpu resizes the surface each frame. The host does not.
+
+`useGpu` asks for the `high-performance` adapter. On a laptop with two GPUs that is the discrete one, and it is the one that holds 60 fps: measured on an Intel UHD 630 with a Radeon Pro 5500M, Topography full screen at 2x rests near 45 fps on the integrated chip and at 60 on the discrete one. A discrete GPU powers down after about seven idle seconds, and the next draw then freezes every animation on the page for most of a second while it wakes. So while a session lives and the tab is visible, the host sends an empty submission every three seconds (`keepAwake.ts`), but only where the `low-power` and `high-performance` adapters report different GPUs; a machine with one GPU gets no timer.
 
 vgpu's canvas alpha mode is already `premultiplied`. Its clear color is opaque black (`[0, 0, 0, 1]`). The host passes `[0, 0, 0, 0]` so empty pixels show whatever sits under the canvas. If the first GPU frame is empty, put HTML behind the canvas instead of swapping it out when the session starts. Light Dispersion does that with "Hello There".
 
