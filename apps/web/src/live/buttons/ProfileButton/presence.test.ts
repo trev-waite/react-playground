@@ -82,7 +82,7 @@ describe("Profile Button presence bead", () => {
     expect(Math.max(...along) - Math.min(...along)).toBeGreaterThan(2 * dot.radius * 2.5);
   });
 
-  test("under the pointer it eases onto the rim, never jumping a frame, and is there in half a second", () => {
+  test("under the pointer it starts onto the rim at once, never lurching, and is there as fast as in flight", () => {
     const moved = (from: number, to: number) => {
       const a = beadOutline(g, dot, 0, from);
       const b = beadOutline(g, dot, 0, to);
@@ -90,14 +90,14 @@ describe("Profile Button presence bead", () => {
     };
     let held = 0;
     const steps: number[] = [];
-    for (let frame = 0; frame < 30; frame++) {
+    for (let frame = 0; frame < 26; frame++) {
       const next = meltIn(held, 1000 / 60);
       steps.push(moved(held, next));
       held = next;
     }
     expect(held).toBe(1);
-    expect(steps[0]!).toBeLessThan(dot.radius * 0.05);
-    expect(Math.max(...steps)).toBeLessThan(dot.radius * 0.35);
+    expect(steps[0]!).toBeGreaterThan(dot.radius * 0.02);
+    expect(Math.max(...steps)).toBeLessThan(dot.radius * 0.2);
   });
 
   test("melting under the pointer carries on from wherever the dot had gathered back to", () => {
