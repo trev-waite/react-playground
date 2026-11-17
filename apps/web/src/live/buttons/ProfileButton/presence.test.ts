@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { geometry, type Point } from "./portal";
-import { RING, beadAt, beadOutline, rimAt, ringAt } from "./presence";
+import { RING, TRACE_MARGIN, beadAt, beadOutline, rimAt, ringAt } from "./presence";
 
 const stage = { width: 560, height: 420 };
 const avatar = { x: 280, y: 210 };
@@ -98,6 +98,26 @@ describe("Profile Button presence bead", () => {
     });
   });
 
+  test("its layer holds all of it, ring and all, melted under the pointer or not, on any stage", () => {
+    for (const [width, height, radius] of [[560, 420, 44], [1280, 760, 44], [582, 1500, 44], [360, 600, 36], [400, 300, 60]] as const) {
+      const centre = { x: width / 2, y: height / 2 };
+      const on = geometry({ width, height }, centre, radius);
+      const sat = { x: centre.x + 0.74 * radius, y: centre.y + 0.74 * radius, radius: 0.18 * radius };
+      for (const held of [0, 1]) {
+        for (let ms = 0; ms <= 1000; ms += 10) {
+          const bead = beadAt(on, sat, ms, held);
+          const side = on.reach * (1 + TRACE_MARGIN) * 2;
+          for (const pair of bead.path.slice(1, -1).split("L").filter(Boolean)) {
+            for (const value of pair.split(" ").map(Number)) {
+              expect(value).toBeGreaterThan(bead.stroke / 2);
+              expect(value).toBeLessThan(side - bead.stroke / 2);
+            }
+          }
+        }
+      }
+    }
+  });
+
   test("drawn in the window's space, the window's own scale carries it onto its outline", () => {
     for (const ms of [0, 150, 300, 450]) {
       const t = ms / 1000;
@@ -107,7 +127,7 @@ describe("Profile Button presence bead", () => {
         .slice(1, -1)
         .split("L")
         .map(pair => pair.split(" ").map(Number) as [number, number])
-        .map(([x, y]) => ({ x: avatar.x + (x - g.reach) * scale, y: avatar.y + (y - g.reach) * scale }));
+        .map(([x, y]) => ({ x: avatar.x + (x - g.reach * (1 + TRACE_MARGIN)) * scale, y: avatar.y + (y - g.reach * (1 + TRACE_MARGIN)) * scale }));
       beadOutline(g, dot, t).forEach((p, i) => {
         expect(drawn[i]!.x).toBeCloseTo(p.x, 1);
         expect(drawn[i]!.y).toBeCloseTo(p.y, 1);

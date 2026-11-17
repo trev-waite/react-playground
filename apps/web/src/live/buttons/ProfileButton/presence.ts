@@ -35,6 +35,8 @@ const SQUASH = 0.5;
 /** As it swirls, the bead carries its weight at the trailing end and thins toward the leading one, by this share. */
 const LEAN = 0.28;
 const POINTS = 56;
+/** How far the bead's layer reaches past the window's square, as a share of it: the bead hangs past that square, and a browser may clip what a layer draws outside its own box. */
+export const TRACE_MARGIN = 0.4;
 
 function clamp01(t: number) {
   return Math.min(1, Math.max(0, t));
@@ -114,7 +116,7 @@ export type Bead = { path: string; stroke: number };
 
 /**
  * The bead `ms` into the flight, drawn in the window's own space: a box the
- * window's open size, centered on the avatar, that scales with the window.
+ * window's open size plus `TRACE_MARGIN`, centered on the avatar, that scales with the window.
  * Riding the window's own scale keeps the bead on the rim even when it is
  * redrawn a frame or two behind the window. Empty once it has left the stage.
  */
@@ -124,6 +126,7 @@ export function beadAt(g: Geometry, dot: Dot, ms: number, held = 0): Bead {
   const margin = RING;
   const onStage = points.some(p => p.x > -margin && p.y > -margin && p.x < g.stage.width + margin && p.y < g.stage.height + margin);
   const scale = rimAt(g, t) / g.reach;
-  const local = (p: Point) => `${(g.reach + (p.x - g.avatar.x) / scale).toFixed(2)} ${(g.reach + (p.y - g.avatar.y) / scale).toFixed(2)}`;
+  const half = g.reach * (1 + TRACE_MARGIN);
+  const local = (p: Point) => `${(half + (p.x - g.avatar.x) / scale).toFixed(2)} ${(half + (p.y - g.avatar.y) / scale).toFixed(2)}`;
   return { path: onStage ? `M${points.map(local).join("L")}Z` : "", stroke: (ringAt(t, held) * 2) / scale };
 }

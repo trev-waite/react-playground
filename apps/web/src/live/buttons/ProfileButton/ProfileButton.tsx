@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { SegmentedControl } from "@/live/controls/SegmentedControl/SegmentedControl";
 import { Switch } from "@/live/controls/Switch/Switch";
 import { CLOSE_RATE, MAX_PORTRAIT, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
-import { HOVER_MS, beadAt, type Dot } from "./presence";
+import { HOVER_MS, TRACE_MARGIN, beadAt, type Dot } from "./presence";
 import { ROOM_COLOR, paintSilhouette } from "./silhouette";
 import styles from "./ProfileButton.module.css";
 
@@ -75,9 +75,9 @@ function measure({ stage, avatar }: Layers): Geometry {
 
 function place({ portal, room, portrait, content, trace }: Layers, g: Geometry) {
   const { avatar: a, reach, stage } = g;
-  const box = { left: `${a.x - reach}px`, top: `${a.y - reach}px`, width: `${reach * 2}px`, height: `${reach * 2}px` };
-  Object.assign(portal.style, box);
-  Object.assign(trace.style, box);
+  const box = (half: number) => ({ left: `${a.x - half}px`, top: `${a.y - half}px`, width: `${half * 2}px`, height: `${half * 2}px` });
+  Object.assign(portal.style, box(reach));
+  Object.assign(trace.style, box(reach * (1 + TRACE_MARGIN)));
   Object.assign(room.style, { left: `${reach - a.x}px`, top: `${reach - a.y}px`, width: `${stage.width}px`, height: `${stage.height}px` });
   Object.assign(portrait.style, {
     left: `${g.portrait.x - g.portraitSize / 2}px`,
