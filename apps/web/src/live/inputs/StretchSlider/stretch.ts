@@ -32,8 +32,6 @@ export const MIN_FILL = 84;
 export const HANDLE_INSET = 14;
 /** Underdamped, so a full fill rings like a plucked rubber band for a few cycles. */
 export const POP_SPRING: Spring = { stiffness: 620, damping: 11 };
-/** Carries the handle between the fill's edge and its place at 0: critically damped, settled in about 0.45s, never overshooting. */
-export const PARK_SPRING: Spring = { stiffness: 220, damping: 29.7 };
 /** At 0 the handle stands this far (px) clear of the number, on the 8px scale. */
 export const PARK_GAP = 8;
 /** The handle's height, as a share of the channel's. */
@@ -44,18 +42,13 @@ const HALF_OVERLAP = 3;
 const SPLIT_SHRINK = 0.15;
 /** How far (px) past the number each half's split eases open or closed. */
 const SPLIT_EASE = 14;
-/** Of the trip to 0, the share by which the grey has slid away, so the line arrives at a white pill. */
+/** Of the line's way from the fill's emptiest to 0, the share by which the grey has slid away, so the line arrives at a white pill. */
 const FILL_GONE_BY = 0.7;
 
 export function clampValue(value: number): number {
   return Math.min(MAX_VALUE, Math.max(0, Math.round(value)));
 }
 
-/**
- * How full (0 to 1) the slider is with its handle under a pointer at `x`, for
- * a fill channel starting at `left` that is `width` wide. The fill runs from
- * MIN_FILL wide at 0 to the whole channel at 1.
- */
 /**
  * A viewport x as layout px from the left of an element drawn `renderedWidth`
  * wide on screen and `layoutWidth` wide in layout, so a scaled-down ancestor
@@ -66,15 +59,15 @@ export function layoutX(clientX: number, renderedLeft: number, renderedWidth: nu
   return (clientX - renderedLeft) / scale;
 }
 
-export function fractionAt(x: number, left: number, width: number): number {
-  const travel = width - MIN_FILL;
-  if (travel <= 0) return 0;
-  return Math.min(1, Math.max(0, (x - left - (MIN_FILL - HANDLE_INSET)) / travel));
+/** The line's x (px into a channel `width` wide) at `fraction` of the slider: one even scale from its place at 0, `parked`, to full. */
+export function lineX(fraction: number, parked: number, width: number): number {
+  return parked + (width - HANDLE_INSET - parked) * Math.min(1, Math.max(0, fraction));
 }
 
-/** How far (px) the full-width fill slides left to show `fraction` of the travel. */
-export function fillOffset(fraction: number, width: number): number {
-  return -(1 - fraction) * Math.max(0, width - MIN_FILL);
+/** How full (0 to 1) the slider is with the line at `x`: the inverse of `lineX`, clamped past either end. */
+export function lineFraction(x: number, parked: number, width: number): number {
+  const span = width - HANDLE_INSET - parked;
+  return span > 0 ? Math.min(1, Math.max(0, (x - parked) / span)) : 0;
 }
 
 /** The value a key moves to, or null for a key the slider leaves alone. */
@@ -149,14 +142,18 @@ export function shapedX(x: number, shape: PillShape, width: number): number {
   return center + shape.shiftX + (x - center) * shape.scaleX;
 }
 
-/** Where the grey fill's leading edge has slid back to, as `park` (0 to 1) carries the slider to rest at 0. */
-export function retracted(park: number): number {
-  return Math.min(1, Math.max(0, park / FILL_GONE_BY));
-}
-
-/** The grey's opacity as it slides away: it fades over the last of its slide, so no sliver lingers in the pill's round end. */
-export function fillOpacity(park: number): number {
-  return 1 - smooth((retracted(park) - 0.6) / 0.4);
+/**
+ * The full-width grey fill for the line at `x`: how far (px) it slides left,
+ * and its opacity. Its leading edge rides `HANDLE_INSET` past the line until
+ * it is `MIN_FILL` wide, room for the number; from there, as the line crosses
+ * the number toward 0, it slides into the pill's round end ahead of the line
+ * and fades, so no sliver lingers and 0 shows no grey.
+ */
+export function fillFor(x: number, parked: number, width: number): { offset: number; opacity: number } {
+  const edge = MIN_FILL - HANDLE_INSET;
+  if (x >= edge || edge <= parked) return { offset: x + HANDLE_INSET - width, opacity: 1 };
+  const gone = Math.min(1, (edge - x) / (edge - parked) / FILL_GONE_BY);
+  return { offset: MIN_FILL * (1 - gone) - width, opacity: 1 - smooth((gone - 0.6) / 0.4) };
 }
 
 /** The number's left and right edges and half its height, in px from the channel's left edge and its middle. */
@@ -179,30 +176,6 @@ export function splitAt(x: number, parked: number, number: NumberBox, width: num
   if (x >= left && x <= right) return 1;
   if (x > right) return smooth(1 - (x - right) / SPLIT_EASE);
   return left > parked ? smooth((x - parked) / (left - parked)) : 0;
-}
-
-/**
- * How far (0 to 1) a drag has carried the handle from the fill's edge at its
- * emptiest toward its place at 0, with the handle at `x` (px into the channel).
- * Past that edge a drag moves the handle itself, over the number.
- */
-export function scrubAt(x: number, parked: number): number {
-  const edge = MIN_FILL - HANDLE_INSET;
-  return edge > parked ? Math.min(1, Math.max(0, (edge - x) / (edge - parked))) : 0;
-}
-
-/** A drag reads 0 once it has carried the handle this far to its place at 0, and lets go of 0 only back below `ZERO_LEAVE`. */
-const ZERO_AT = 0.97;
-const ZERO_LEAVE = 0.9;
-
-/**
- * The value a drag shows, at `fraction` of the travel and `scrub` of the way
- * past the fill's edge, with `showing` on screen now. 0 is the handle's place
- * at the very left; anywhere short of it the slider reads at least 1.
- */
-export function dragValue(fraction: number, scrub: number, showing: number): number {
-  if (scrub >= (showing === 0 ? ZERO_LEAVE : ZERO_AT)) return 0;
-  return Math.max(1, settle(fraction * MAX_VALUE, Math.max(1, showing)));
 }
 
 /** The handle's place at 0: just left of the number, `PARK_GAP` clear of it. */

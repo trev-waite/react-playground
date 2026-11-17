@@ -1,26 +1,21 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, type PointerEvent } from "react";
 import {
   FOLLOW_SPRING,
-  HANDLE_INSET,
   MAX_VALUE,
-  MIN_FILL,
-  PARK_SPRING,
   POP_KICK,
   POP_SPRING,
   STRETCH_SPRING,
   atRest,
   clampValue,
-  dragValue,
-  fillOffset,
-  fillOpacity,
+  fillFor,
   fills,
-  fractionAt,
   keyValue,
   layoutX,
+  lineFraction,
+  lineX,
   parkedX,
   pillShape,
-  retracted,
-  scrubAt,
+  settle,
   shapedX,
   splitAt,
   stepSpring,
@@ -40,18 +35,13 @@ type StretchSliderProps = {
 
 /** Moves the fill and bends the pill, on one frame loop. */
 type Pill = {
-  /**
-   * Carries the fill toward `fraction` (0 to 1); `held` while a pointer drags it, when `scrub` is how far past the
-   * fill's edge the pointer has taken the handle. A press is not a flick: its jump never stretches the pill.
-   */
-  aim: (fraction: number, held: boolean, scrub?: number) => void;
-  /** How far past the fill's edge, toward its place at 0, a handle at `x` px into the channel would be. */
-  scrubAt: (x: number) => number;
+  /** Carries the line toward `fraction` (0 to 1); `held` while a pointer drags it. A press is not a flick: its jump never stretches the pill. */
+  aim: (fraction: number, held: boolean) => void;
+  /** How full the slider is with the line at `x` px into the channel. */
+  fractionAt: (x: number) => number;
   /** Where a point `x` px into the pill would sit unstretched, so the handle stays under the pointer while it stretches. The pop swells in place and is not undone: a still pointer must not read it as a move. */
   rest: (x: number) => number;
   pop: () => void;
-  /** Sends the handle to its place at 0, past the number, or back to the fill's edge. */
-  park: (atZero: boolean) => void;
   stop: () => void;
 };
 
@@ -77,10 +67,6 @@ function startPill({ body, channel, fill, number, top, bottom }: PillParts, star
   let held = false;
   let stretch: SpringState = { value: 0, velocity: 0 };
   let pop: SpringState = { value: 0, velocity: 0 };
-  let parkTarget = start === 0 ? 1 : 0;
-  let park: SpringState = { value: parkTarget, velocity: 0 };
-  /** Where a pointer has taken the handle past the fill's edge; null when no pointer holds it, and the value places it. */
-  let scrub: number | null = null;
   let shape = pillShape(0, 0, width);
   let frame = 0;
   let previous = 0;
@@ -91,13 +77,11 @@ function startPill({ body, channel, fill, number, top, bottom }: PillParts, star
   }
 
   function paintFill() {
-    const offset = fillOffset(position.value, travel);
-    fill.style.transform = `translateX(${offset - MIN_FILL * retracted(park.value)}px)`;
-    const opacity = fillOpacity(park.value);
-    fill.style.opacity = opacity === 1 ? "" : String(opacity);
-    const edge = travel + offset - HANDLE_INSET;
     const parked = parkedX(box, HANDLE_WIDTH);
-    const x = edge + (parked - edge) * park.value;
+    const x = lineX(position.value, parked, travel);
+    const { offset, opacity } = fillFor(x, parked, travel);
+    fill.style.transform = `translateX(${offset}px)`;
+    fill.style.opacity = opacity === 1 ? "" : String(opacity);
     const half = topHalf(splitAt(x, parked, box, HANDLE_WIDTH), height, box);
     top.style.transform = `translate(${x}px, ${half.y}px) scaleY(${half.scale})`;
     bottom.style.transform = `translate(${x}px, ${-half.y}px) scaleY(${half.scale})`;
@@ -125,20 +109,12 @@ function startPill({ body, channel, fill, number, top, bottom }: PillParts, star
     }
     lastTarget = target;
     position = stepSpring(position, target, FOLLOW_SPRING, dt);
-    const speed = (dragVelocity * Math.max(0, travel - MIN_FILL)) / Math.max(1, width);
+    const speed = (dragVelocity * (lineX(1, parkedX(box, HANDLE_WIDTH), travel) - parkedX(box, HANDLE_WIDTH))) / Math.max(1, width);
     stretch = stepSpring(stretch, held ? stretchFor(speed) : 0, STRETCH_SPRING, dt);
     pop = stepSpring(pop, 0, POP_SPRING, dt);
-    const parkAt = scrub ?? parkTarget;
-    park = stepSpring(park, parkAt, scrub === null ? PARK_SPRING : FOLLOW_SPRING, dt);
-    const resting =
-      atRest(position, target) &&
-      atRest(stretch, 0) &&
-      atRest(pop, 0) &&
-      atRest(park, parkAt) &&
-      Math.abs(dragVelocity) < 0.005;
+    const resting = atRest(position, target) && atRest(stretch, 0) && atRest(pop, 0) && Math.abs(dragVelocity) < 0.005;
     if (resting) {
       position = { value: target, velocity: 0 };
-      park = { value: parkAt, velocity: 0 };
       dragVelocity = 0;
     }
     paintFill();
@@ -158,7 +134,6 @@ function startPill({ body, channel, fill, number, top, bottom }: PillParts, star
       lastTarget = target;
       stretch = { value: 0, velocity: 0 };
       pop = { value: 0, velocity: 0 };
-      park = { value: scrub ?? parkTarget, velocity: 0 };
       paintFill();
       paintShape();
       return;
@@ -188,15 +163,14 @@ function startPill({ body, channel, fill, number, top, bottom }: PillParts, star
   paintFill();
 
   return {
-    aim(fraction, holding, scrubbed) {
+    aim(fraction, holding) {
       if (holding && !held) lastTarget = fraction;
       target = fraction;
       held = holding;
-      scrub = holding ? (scrubbed ?? 0) : null;
       wake();
     },
-    scrubAt(x) {
-      return scrubAt(x, parkedX(box, HANDLE_WIDTH));
+    fractionAt(x) {
+      return lineFraction(x, parkedX(box, HANDLE_WIDTH), travel);
     },
     rest(x) {
       const pulled = pillShape(stretch.value, 0, width);
@@ -206,10 +180,6 @@ function startPill({ body, channel, fill, number, top, bottom }: PillParts, star
     pop() {
       if (reducedMotion.matches) return;
       pop = { value: pop.value, velocity: pop.velocity + POP_KICK };
-      wake();
-    },
-    park(atZero) {
-      parkTarget = atZero ? 1 : 0;
       wake();
     },
     stop() {
@@ -225,9 +195,8 @@ type Press = { pointerId: number; x: number; y: number; sliding: boolean };
 /**
  * A pill slider. Drag the line, or anywhere on the pill: the grey fill follows
  * smoothly, a fast flick stretches the pill like rubber, and filling it to 100
- * turns it green with a springy pop. Past the fill's emptiest, a drag takes the
- * line over the number, parting around it, to 0 at the very left as the grey
- * slides away.
+ * turns it green with a springy pop. The line's place is the value, evenly from
+ * 0 at the very left: near 0 it parts around the number as the grey slides away.
  */
 export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSliderProps) {
   const [value, setValue] = useState(() => clampValue(defaultValue));
@@ -267,29 +236,26 @@ export function StretchSlider({ label, defaultValue = 40, onChange }: StretchSli
     const previous = latest.current;
     if (next === previous) return;
     if (fills(previous, next)) pill.current?.pop();
-    if ((previous === 0) !== (next === 0)) pill.current?.park(next === 0);
     latest.current = next;
     setValue(next);
     onChange?.(next);
   }
 
-  /** Where a pointer at `clientX` puts the handle: a fraction of the travel, and how far past the fill's edge toward 0. */
-  function handleUnder(clientX: number): { fraction: number; scrub: number } {
+  function fractionUnder(clientX: number): number {
     const root = rootRef.current;
     const body = bodyRef.current;
     const channel = channelRef.current;
-    if (!root || !body || !channel) return { fraction: latest.current / MAX_VALUE, scrub: 0 };
+    if (!root || !body || !channel) return latest.current / MAX_VALUE;
     const rendered = root.getBoundingClientRect();
     const local = layoutX(clientX, rendered.left, rendered.width, root.offsetWidth) - body.offsetLeft;
     const x = pill.current?.rest(local) ?? local;
-    const left = body.clientLeft + channel.offsetLeft;
-    return { fraction: fractionAt(x, left, channel.offsetWidth), scrub: pill.current?.scrubAt(x - left) ?? 0 };
+    return pill.current?.fractionAt(x - body.clientLeft - channel.offsetLeft) ?? latest.current / MAX_VALUE;
   }
 
   function dragTo(clientX: number) {
-    const { fraction, scrub } = handleUnder(clientX);
-    pill.current?.aim(fraction, true, scrub);
-    commit(dragValue(fraction, scrub, latest.current));
+    const fraction = fractionUnder(clientX);
+    pill.current?.aim(fraction, true);
+    commit(settle(fraction * MAX_VALUE, latest.current));
   }
 
   function letGo() {
