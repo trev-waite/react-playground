@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { SegmentedControl } from "@/live/controls/SegmentedControl/SegmentedControl";
 import { Switch } from "@/live/controls/Switch/Switch";
 import { CLOSE_RATE, MAX_PORTRAIT, OPEN_MS, geometry, tracks, type Geometry } from "./portal";
-import { HOVER_MS, TRACE_MARGIN, beadAt, meltIn, type Dot } from "./presence";
+import { HOVER_MS, TRACE_MARGIN, beadAt, gathered, meltIn, type Dot } from "./presence";
 import { ROOM_COLOR, paintSilhouette } from "./silhouette";
 import styles from "./ProfileButton.module.css";
 
@@ -159,10 +159,8 @@ function traceDot(flight: Flight, stage: HTMLElement, bead: SVGPathElement, dot:
     const ms = Number(flight.portal.currentTime ?? 0);
     const playing = flight.portal.playState === "running";
     if (ms >= HOVER_MS) flight.held = 0;
-    else if (playing && flight.heading < 0) flight.held = Math.min(flight.held, ms / HOVER_MS);
-    else if (!playing) {
-      flight.held = flight.holding ? meltIn(flight.held, now - last) : Math.max(0, flight.held - ((now - last) / HOVER_MS) * CLOSE_RATE);
-    }
+    else if (flight.holding && !playing) flight.held = meltIn(flight.held, now - last);
+    else if (!flight.holding && (!playing || flight.heading < 0)) flight.held = gathered(flight.held, now - last);
     last = now;
     const { path, stroke } = beadAt(flight.geometry, dot, ms, flight.held);
     if (bead.getAttribute("d") !== path) {
@@ -190,7 +188,8 @@ type Cockpit = { flight: Flight | null };
 
 /**
  * Makes `started` the current flight. Once it lands in the room it catches up
- * with any resize it flew through; once it plays back out, the portal hides.
+ * with any resize it flew through; once it plays back out, the portal hides,
+ * after the dot has gathered if a flight turned back while it was melted.
  */
 function adopt(cockpit: Cockpit, layers: Layers, started: Flight) {
   started.portal.addEventListener("finish", () => {
@@ -200,7 +199,7 @@ function adopt(cockpit: Cockpit, layers: Layers, started: Flight) {
       if (started.stale) refit(cockpit, layers);
       return;
     }
-    releaseFlight(cockpit, layers.stage, true);
+    if (started.held === 0 || !started.trace) releaseFlight(cockpit, layers.stage, true);
   });
   cockpit.flight = started;
   layers.stage.dataset.flight = "";
@@ -287,11 +286,13 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     return true;
   }
 
-  /** A readied flight whose dot has gathered back is dropped, as it would have been when the pointer left. */
+  /** A flight back at the avatar whose dot has gathered is dropped, as it would have been when the pointer left. */
   function rest(flight: Flight) {
     const stage = stageRef.current;
     if (!stage || cockpit.current.flight !== flight) return;
-    if (flight.portal.playState === "paused") releaseFlight(cockpit.current, stage);
+    const { playState, playbackRate } = flight.portal;
+    if (playState === "paused") releaseFlight(cockpit.current, stage);
+    else if (playState === "finished" && playbackRate < 0) releaseFlight(cockpit.current, stage, true);
     else stopTracing(flight, stage);
   }
 
@@ -308,10 +309,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     const stage = stageRef.current;
     if (!flight || !stage) return;
     flight.holding = false;
-    if (flight.held > 0 && flight.portal.playState === "paused") {
-      if (!flight.trace) trace(flight);
-      return;
-    }
+    if (flight.held > 0 && flight.portal.playState === "paused" && (flight.trace !== 0 || trace(flight))) return;
     releaseFlight(cockpit.current, stage);
   }
 
@@ -339,19 +337,23 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     avatarRef.current?.focus({ preventScroll: true });
   }
 
-  /** An open room follows the stage's size. A room in flight keeps its course and catches up when it lands. */
-  const onResize = useEffectEvent(() => {
+  /**
+   * Rebuilds the flight for the stage's size and the motion preference now. A
+   * readied flight is readied again, its dot as melted as it was; an open room
+   * is refitted; a room in flight keeps its course and catches up when it lands.
+   */
+  const rebuild = useEffectEvent(() => {
     const found = layers();
     const current = cockpit.current.flight;
     if (!current || !found) return;
     if (current.portal.playState === "paused") {
       releaseFlight(cockpit.current, found.stage);
-      if (!current.holding) return;
+      if (!current.holding && current.held === 0) return;
       prime();
       const next = cockpit.current.flight;
       if (!next) return;
-      Object.assign(next, { held: current.held, holding: true });
-      trace(next);
+      Object.assign(next, { held: current.held, holding: current.holding });
+      if (!trace(next)) next.held = 0;
     } else if (current.portal.playState === "finished" && current.portal.playbackRate >= 0) refit(cockpit.current, found);
     else current.stale = true;
   });
@@ -373,10 +375,14 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     const stage = stageRef.current;
     const pilot = cockpit.current;
     if (!stage) return;
-    const observer = new ResizeObserver(() => onResize());
+    const observer = new ResizeObserver(() => rebuild());
     observer.observe(stage);
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onMotion = () => rebuild();
+    motion.addEventListener("change", onMotion);
     return () => {
       observer.disconnect();
+      motion.removeEventListener("change", onMotion);
       cancelAnimationFrame(pilot.flight?.trace ?? 0);
       for (const animation of pilot.flight?.animations ?? []) animation.cancel();
     };

@@ -1,4 +1,4 @@
-import { OPEN_MS, PULL, frameAt, type Geometry, type Point } from "./portal";
+import { CLOSE_RATE, OPEN_MS, PULL, frameAt, type Geometry, type Point } from "./portal";
 
 /**
  * The presence dot through the camera move. It does not let the window close
@@ -111,6 +111,11 @@ export function ringAt(t: number, held = 0): number {
 
 function melted(t: number): number {
   return 1 - Math.pow(1 - clamp01(t / MELT), 3);
+}
+
+/** How far the dot is still melted `ms` after `held` as it gathers back off the rim: at one pace, whether the pointer left or a flight turned back. */
+export function gathered(held: number, ms: number): number {
+  return Math.max(0, held - (ms / HOVER_MS) * CLOSE_RATE);
 }
 
 /** How far the dot has melted under the pointer `ms` after `held`, from wherever it was. */

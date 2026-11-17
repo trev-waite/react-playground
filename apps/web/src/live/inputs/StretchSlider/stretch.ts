@@ -26,7 +26,7 @@ export const STRETCH_SPRING: Spring = { stiffness: 420, damping: 24 };
  */
 export const FOLLOW_SPRING: Spring = { stiffness: 4900, damping: 140 };
 
-/** The grey fill never shrinks past this (px), so the number and the handle always sit on it. */
+/** The grey fill's width (px) with the line just past the number; nearer 0 it slides away into the pill's round end. */
 export const MIN_FILL = 84;
 /** The handle line sits this far (px) inside the fill's right end. */
 export const HANDLE_INSET = 14;

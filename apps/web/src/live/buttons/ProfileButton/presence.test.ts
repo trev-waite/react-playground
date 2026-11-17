@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { geometry, type Point } from "./portal";
-import { RING, TRACE_MARGIN, beadAt, beadOutline, meltIn, rimAt, ringAt } from "./presence";
+import { RING, TRACE_MARGIN, beadAt, beadOutline, gathered, meltIn, rimAt, ringAt } from "./presence";
 
 const stage = { width: 560, height: 420 };
 const avatar = { x: 280, y: 210 };
@@ -98,6 +98,26 @@ describe("Profile Button presence bead", () => {
     expect(held).toBe(1);
     expect(steps[0]!).toBeGreaterThan(dot.radius * 0.02);
     expect(Math.max(...steps)).toBeLessThan(dot.radius * 0.2);
+  });
+
+  test("a flight turned back just after leaving gathers the melted dot at its own pace, without a jump", () => {
+    const frame = 1000 / 60;
+    for (const turnAt of [frame, 2 * frame, 5 * frame]) {
+      let ms = turnAt;
+      let held = 1;
+      let last = beadOutline(g, dot, ms / 1000, held);
+      let largest = 0;
+      while (held > 0 || ms > 0) {
+        ms = Math.max(0, ms - frame * 1.3);
+        held = gathered(held, frame);
+        const next = beadOutline(g, dot, ms / 1000, held);
+        largest = Math.max(largest, ...next.map((p, i) => Math.hypot(p.x - last[i]!.x, p.y - last[i]!.y)));
+        last = next;
+      }
+      expect(largest).toBeLessThan(dot.radius * 0.5);
+    }
+    expect(gathered(1, 0)).toBe(1);
+    expect(gathered(0.2, 10_000)).toBe(0);
   });
 
   test("melting under the pointer carries on from wherever the dot had gathered back to", () => {
