@@ -32,6 +32,20 @@ export const MIN_FILL = 84;
 export const HANDLE_INSET = 14;
 /** Underdamped, so a full fill rings like a plucked rubber band for a few cycles. */
 export const POP_SPRING: Spring = { stiffness: 620, damping: 11 };
+/** Carries the handle between the fill's edge and its place at 0: critically damped, settled in about 0.45s, never overshooting. */
+export const PARK_SPRING: Spring = { stiffness: 220, damping: 29.7 };
+/** At 0 the handle stands this far (px) clear of the number, on the 8px scale. */
+export const PARK_GAP = 8;
+/** The handle's height, as a share of the channel's. */
+export const HANDLE_HEIGHT = 0.44;
+/** The handle's halves overlap by this much (px) when joined, so the line shows no seam. */
+const HALF_OVERLAP = 3;
+/** Split apart, each half shrinks by this share, so it clears the number and the pill's curve with room to spare. */
+const SPLIT_SHRINK = 0.15;
+/** How far (px) past the number each half's split eases open or closed. */
+const SPLIT_EASE = 14;
+/** Of the trip to 0, the share by which the grey has slid away, so the line arrives at a white pill. */
+const FILL_GONE_BY = 0.7;
 
 export function clampValue(value: number): number {
   return Math.min(MAX_VALUE, Math.max(0, Math.round(value)));
@@ -133,6 +147,63 @@ export function pillShape(stretch: number, pop: number, width: number): PillShap
 export function shapedX(x: number, shape: PillShape, width: number): number {
   const center = width / 2;
   return center + shape.shiftX + (x - center) * shape.scaleX;
+}
+
+/** Where the grey fill's leading edge has slid back to, as `park` (0 to 1) carries the slider to rest at 0. */
+export function retracted(park: number): number {
+  return Math.min(1, Math.max(0, park / FILL_GONE_BY));
+}
+
+/** The grey's opacity as it slides away: it fades over the last of its slide, so no sliver lingers in the pill's round end. */
+export function fillOpacity(park: number): number {
+  return 1 - smooth((retracted(park) - 0.6) / 0.4);
+}
+
+/** The number's left and right edges and half its height, in px from the channel's left edge and its middle. */
+export type NumberBox = { left: number; right: number; half: number };
+
+function smooth(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
+}
+
+/**
+ * How far apart (0 to 1) the handle's halves stand with its center at `x`:
+ * open while it crosses the number, eased shut on either side, and joined
+ * where it rests at 0 and anywhere on the fill's edge.
+ */
+export function splitAt(x: number, parked: number, number: NumberBox, width: number): number {
+  const clear = width / 2 + 1;
+  const left = number.left - clear;
+  const right = number.right + clear;
+  if (x >= left && x <= right) return 1;
+  if (x > right) return smooth(1 - (x - right) / SPLIT_EASE);
+  return left > parked ? smooth((x - parked) / (left - parked)) : 0;
+}
+
+/** The handle's place at 0: just left of the number, `PARK_GAP` clear of it. */
+export function parkedX(number: NumberBox, width: number): number {
+  return number.left - PARK_GAP - width / 2;
+}
+
+export type Half = { y: number; scale: number };
+
+/** Each half's length (px) for a handle `channel` px tall: half the line, plus the overlap that hides the join. */
+export function halfLength(channel: number): number {
+  return (channel * HANDLE_HEIGHT + HALF_OVERLAP) / 2;
+}
+
+/**
+ * The top half's center (px from the channel's middle; the bottom half
+ * mirrors it) and length scale, `split` (0 to 1) of the way apart. Joined,
+ * the halves make the one line; split, each clears the number's box.
+ */
+export function topHalf(split: number, channel: number, number: NumberBox): Half {
+  const length = halfLength(channel);
+  const joined = -(channel * HANDLE_HEIGHT) / 2 + length / 2;
+  const scale = 1 - SPLIT_SHRINK * split;
+  const apart = -(number.half + (length * scale) / 2);
+  return { y: joined + (apart - joined) * split, scale };
 }
 
 export type SpringState = { value: number; velocity: number };

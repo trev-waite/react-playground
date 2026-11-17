@@ -20,6 +20,16 @@ import {
   HANDLE_INSET,
   CALM_SPEED,
   FOLLOW_SPRING,
+  HANDLE_HEIGHT,
+  PARK_GAP,
+  PARK_SPRING,
+  fillOpacity,
+  halfLength,
+  parkedX,
+  retracted,
+  splitAt,
+  topHalf,
+  type NumberBox,
   type SpringState,
 } from "./stretch";
 
@@ -113,6 +123,68 @@ describe("Stretch Slider value", () => {
     expect(touchIntent(3, 2)).toBeNull();
     expect(touchIntent(10, 4)).toBe("slide");
     expect(touchIntent(4, 10)).toBe("scroll");
+  });
+});
+
+describe("Stretch Slider at 0", () => {
+  const channel = 47;
+  const width = 2.5;
+  const box = (digits: number): NumberBox => ({ left: 15.5, right: 15.5 + 17 + digits * 10.5, half: 9 });
+  const lineTop = -(channel * HANDLE_HEIGHT) / 2;
+
+  test("the line is whole on the fill's edge and at rest at 0, and parts only to pass the number", () => {
+    const travel = 200;
+    for (const value of [0, 1, 9, 10, 99, 100]) {
+      const number = box(String(value).length);
+      const parked = parkedX(number, width);
+      expect(splitAt(parked, parked, number, width)).toBe(0);
+      expect(splitAt(MIN_FILL - HANDLE_INSET + (travel * value) / 100, parked, number, width)).toBe(0);
+      for (let x = number.left - width / 2; x <= number.right + width / 2; x += 0.5) expect(splitAt(x, parked, number, width)).toBe(1);
+    }
+  });
+
+  test("at 0 the line rests a clear 8px left of the number", () => {
+    const number = box(1);
+    expect(number.left - (parkedX(number, width) + width / 2)).toBe(PARK_GAP);
+  });
+
+  test("joined, the halves make the one line with no seam; parted, they clear the number inside the pill", () => {
+    const number = box(1);
+    const length = halfLength(channel);
+    const joined = topHalf(0, channel, number);
+    expect(joined.y - length / 2).toBeCloseTo(lineTop);
+    expect(joined.y + length / 2).toBeGreaterThan(0);
+    const apart = topHalf(1, channel, number);
+    expect(apart.y + (length * apart.scale) / 2).toBeLessThanOrEqual(-number.half + 1e-9);
+    expect(apart.y - (length * apart.scale) / 2).toBeGreaterThan(-channel / 2 + 3);
+  });
+
+  test("the grey is gone, not lingering, by the time the line rests at 0, and untouched away from it", () => {
+    expect(retracted(0)).toBe(0);
+    expect(fillOpacity(0)).toBe(1);
+    expect(retracted(1)).toBe(1);
+    expect(fillOpacity(1)).toBe(0);
+    expect(fillOpacity(0.3)).toBe(1);
+  });
+
+  test("on the way to 0 and back, no half ever jumps between frames", () => {
+    const number = box(1);
+    const parked = parkedX(number, width);
+    const edge = MIN_FILL - HANDLE_INSET;
+    let park: SpringState = { value: 0, velocity: 0 };
+    let last: { x: number; y: number } | null = null;
+    let largest = 0;
+    for (const target of [1, 0]) {
+      for (let frame = 0; frame < 45; frame++) {
+        park = stepSpring(park, target, PARK_SPRING, 1 / 60);
+        const x = edge + (parked - edge) * park.value;
+        const half = topHalf(splitAt(x, parked, number, width), channel, number);
+        if (last) largest = Math.max(largest, Math.hypot(x - last.x, half.y - last.y));
+        last = { x, y: half.y };
+      }
+    }
+    expect(largest).toBeLessThan(9);
+    expect(park.value).toBeCloseTo(0, 2);
   });
 });
 
