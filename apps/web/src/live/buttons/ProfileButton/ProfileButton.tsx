@@ -381,8 +381,10 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
       return;
     }
     stopTracing(current, found.stage);
-    Object.assign(current, { held: 0, holding: false, stale: true });
+    Object.assign(current, { held: 0, holding: false });
     for (const animation of current.animations) animation.finish();
+    if (current.heading > 0) refit(cockpit.current, found);
+    else releaseFlight(cockpit.current, found.stage, true);
   });
 
   const leaveOnEscape = useEffectEvent((event: KeyboardEvent) => {

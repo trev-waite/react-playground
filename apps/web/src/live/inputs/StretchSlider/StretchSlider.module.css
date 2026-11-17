@@ -52,11 +52,21 @@
   height: 100%;
   border-radius: 12px;
   background: var(--fill);
-  transition: background-color 200ms ease-out;
 }
 
-.slider[data-full] .fill {
+/* Full, the green fades in over the grey, by opacity alone. */
+.fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   background: var(--full);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.slider[data-full] .fill::after {
+  opacity: 1;
 }
 
 /* The grab line, in two halves placed by script: joined (overlapping, so no seam shows) on the fill's
@@ -88,7 +98,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fill {
+  .fill::after {
     transition: none;
   }
 }
