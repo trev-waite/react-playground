@@ -93,10 +93,13 @@ function place({ portal, room, portrait, content, trace }: Layers, g: Geometry) 
   content.dataset.layout = g.details.strip ? "strip" : g.details.align === "start" ? "side" : "stacked";
 }
 
+/** Reduced motion's cross-fade, in place of the zoom. */
+const REDUCED_MS = 200;
+
 /** Builds every layer's animation for one geometry. Reduced motion swaps the zoom for a short cross-fade. */
 function launch(layers: Layers, g: Geometry, reduced: boolean): Flight {
   place(layers, g);
-  const timing: KeyframeAnimationOptions = { duration: reduced ? 200 : OPEN_MS, fill: "both", easing: "linear" };
+  const timing: KeyframeAnimationOptions = { duration: reduced ? REDUCED_MS : OPEN_MS, fill: "both", easing: "linear" };
   const animations: Animation[] = [];
   let portal: Animation;
   if (reduced) {
@@ -188,8 +191,9 @@ type Cockpit = { flight: Flight | null };
 
 /**
  * Makes `started` the current flight. Once it lands in the room it catches up
- * with any resize it flew through; once it plays back out, the portal hides,
- * after the dot has gathered if a flight turned back while it was melted.
+ * with any resize it flew through; once it plays back out, the portal hides.
+ * Back out while the dot is still melted, it waits readied, as under the
+ * pointer, until the dot has gathered.
  */
 function adopt(cockpit: Cockpit, layers: Layers, started: Flight) {
   started.portal.addEventListener("finish", () => {
@@ -199,7 +203,15 @@ function adopt(cockpit: Cockpit, layers: Layers, started: Flight) {
       if (started.stale) refit(cockpit, layers);
       return;
     }
-    if (started.held === 0 || !started.trace) releaseFlight(cockpit, layers.stage, true);
+    if (started.held === 0 || !started.trace) {
+      releaseFlight(cockpit, layers.stage, true);
+      return;
+    }
+    for (const animation of started.animations) {
+      animation.pause();
+      animation.playbackRate = 1;
+    }
+    started.heading = 1;
   });
   cockpit.flight = started;
   layers.stage.dataset.flight = "";
@@ -286,13 +298,11 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     return true;
   }
 
-  /** A flight back at the avatar whose dot has gathered is dropped, as it would have been when the pointer left. */
+  /** A readied flight whose dot has gathered back is dropped, as it would have been when the pointer left. */
   function rest(flight: Flight) {
     const stage = stageRef.current;
     if (!stage || cockpit.current.flight !== flight) return;
-    const { playState, playbackRate } = flight.portal;
-    if (playState === "paused") releaseFlight(cockpit.current, stage);
-    else if (playState === "finished" && playbackRate < 0) releaseFlight(cockpit.current, stage, true);
+    if (flight.portal.playState === "paused") releaseFlight(cockpit.current, stage);
     else stopTracing(flight, stage);
   }
 
@@ -358,6 +368,33 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     else current.stale = true;
   });
 
+  /**
+   * Reduced motion turned on while the room zooms: the zoom stops where it is
+   * and fades out (closing) or the room lands and fades in (opening), as the
+   * reduced flight would. Otherwise the flight is rebuilt for the preference.
+   */
+  const followMotion = useEffectEvent(() => {
+    const found = layers();
+    const current = cockpit.current.flight;
+    if (!found || !current || current.portal.playState !== "running" || current.reduced || !prefersReducedMotion()) {
+      rebuild();
+      return;
+    }
+    stopTracing(current, found.stage);
+    const fade: KeyframeAnimationOptions = { duration: REDUCED_MS, easing: "ease-out" };
+    if (current.heading > 0) {
+      for (const animation of current.animations) animation.finish();
+      found.portal.animate([{ opacity: 0 }, { opacity: 1 }], fade);
+      return;
+    }
+    for (const animation of current.animations) animation.pause();
+    const out = found.portal.animate([{ opacity: 1 }, { opacity: 0 }], { ...fade, fill: "forwards" });
+    out.addEventListener("finish", () => {
+      if (cockpit.current.flight === current && current.portal.playState === "paused") releaseFlight(cockpit.current, found.stage, true);
+      out.cancel();
+    });
+  });
+
   const leaveOnEscape = useEffectEvent((event: KeyboardEvent) => {
     if (event.key !== "Escape" || event.defaultPrevented) return;
     event.preventDefault();
@@ -378,7 +415,7 @@ export function ProfileButton({ profile, size = 72 }: ProfileButtonProps) {
     const observer = new ResizeObserver(() => rebuild());
     observer.observe(stage);
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const onMotion = () => rebuild();
+    const onMotion = () => followMotion();
     motion.addEventListener("change", onMotion);
     return () => {
       observer.disconnect();
