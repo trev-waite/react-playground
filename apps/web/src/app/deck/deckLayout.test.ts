@@ -179,7 +179,7 @@ describe("cameraPose", () => {
 
 describe("footerOpacity", () => {
   const close = springGenerator(1, 0, SPRING.morph, 0);
-  const open = springGenerator(0, 1, SPRING.morph, 0);
+  const open = springGenerator(0, 1, SPRING.morphToPage, 0);
   const firstHidden = (curve: typeof close) => {
     for (let at = 0; at <= curve.duration; at += 5) if (footerOpacity(curve.value(at)) === 0) return at;
     return Infinity;
@@ -199,8 +199,18 @@ describe("footerOpacity", () => {
   });
 
   test("stays hidden for most of an opening and is fully shown once the page lands", () => {
-    expect(footerOpacity(open.value(open.duration / 3))).toBe(0);
+    // When the card is all but there; the spring's settling tail after that moves it less than a pixel.
+    let landed = 0;
+    while (landed < open.duration && open.value(landed) < 0.99) landed += 5;
+    expect(footerOpacity(open.value(landed * 0.45))).toBe(0);
     expect(footerOpacity(open.value(open.duration))).toBe(1);
     expect(footerOpacity(1.04)).toBe(1);
+  });
+});
+
+describe("the spring to a page", () => {
+  test("grows a card straight into its page and never past it, so nothing shrinks back as it lands", () => {
+    const curve = springGenerator(0, 1, SPRING.morphToPage, 0);
+    for (let at = 0; at <= curve.duration; at += 2) expect(curve.value(at)).toBeLessThanOrEqual(1 + 1e-9);
   });
 });

@@ -217,7 +217,7 @@ const TILES = [
  */
 function ViewIcon({ grid }: { grid: boolean }) {
   const reducedMotion = useReducedMotion();
-  const transition = reducedMotion ? REDUCED_MOTION : SPRING.morph;
+  const transition = reducedMotion ? REDUCED_MOTION : grid ? SPRING.morph : SPRING.morphToPage;
 
   return (
     <svg className={styles.icon} width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">

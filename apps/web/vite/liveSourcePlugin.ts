@@ -56,6 +56,8 @@ export function liveSourcePlugin(env: Record<string, string | undefined>): Plugi
             const body = codeFiles(cards, siteUrl).get(pathname);
             response.statusCode = body === undefined ? 404 : 200;
             response.setHeader("Content-Type", body === undefined ? "text/plain; charset=utf-8" : `${CONTENT_TYPES[format]}; charset=utf-8`);
+            // Served fresh from source each time, so a browser must not keep an older one.
+            response.setHeader("Cache-Control", "no-store");
             response.end(body ?? "Not found");
           },
           error => next(error),

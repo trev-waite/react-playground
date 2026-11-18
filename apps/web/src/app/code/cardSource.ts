@@ -13,31 +13,34 @@ async function fetchSource(slug: string): Promise<SourceFile[]> {
   return (await response.json()) as SourceFile[];
 }
 
+const failed = new WeakSet<Promise<SourceFile[]>>();
+
 /**
  * Every file of every component on the card, fetched once. A failed fetch is
- * kept until `forgetSource`: the sheet renders again once it settles, and a
- * fetch started anew each time would never let it show the failure.
+ * kept, so the sheet that renders it once more after it settles does not start
+ * another; `loadSource` is what asks again.
  */
 export function cardSource(card: SourceCard): Promise<SourceFile[]> {
   let files = sources.get(card.slug);
   if (!files) {
-    files = fetchSource(card.slug);
-    sources.set(card.slug, files);
+    const fetched = fetchSource(card.slug);
+    fetched.catch(() => failed.add(fetched));
+    sources.set(card.slug, fetched);
+    files = fetched;
   }
   return files;
 }
 
-/** Drops a card's fetch, so the next ask fetches again. */
-export function forgetSource(card: SourceCard): void {
-  sources.delete(card.slug);
+/** The card's files, fetched again if the last fetch failed. */
+export function loadSource(card: SourceCard): Promise<SourceFile[]> {
+  const files = sources.get(card.slug);
+  if (files && failed.has(files)) sources.delete(card.slug);
+  return cardSource(card);
 }
 
-/** Fetches the card's files and the highlighter before the sheet opens, so it opens on finished code. A failed early fetch is not kept. */
+/** Fetches the card's files and the highlighter before the sheet opens, so it opens on finished code. */
 export function prepareCode(card: SourceCard): void {
-  const files = cardSource(card);
-  files.catch(() => {
-    if (sources.get(card.slug) === files) forgetSource(card);
-  });
+  loadSource(card).catch(() => {});
   warmHighlighter();
 }
 

@@ -54,7 +54,8 @@ type DeckCardProps = {
   current: boolean;
   /** Present in the grid: the whole tile opens the page. */
   onOpen?: () => void;
-  onShowCode?: () => void;
+  /** The Code button was pressed; it is the control to hand focus back to. */
+  onShowCode?: (trigger: HTMLElement) => void;
   /** The reader is reaching for the code button: fetch what it opens. */
   onPrepareCode?: () => void;
   raised?: boolean;
@@ -139,7 +140,7 @@ export function DeckCard({
             type="button"
             className={styles.code}
             aria-haspopup="dialog"
-            onClick={onShowCode}
+            onClick={event => onShowCode(event.currentTarget)}
             onPointerEnter={onPrepareCode}
             onFocus={onPrepareCode}
           >

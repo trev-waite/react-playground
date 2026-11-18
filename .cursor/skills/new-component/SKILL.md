@@ -87,7 +87,7 @@ The build reads `meta` without running the component and writes each page's titl
 
 ## Its code and agent prompt
 
-Nothing to write: the build turns each component into one `<Name>.tsx` (`vite/oneFile.ts`) and publishes it at `/code/<slug>.md` (and `.json` for the Code sheet), and the sheet's Copy prompt button hands that link and the card's `description` to a reader's coding agent. `bun test apps/web/vite/oneFile.test.ts` type-checks every component's one file; if yours fails, it names the clash or the import it could not inline. Open the Code sheet on the card's page, press Copy prompt, and read `http://localhost:3000/code/<slug>.md`: the component should be one file, and anything it needs but leaves out should be named. `check:deploy` fails a build missing a card's code.
+Nothing to write: the build turns each component into one `<Name>.tsx` (`vite/oneFile.ts`) and publishes it at `/code/<slug>.md` (and `.json` for the Code sheet), and the sheet's Prompt button hands that link and the card's `description` to a reader's coding agent. `bun test apps/web/vite/oneFile.test.ts` type-checks every component's one file; if yours fails, it names the clash or the import it could not inline. Open the Code sheet on the card's page, press Prompt, and read `http://localhost:3000/code/<slug>.md`: the component should be one file, and anything it needs but leaves out should be named. `check:deploy` fails a build missing a card's code.
 
 ## Look at it
 

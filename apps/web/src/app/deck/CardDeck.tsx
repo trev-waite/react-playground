@@ -39,7 +39,7 @@ type CardDeckProps = {
   onActiveChange: (index: number) => void;
   /** A grid tile was chosen. */
   onOpen: (index: number) => void;
-  onShowCode?: (index: number) => void;
+  onShowCode?: (index: number, trigger: HTMLElement) => void;
   /** A page's code button is about to be pressed (hovered or focused): fetch what it opens. */
   onPrepareCode?: (index: number) => void;
   /** The deck owns the page, so phones may scroll the document itself. */
@@ -253,7 +253,7 @@ export function CardDeck({
   );
   const frame = pageFrame(viewport, viewport.insets);
   const layout = view === "grid" ? "grid" : paged ? "pages" : "flight";
-  const transition = reducedMotion ? INSTANT : SPRING.morph;
+  const transition = reducedMotion ? { toGrid: INSTANT, toPage: INSTANT } : { toGrid: SPRING.morph, toPage: SPRING.morphToPage };
   const pageRect = (index: number) => offsetRect(frame, index * viewport.height);
 
   const motionFor = (card: LiveCard, index: number): CardMotion =>
@@ -439,7 +439,7 @@ export function CardDeck({
           moveCard(
             motionOf(card, index),
             index === activeIndex ? pagePose(camera) : cameraPose(grid.rects[index]!, focus, camera),
-            transition,
+            transition.toPage,
           ),
         () => {
           stopWatching();
@@ -472,7 +472,7 @@ export function CardDeck({
         }
         fly(
           id,
-          (card, index) => moveCard(motionOf(card, index), gridPose(grid.rects[index]!), transition),
+          (card, index) => moveCard(motionOf(card, index), gridPose(grid.rects[index]!), transition.toGrid),
           () => setFlying(false),
         );
       } else {
@@ -645,7 +645,7 @@ export function CardDeck({
               // Pages never overlap. Moving the raise as the reader pages made Safari repaint two whole cards.
               raised={layout !== "pages" && index === activeIndex}
               onOpen={layout === "grid" ? () => onOpen(index) : undefined}
-              onShowCode={onShowCode ? () => onShowCode(index) : undefined}
+              onShowCode={onShowCode ? trigger => onShowCode(index, trigger) : undefined}
               onPrepareCode={onPrepareCode ? () => onPrepareCode(index) : undefined}
             />
           ))}

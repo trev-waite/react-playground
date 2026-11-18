@@ -14,8 +14,10 @@ describe("Profile Button portal", () => {
 
   test("the portal's box shares the avatar's fraction of a pixel, so a browser snaps both alike", () => {
     const fraction = (value: number) => value - Math.floor(value);
-    const off = geometry({ width: 320, height: 360.89 }, { x: 160, y: 180.445 }, 44);
-    expect(fraction(off.avatar.y - off.reach)).toBeCloseTo(fraction(off.avatar.y - off.avatarRadius));
+    for (const radius of [44, 36.5]) {
+      const off = geometry({ width: 320, height: 360.89 }, { x: 160, y: 180.445 }, radius);
+      expect(fraction(off.avatar.y - off.reach)).toBeCloseTo(fraction(off.avatar.y - off.avatarRadius));
+    }
   });
 
   test("on the page, the portal is exactly the avatar and the room's portrait fills it", () => {
