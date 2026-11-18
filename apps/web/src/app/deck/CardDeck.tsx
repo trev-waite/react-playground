@@ -264,12 +264,12 @@ export function CardDeck({
     latest.current = { cards, grid, frame, viewport, activeIndex, transition, scrollsDocument };
   });
   const focusRect = grid.rects[activeIndex];
-  const gridWindow: GridWindow = {
+  const gridWindow: GridWindow = useMemo(() => ({
     rects: grid.rects,
     top: gridTop ?? (focusRect ? centeredScrollTop(focusRect, viewport, grid.height) : 0),
     height: viewport.height,
-  };
-  const place: DeckPlace = !landed
+  }), [grid, gridTop, focusRect, viewport]);
+  const place: DeckPlace = !landed || shownView !== view
     ? { layout: "flight" }
     : layout === "pages"
       ? { layout, index: mountIndex }
@@ -281,6 +281,19 @@ export function CardDeck({
   if (nearSlugs.some(slug => !warm.has(slug))) setWarm(new Set([...warm, ...nearSlugs]));
   const warmNext = nextToWarm(place, cards.length, index => warm.has(cards[index]!.slug));
   const warmNextSlug = warmNext === null ? null : cards[warmNext]!.slug;
+  useEffect(() => {
+    if (landed || view !== "grid") return;
+    let cancelled = false;
+    for (const [index, rect] of gridWindow.rects.entries()) {
+      if (rect.y + rect.height <= gridWindow.top || rect.y >= gridWindow.top + gridWindow.height) continue;
+      const card = cards[index]!;
+      void Promise.allSettled(card.members.map(member => member.load())).then(() => {
+        if (cancelled) return;
+        startTransition(() => setWarm(current => current.has(card.slug) ? current : new Set(current).add(card.slug)));
+      });
+    }
+    return () => { cancelled = true; };
+  }, [cards, gridWindow, landed, view]);
   const [nearFor, setNearFor] = useState({ activeIndex, layout });
   if (nearFor.activeIndex !== activeIndex || nearFor.layout !== layout) {
     setNearFor({ activeIndex, layout });

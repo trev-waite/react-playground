@@ -499,6 +499,7 @@ function formAt(index: number): Form {
 
 /** Idle time a trace needs to start; less, and it waits for a longer idle period. */
 const PREBUILD_IDLE_MS = 10;
+const PREBUILD_VISIBLE_MS = 300;
 
 function prebuildForms(): () => void {
   let cancel = () => {};
@@ -782,7 +783,8 @@ function animateBlob({
   settings: RefObject<{ bounce: number; wobble: number; tempo: number; playing: boolean }>;
 }): () => void {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const stopPrebuild = prebuildForms();
+  let stopPrebuild: (() => void) | undefined;
+  let visibleSince = 0;
   const body = REST_FORM.body.map(particle);
   const features = REST_FORM.features.map(contour => contour.map(particle));
   const look = { x: { value: 0, velocity: 0 }, y: { value: 0, velocity: 0 } };
@@ -820,6 +822,8 @@ function animateBlob({
     last = ms;
     now += dt;
     const { bounce, wobble, tempo, playing } = settings.current;
+
+    if (playing && !stopPrebuild && ms - visibleSince >= PREBUILD_VISIBLE_MS) stopPrebuild = prebuildForms();
 
     if (pokeRef.current !== poke) {
       poke = pokeRef.current;
@@ -930,13 +934,17 @@ function animateBlob({
     cancelAnimationFrame(raf);
     if (entry?.isIntersecting) {
       last = performance.now();
+      visibleSince = last;
       raf = requestAnimationFrame(tick);
+    } else {
+      stopPrebuild?.();
+      stopPrebuild = undefined;
     }
   });
   if (svgRef.current) observer.observe(svgRef.current);
   else raf = requestAnimationFrame(tick);
   return () => {
-    stopPrebuild();
+    stopPrebuild?.();
     observer.disconnect();
     cancelAnimationFrame(raf);
   };

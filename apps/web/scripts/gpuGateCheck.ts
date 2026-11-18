@@ -5,7 +5,7 @@ import { preview } from "vite";
 
 /**
  * Checks the split `src/gpu/vgpuGate.ts` promises: the GPU library is fetched
- * only where `navigator.gpu` exists, and every card mounts either way.
+ * only where `navigator.gpu` exists, and a GPU preview opens either way.
  * Run it after `bun run build`.
  */
 
@@ -41,16 +41,18 @@ async function load(browser: Browser, webGpu: boolean) {
   page.on("request", request => {
     if (new URL(request.url()).pathname === `/assets/${library[0]}`) fetched = true;
   });
-  await page.goto(url!);
-  await page.waitForFunction(
-    () => {
-      const cards = Array.from(document.querySelectorAll("article"));
-      return cards.length > 0 && cards.every(card => card.querySelector('[class*="_fit_"] > :not([class*="_loading_"])') !== null);
-    },
-    null,
-    { timeout: SETTLE_TIMEOUT_MS },
-  );
-  // The library is requested once the first GPU card mounts.
+  await page.goto(new URL("/buttons/PrimaryButton", url).href);
+  const preview = (title: string) => page.getByRole("article", { name: title, exact: true })
+    .locator('[class*="_fit_"] > :not([class*="_loading_"])').first();
+  await preview("Primary Button").waitFor();
+  if (fetched) failures.push("The button page requested the GPU library before showing a GPU card.");
+  await page.getByRole("button", { name: "Show all components" }).click();
+  await page.getByRole("article", { name: "Light Dispersion" }).getByRole("link").click();
+  await preview("Light Dispersion").waitFor();
+  if (webGpu) {
+    await page.waitForFunction(() => performance.getEntriesByType("resource")
+      .some(entry => entry.name.includes("/vgpuLibrary-")), null, { timeout: SETTLE_TIMEOUT_MS });
+  }
   const broken = await page.evaluate(() =>
     Array.from(document.querySelectorAll('article [role="alert"]'), alert => alert.textContent ?? ""),
   );
@@ -78,4 +80,4 @@ if (failures.length > 0) {
   console.error(`The GPU library:\n${failures.map(line => `  ${line}`).join("\n")}`);
   process.exit(1);
 }
-console.log(`${library[0]} is fetched only where WebGPU exists, and every card mounts either way.`);
+console.log(`${library[0]} is fetched only where WebGPU exists, and a GPU preview opens either way.`);

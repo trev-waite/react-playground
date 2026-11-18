@@ -8,7 +8,6 @@ import { liveCatalogPlugin } from "./vite/liveCatalogPlugin.ts";
 import { liveRoutesPlugin } from "./vite/liveRoutesPlugin.ts";
 import { liveSourcePlugin } from "./vite/liveSourcePlugin.ts";
 import { previewMetaPlugin } from "./vite/previewMetaPlugin.ts";
-import { previewPreloadPlugin } from "./vite/previewPreloadPlugin.ts";
 import { themeTogglePlugin } from "./vite/themeTogglePlugin.ts";
 import { vgpuGatePlugin } from "./vite/vgpuGatePlugin.ts";
 
@@ -24,7 +23,6 @@ export default defineConfig(({ mode }) => {
       liveCatalogPlugin(),
       previewMetaPlugin(),
       liveSourcePlugin(env),
-      previewPreloadPlugin(),
       themeTogglePlugin(env),
       liveRoutesPlugin(env),
       vgpuGatePlugin(),

@@ -8,10 +8,6 @@ import type { LiveCatalog } from "./types";
 
 const catalog = moduleStore(liveCatalog);
 
-// Every preview starts importing now, before the first render, so the cards on screen render
-// their components in the first paint instead of a loading frame. Mounting still waits its turn.
-for (const entry of liveCatalog.entries) previewModule(entry).catch(() => {});
-
 /** Keep loaders for unchanged slugs so their modules are not fetched again. */
 function mergeCatalog(next: LiveCatalog, freshSlug?: string): LiveCatalog {
   const current = new Map(catalog.getSnapshot().entries.map(entry => [entry.slug, entry]));
@@ -42,9 +38,13 @@ export function useLiveEntries() {
 }
 
 /** Every card, straight away. Each preview loads on its own inside its card. */
+export function liveCards(snapshot: LiveCatalog = catalog.getSnapshot()): LiveCard[] {
+  return planCards(snapshot).map(plan => cardFromPlan(plan, previewModule));
+}
+
 export function useLiveCards(): LiveCard[] {
   const snapshot = useLiveCatalog();
-  return useMemo(() => planCards(snapshot).map(plan => cardFromPlan(plan, previewModule)), [snapshot]);
+  return useMemo(() => liveCards(snapshot), [snapshot]);
 }
 
 export async function refreshLiveCatalog(slug?: string): Promise<void> {

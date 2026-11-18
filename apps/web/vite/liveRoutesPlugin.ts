@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { liveRoutes, liveSlugFromPath, livePath, type LiveRoute } from "../src/lib/liveRoutes.ts";
+import { previewPreloads } from "./previewPreloads.ts";
 import { readLiveCards } from "./liveCards.ts";
 import { cardImagePath, robots, routeHead, sitemap, stampHead, type HeadContext } from "./routeHead.ts";
 
@@ -26,6 +27,7 @@ export function routePageFile(route: LiveRoute): string {
  */
 export function liveRoutesPlugin(env: Record<string, string | undefined>): Plugin {
   const siteUrl = resolveSiteUrl(env);
+  let base = "/";
   let liveDir = "";
   let publicDir = "";
 
@@ -38,6 +40,7 @@ export function liveRoutesPlugin(env: Record<string, string | undefined>): Plugi
   return {
     name: "live-routes",
     configResolved(config) {
+      base = config.base;
       liveDir = path.join(config.root, "src/live");
       publicDir = config.publicDir;
       if (!siteUrl && config.command === "build") {
@@ -68,7 +71,12 @@ export function liveRoutesPlugin(env: Record<string, string | undefined>): Plugi
           }
         }
         for (const route of routes) {
-          const source = stampHead(template, routeHead(route, context));
+          const members = (route.card ?? routes[1]?.card)?.members ?? [];
+          const tags = routeHead(route, context);
+          for (const file of previewPreloads(bundle, members)) {
+            tags.push({ tag: "link", attrs: { rel: "modulepreload", crossorigin: "", href: base + file } });
+          }
+          const source = stampHead(template, tags);
           if (route.path === "/") page.source = source;
           else this.emitFile({ type: "asset", fileName: routePageFile(route), source });
         }

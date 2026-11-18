@@ -146,7 +146,8 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
   const ctx = context;
   const size = PANEL_WIDTH * PANEL_HEIGHT;
   const image = ctx.createImageData(PANEL_WIDTH, PANEL_HEIGHT);
-  const pages = PAGES.map((_, index) => rasterizePage(index));
+  const pages: Uint8Array[] = [];
+  const pageAt = (index: number) => (pages[index] ??= rasterizePage(index));
   const cleared = new Uint8Array(size);
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let pigment: Float32Array = new Float32Array(size);
@@ -208,11 +209,11 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
 
   function turn() {
     if (!on) return;
-    pageIndex = (pageIndex + 1) % pages.length;
+    pageIndex = (pageIndex + 1) % PAGES.length;
     quickTurns += 1;
     const full = quickTurns >= Math.max(1, Math.round(slider("flashEvery")));
     if (full) quickTurns = 0;
-    refresh(pages[pageIndex]!, full);
+    refresh(pageAt(pageIndex), full);
     schedule();
   }
 
@@ -221,7 +222,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     if (next === on) return;
     on = next;
     quickTurns = 0;
-    refresh(on ? pages[pageIndex]! : cleared, true);
+    refresh(on ? pageAt(pageIndex) : cleared, true);
     schedule();
   }
 
@@ -239,7 +240,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
   reducedMotion.addEventListener("change", onMotionChange);
 
   on = settings.current.progress >= 0.5;
-  if (on) pigment = from = goal = Float32Array.from(pages[0]!);
+  if (on) pigment = from = goal = Float32Array.from(pageAt(0));
   paint();
   schedule();
 

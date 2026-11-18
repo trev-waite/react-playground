@@ -34,25 +34,25 @@ export function nearCards(place: DeckPlace, count: number): Set<number> {
 }
 
 /** How far a card is from the reader: in pages, or from the middle of the grid's screen. */
-function distance(place: DeckPlace, index: number): number {
+function distance(place: Exclude<DeckPlace, { layout: "flight" }>, index: number): number {
   if (place.layout === "pages") return Math.abs(index - place.index);
-  if (place.layout === "flight") return index;
   const rect = place.grid.rects[index];
   if (!rect) return Infinity;
   return Math.abs(rect.y + rect.height / 2 - (place.grid.top + place.grid.height / 2));
 }
 
-/**
- * The nearest card not mounted yet, to mount in the next quiet moment; null
- * in flight, or once every card is. Every card warms in the end, so later
- * swipes and flights never pay for a first render.
- */
 export function nextToWarm(place: DeckPlace, count: number, isWarm: (index: number) => boolean): number | null {
   if (place.layout === "flight") return null;
+  const reach = place.layout === "pages" ? 2 : place.grid.height * 1.5;
   let best: number | null = null;
+  let closest = Infinity;
   for (let index = 0; index < count; index++) {
     if (isWarm(index)) continue;
-    if (best === null || distance(place, index) < distance(place, best)) best = index;
+    const away = distance(place, index);
+    if (away <= reach && away < closest) {
+      closest = away;
+      best = index;
+    }
   }
   return best;
 }

@@ -35,7 +35,11 @@ async function atRest(page: Page, layout: "pages" | "grid") {
   await page.waitForFunction(
     name => {
       const cards = Array.from(document.querySelectorAll("article"));
-      const loaded = cards.every(card => card.querySelector('[class*="_fit_"] > :not([class*="_loading_"])') !== null);
+      const visible = cards.filter(card => {
+        const box = card.getBoundingClientRect();
+        return box.bottom > 0 && box.top < innerHeight && box.right > 0 && box.left < innerWidth;
+      });
+      const loaded = visible.length > 0 && visible.every(card => card.querySelector('[class*="_fit_"] > :not([class*="_loading_"])') !== null);
       return loaded && document.querySelector(`[data-layout="${name}"]:not([data-flying])`) !== null;
     },
     layout,

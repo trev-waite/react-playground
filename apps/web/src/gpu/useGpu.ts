@@ -18,17 +18,11 @@ export type GpuSession = {
 
 export type GpuStatus = "idle" | "running" | "unsupported" | "error";
 
+const OFFSCREEN_GRACE_MS = 1500;
+const PROXIMITY = { rootMargin: "300px 0px", scrollMargin: "300px 0px" };
 const INIT_TIMEOUT_MS = 10_000;
 /** vgpu clears to opaque black; experiments keep the canvas see-through for HTML underlays. */
 const TRANSPARENT: readonly [number, number, number, number] = [0, 0, 0, 0];
-
-function initTimeout(label: string): Promise<never> {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`${label}: WebGPU init timed out`));
-    }, INIT_TIMEOUT_MS);
-  });
-}
 
 function waitForLayout(canvas: HTMLCanvasElement, signal: AbortSignal) {
   // vgpu sizes from clientWidth/clientHeight. A 0x0 first frame stays blank.
@@ -51,11 +45,21 @@ function waitForLayout(canvas: HTMLCanvasElement, signal: AbortSignal) {
 }
 
 async function initClient(label: string, features: readonly GPUFeatureName[]): Promise<GpuClient> {
-  const create = (requiredFeatures: readonly GPUFeatureName[]) =>
-    Promise.race([
-      init({ powerPreference: "high-performance", label, requiredFeatures }),
-      initTimeout(label),
-    ]);
+  const create = (requiredFeatures: readonly GPUFeatureName[]) => new Promise<GpuClient>((resolve, reject) => {
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      reject(new Error(`${label}: WebGPU init timed out`));
+    }, INIT_TIMEOUT_MS);
+    init({ powerPreference: "high-performance", label, requiredFeatures }).then(gpu => {
+      clearTimeout(timer);
+      if (timedOut) gpu.dispose();
+      else resolve(gpu);
+    }, error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
   if (features.length === 0) return create([]);
   try {
     return await create(features);
@@ -84,37 +88,35 @@ function runGpu(
   setStatus: (status: GpuStatus) => void,
   setError: (error: string | null) => void,
 ): () => void {
-  const abort = new AbortController();
-  const session: { epoch: number; cleanup: () => void; rest: () => void; gpu: GpuClient | undefined } = {
-    epoch: 0,
+  let attempt: AbortController | undefined;
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+  let nearby = false;
+  const session: { cleanup: () => void; rest: () => void; gpu?: GpuClient } = {
     cleanup: () => {},
     rest: () => {},
-    gpu: undefined,
   };
 
   const disposeSession = () => {
+    attempt?.abort();
+    attempt = undefined;
     session.cleanup();
     session.cleanup = () => {};
     session.rest();
     session.rest = () => {};
     session.gpu?.dispose();
-    session.gpu = undefined;
+    delete session.gpu;
   };
 
-  const startSession = async () => {
-    session.epoch += 1;
-    const mine = session.epoch;
+  const startSession = async (signal: AbortSignal) => {
     try {
-      await waitForLayout(canvas, abort.signal);
-      if (mine !== session.epoch || abort.signal.aborted) return;
-
-      const created = await initClient(readOptions().label, readOptions().features ?? []);
-      if (mine !== session.epoch || abort.signal.aborted) {
-        created.dispose();
+      await waitForLayout(canvas, signal);
+      if (signal.aborted) return;
+      const gpu = await initClient(readOptions().label, readOptions().features ?? []);
+      if (signal.aborted) {
+        gpu.dispose();
         return;
       }
 
-      const gpu = created;
       session.gpu = gpu;
       session.rest = keepGpuAwake(gpu.gpu);
       const gpuSurface = surface(gpu, canvas, {
@@ -124,14 +126,10 @@ function runGpu(
         label: readOptions().label,
       });
       session.cleanup = readOptions().start({ gpu, surface: gpuSurface, canvas }) ?? (() => {});
-      if (mine !== session.epoch || abort.signal.aborted) {
-        disposeSession();
-        return;
-      }
       setStatus("running");
       setError(null);
     } catch (caught) {
-      if (mine !== session.epoch || abort.signal.aborted) return;
+      if (signal.aborted) return;
       const message =
         caught instanceof Error ? caught.message : "WebGPU failed to start";
       console.error(message, caught);
@@ -141,19 +139,34 @@ function runGpu(
     }
   };
 
-  const syncHost = () => {
-    if (abort.signal.aborted) return;
-    // Experimental stays mounted under Live as an inert layer. Drop the adapter while hidden.
-    if (gpuHostIsActive(canvas)) {
-      if (!session.gpu) void startSession();
-      return;
-    }
-    session.epoch += 1;
+  const release = () => {
+    releaseTimer = undefined;
     disposeSession();
     setStatus("idle");
   };
 
-  syncHost();
+  const syncHost = () => {
+    if (!gpuHostIsActive(canvas) || document.hidden) {
+      clearTimeout(releaseTimer);
+      release();
+    } else if (nearby) {
+      clearTimeout(releaseTimer);
+      releaseTimer = undefined;
+      if (!attempt) {
+        attempt = new AbortController();
+        void startSession(attempt.signal);
+      }
+    } else if (attempt && releaseTimer === undefined) {
+      releaseTimer = setTimeout(release, OFFSCREEN_GRACE_MS);
+    }
+  };
+
+  const proximity = new IntersectionObserver(entries => {
+    nearby = entries[entries.length - 1]?.isIntersecting ?? false;
+    syncHost();
+  }, PROXIMITY);
+  proximity.observe(canvas);
+  document.addEventListener("visibilitychange", syncHost);
 
   const layer = canvas.closest("[data-layer]");
   const mutation = layer instanceof HTMLElement ? new MutationObserver(syncHost) : undefined;
@@ -165,9 +178,10 @@ function runGpu(
   }
 
   return () => {
-    abort.abort();
+    clearTimeout(releaseTimer);
+    proximity.disconnect();
+    document.removeEventListener("visibilitychange", syncHost);
     mutation?.disconnect();
-    session.epoch += 1;
     disposeSession();
   };
 }

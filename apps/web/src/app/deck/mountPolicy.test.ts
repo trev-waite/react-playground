@@ -45,11 +45,13 @@ describe("nextToWarm", () => {
     expect(Math.abs(rects[next]!.y - rects[24]!.y)).toBeLessThan(SCREEN.height);
   });
 
-  test("works through every card in the end, wherever the reader is", () => {
-    const warm = new Set<number>();
-    for (let step = 0; step < 40; step++) warm.add(nextToWarm(page(20), 40, index => warm.has(index))!);
-    expect(warm.size).toBe(40);
+  test("stops after warming two pages on each side", () => {
+    const warm = new Set([18, 19, 20, 21, 22]);
     expect(nextToWarm(page(20), 40, index => warm.has(index))).toBeNull();
+  });
+
+  test("leaves distant grid cards cold while the reader stays at the top", () => {
+    expect(nextToWarm({ layout: "grid", grid: top }, 40, index => index !== 39)).toBeNull();
   });
 
   test("waits out a flight", () => {

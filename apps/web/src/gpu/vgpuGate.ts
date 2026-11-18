@@ -1,15 +1,7 @@
 import { webGpuSupported } from "./host";
 import type * as Library from "./vgpuLibrary";
 
-/**
- * What `import … from "vgpu"` resolves to (`vite/vgpuGatePlugin.ts`): the
- * library is fetched only where WebGPU exists, and `init` waits for it.
- * Not a top-level await: that would split shared code out of the app's entry.
- */
 let library: typeof Library | undefined;
-const loading = webGpuSupported() ? import("./vgpuLibrary").then(loaded => (library = loaded)) : undefined;
-// A failed fetch is reported by `init`, not as an unhandled rejection.
-loading?.catch(() => {});
 
 function needsWebGpu(): never {
   throw new Error("vgpu needs WebGPU, which this browser does not have.");
@@ -23,8 +15,9 @@ function gated<Name extends Exclude<keyof typeof Library, "init">>(name: Name): 
 }
 
 export const init: typeof Library.init = async (...args) => {
-  if (!loading) needsWebGpu();
-  return (await loading).init(...args);
+  if (!webGpuSupported()) needsWebGpu();
+  library ??= await import("./vgpuLibrary");
+  return library.init(...args);
 };
 export const clock = gated("clock");
 export const effect = gated("effect");
