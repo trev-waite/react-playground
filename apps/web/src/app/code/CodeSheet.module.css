@@ -13,6 +13,11 @@
   --code-token-function: var(--shell-ink);
   --code-token-parameter: var(--shell-ink);
   --sheet-travel: var(--space-4) 0;
+  /* Copy feedback swaps icons and labels as the components' own icon swaps do. */
+  --icon-swap-dur: 250ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
 
   position: fixed;
   inset: var(--space-2) calc(var(--space-2) + var(--safe-right)) var(--space-2) auto;
@@ -88,8 +93,8 @@
   }
 }
 
-/* Phones: a sheet from the bottom edge, clear of the home indicator. */
-@media (max-width: 719px) {
+/* Phones, upright or on their side: a sheet from the bottom edge, clear of the home indicator and the notch. */
+@media (max-width: 719px), (pointer: coarse) and (max-height: 500px) {
   .sheet {
     --sheet-travel: 0 calc(100% + var(--space-2));
 
@@ -97,6 +102,13 @@
       calc(var(--space-1) + var(--safe-left));
     width: auto;
     height: min(85dvh, calc(100dvh - var(--space-7) - var(--safe-top)));
+  }
+}
+
+/* A phone on its side has little height to spare, so the sheet takes nearly all of it and the code keeps most. */
+@media (pointer: coarse) and (max-height: 500px) {
+  .sheet {
+    height: calc(100dvh - var(--space-2) - var(--safe-top));
   }
 }
 
@@ -149,7 +161,7 @@
   color: var(--shell-ink-muted);
 }
 
-/* The file's Copy is its icon alone, in the code box's top-right corner: a check once copied, an alert if it failed. Its label still speaks. */
+/* The file's Copy is its icon alone, in the code box's top-right corner: a check once copied, an alert if it failed. Its feedback still speaks. */
 .copy {
   position: relative;
   width: var(--chrome-control);
@@ -158,7 +170,7 @@
   color: var(--shell-ink-muted);
 }
 
-.copy .copyLabel {
+.srOnly {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -167,17 +179,35 @@
   white-space: nowrap;
 }
 
+.labels {
+  display: grid;
+  place-items: center;
+}
+
+.labelRow {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transition:
+    opacity var(--icon-swap-dur) var(--icon-swap-ease),
+    filter var(--icon-swap-dur) var(--icon-swap-ease);
+}
+
+.labelRow[data-shown] {
+  opacity: 1;
+  filter: none;
+}
+
 .copy[data-state="copied"] {
   color: var(--shell-ink);
 }
 
 /* The copy icon cross-fades to the check or the alert and back, as the components' own icon swaps do: a soft blur and a grow from a quarter size. */
 .iconSwap {
-  --icon-swap-dur: 250ms;
-  --icon-swap-blur: 2px;
-  --icon-swap-start-scale: 0.25;
-  --icon-swap-ease: ease-in-out;
-
   display: inline-grid;
   place-items: center;
   width: 16px;
@@ -207,7 +237,7 @@
 
 .prompt {
   min-width: 148px;
-  padding: 0 var(--space-2) 0 14px;
+  padding: 0 var(--space-2);
   background: var(--shell-ink);
   color: var(--card-surface);
 }
@@ -248,18 +278,18 @@
   border-bottom: 1px solid var(--shell-border-subtle);
 }
 
+/* A long name at large text on a phone wraps, inside the name if it must, rather than lose its end. */
 .fileName,
 .barNote {
   flex: 1;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
+  padding-block: var(--space-1);
   color: var(--shell-ink);
   font-size: var(--text-body);
   font-weight: var(--weight-medium);
   line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .barNote {
@@ -414,7 +444,7 @@
   }
 }
 
-/* Phones: the prompt button spans the sheet, under the thumb. */
+/* Upright phones: the prompt button spans the sheet, under the thumb. */
 @media (max-width: 719px) {
   .prompt {
     flex: 1;
@@ -459,8 +489,9 @@
     transition: none;
   }
 
-  /* Icons still cross-fade, without the blur and grow. */
-  .swapIcon {
+  /* Icons and labels still cross-fade, without the blur and grow. */
+  .swapIcon,
+  .labelRow {
     filter: none;
     transform: none;
     transition: opacity var(--reduced-motion-duration) var(--reduced-motion-easing);

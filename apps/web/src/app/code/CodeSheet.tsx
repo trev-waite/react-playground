@@ -177,16 +177,16 @@ function Files({ card }: { card: PromptCard }) {
                 onClick={() => setSelected(index)}
                 onKeyDown={event => onTabKey(event, index)}
               >
-                {each.name}
+                <FileName name={each.name} />
               </button>
             ))}
           </div>
         ) : (
           <p id={`${tabsId}-0`} className={styles.fileName}>
-            {file.name}
+            <FileName name={file.name} />
           </p>
         )}
-        <CopyButton key={file.name} text={() => file.code} label="Copy code" className={styles.copy} title="Copy code" />
+        <CopyButton key={file.name} text={() => file.code} name="Copy code" className={styles.copy} title="Copy code" />
       </div>
       <div
         key={file.name}
@@ -239,13 +239,16 @@ function HighlightedLines({ file }: { file: SourceFile }) {
 
 type CopyButtonProps = {
   text: () => string;
-  /** What the button reads. */
-  label: string;
-  /** What it is called to assistive tech, when its label is short. Copy feedback still speaks. */
-  name?: string;
+  /** What the button reads beside its icon, if anything: an icon-only button has none. */
+  label?: string;
+  /** What it is called to assistive tech. Copy feedback is announced on its own. */
+  name: string;
   className?: string;
   title?: string;
 };
+
+const FEEDBACK = { idle: "", copied: "Copied", failed: "Copy failed" } as const;
+const ICONS = { idle: <CopyIcon />, copied: <CheckIcon />, failed: <FailIcon /> } as const;
 
 function CopyButton({ text, label, name, className, title }: CopyButtonProps) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
@@ -266,21 +269,43 @@ function CopyButton({ text, label, name, className, title }: CopyButtonProps) {
 
   return (
     <button type="button" className={className} data-state={state} title={title} aria-label={name} onClick={copy}>
-      <span className={styles.iconSwap} data-state={state} aria-hidden="true">
-        <span className={styles.swapIcon} data-icon="idle">
-          <CopyIcon />
+      {label ? (
+        // Each state's icon and words cross-fade as one, in one shared cell: the button holds the widest at any
+        // text size, so feedback never resizes it, and whichever shows sits centered.
+        <span className={styles.labels} aria-hidden="true">
+          {(["idle", "copied", "failed"] as const).map(each => (
+            <span key={each} className={styles.labelRow} data-shown={each === state || undefined}>
+              {ICONS[each]}
+              {each === "idle" ? label : FEEDBACK[each]}
+            </span>
+          ))}
         </span>
-        <span className={styles.swapIcon} data-icon="copied">
-          <CheckIcon />
+      ) : (
+        <span className={styles.iconSwap} data-state={state} aria-hidden="true">
+          {(["idle", "copied", "failed"] as const).map(each => (
+            <span key={each} className={styles.swapIcon} data-icon={each}>
+              {ICONS[each]}
+            </span>
+          ))}
         </span>
-        <span className={styles.swapIcon} data-icon="failed">
-          <FailIcon />
-        </span>
-      </span>
-      <span className={styles.copyLabel} aria-live="polite">
-        {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : label}
+      )}
+      <span className={styles.srOnly} aria-live="polite">
+        {FEEDBACK[state]}
       </span>
     </button>
+  );
+}
+
+/** A file name that, if it must wrap, breaks before its extension first. */
+function FileName({ name }: { name: string }) {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return name;
+  return (
+    <>
+      {name.slice(0, dot)}
+      <wbr />
+      {name.slice(dot)}
+    </>
   );
 }
 

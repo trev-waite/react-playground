@@ -26,6 +26,10 @@ export function CodeError({ failure, onRetry, onDismiss }: CodeErrorProps) {
       <p className={styles.message} role="alert">
         {spent ? "Still couldn’t load the code." : "Couldn’t load the code. Check your connection."}
       </p>
+      {/* The message reads the same after each failed try, so the try's own result is announced here. */}
+      <span className={styles.srOnly} aria-live="polite">
+        {failure.retries > 0 && !failure.trying ? `Try ${failure.retries} of ${MAX_RETRIES} didn’t load the code.` : ""}
+      </span>
       <div className={styles.actions}>
         <button
           ref={actionRef}
