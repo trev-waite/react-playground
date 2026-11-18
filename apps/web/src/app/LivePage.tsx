@@ -7,7 +7,8 @@ import { CardDeck, type DeckView } from "./deck/CardDeck";
 import { BackPill, ChromeBar, DeckChromeSlot, DeckPager, DeckViewButton, ThemeButton } from "./deck/DeckChrome";
 import { RefreshCatalogButton } from "./RefreshCatalogButton";
 import { useTheme } from "./theme/theme";
-import { LazyCodeSheet, prepareCode } from "./code/LazyCodeSheet";
+import { prepareCode } from "./code/cardSource";
+import { CodeSheet } from "./code/CodeSheet";
 import styles from "./LivePage.module.css";
 
 /**
@@ -136,7 +137,7 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
         }}
       />
       {codeCard ? (
-        <LazyCodeSheet card={codeCard} open={codeOpen} onClose={() => setCode(current => current && { ...current, open: false })} />
+        <CodeSheet card={codeCard} open={codeOpen} onClose={() => setCode(current => current && { ...current, open: false })} />
       ) : null}
     </div>
   );

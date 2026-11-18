@@ -1,62 +1,71 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin } from "vite";
-import type { SourceFile } from "../src/lib/types.ts";
+import { codePath } from "../src/lib/liveRoutes.ts";
+import { codeMarkdown, type CodeCard } from "./codeMarkdown.ts";
+import { readLiveCards } from "./liveCards.ts";
+import { resolveSiteUrl } from "./liveRoutesPlugin.ts";
+import { oneFileSources } from "./oneFile.ts";
 
-const SOURCE_QUERY = "?source";
-const LOCAL_IMPORT = /(?:\bfrom\s+|\bimport\s*\(?\s*)["'](\.\/[^"']+)["']/g;
-const EXTENSIONS = ["", ".tsx", ".ts"];
+/** Every card, or just the one `slug` names, with each component as one file to copy, read from source. */
+export async function readCodeCards(liveDir: string, slug?: string): Promise<CodeCard[]> {
+  const cards = (await readLiveCards(liveDir)).filter(card => slug === undefined || card.slug === slug);
+  return Promise.all(
+    cards.map(async card => ({
+      slug: card.slug,
+      title: card.title,
+      description: card.description,
+      members: await Promise.all(
+        card.members.map(async member => ({ ...member, files: await oneFileSources(path.join(liveDir, member.slug), liveDir) })),
+      ),
+    })),
+  );
+}
 
-/** The file a relative import names, if it is in the folder. */
-function resolveLocal(folder: string, specifier: string): string | null {
-  for (const extension of EXTENSIONS) {
-    const file = path.join(folder, specifier + extension);
-    if (path.dirname(file) === folder && existsSync(file) && !file.endsWith("/preview.tsx")) return file;
+/** A card's published code: the files for the code sheet, and the Markdown a person or an agent downloads. */
+export function codeFiles(cards: readonly CodeCard[], siteUrl: string | null): Map<string, string> {
+  const files = new Map<string, string>();
+  for (const card of cards) {
+    files.set(codePath(card.slug, "json"), JSON.stringify(card.members.flatMap(member => member.files)));
+    files.set(codePath(card.slug, "md"), codeMarkdown(card, siteUrl));
   }
-  return null;
+  return files;
 }
 
-/**
- * A Live component as someone would copy it: `<Folder>.tsx` and every file in
- * its folder that it imports, directly or not. The preview that stages it,
- * its tests, and its staging styles stay out.
- */
-export async function componentSources(folder: string): Promise<SourceFile[]> {
-  const main = path.join(folder, `${path.basename(folder)}.tsx`);
-  if (!existsSync(main)) return [];
-  const files: string[] = [];
-  const codes = new Map<string, string>();
-  const visit = async (file: string) => {
-    if (files.includes(file)) return;
-    files.push(file);
-    const code = await readFile(file, "utf8");
-    codes.set(file, code);
-    for (const [, specifier] of code.matchAll(LOCAL_IMPORT)) {
-      const local = resolveLocal(folder, specifier!);
-      if (local) await visit(local);
-    }
-  };
-  await visit(main);
-  const rank = (file: string) => (file === main ? 0 : file.endsWith(".css") ? 2 : 1);
-  return files
-    .toSorted((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-    .map(file => ({ name: path.basename(file), code: codes.get(file)! }));
-}
+const CONTENT_TYPES = { json: "application/json", md: "text/markdown" } as const;
 
 /**
- * Serves `preview.tsx?source` as the component's source files, so a card can
- * show its code. Each card's source is its own chunk, fetched only when asked.
+ * Publishes each card's code at `codePath`: written into the build, and served
+ * fresh by the dev server. Plain files, not chunks, so a failed fetch can be
+ * tried again: a browser keeps a failed module import for the page's life.
  */
-export function liveSourcePlugin(): Plugin {
+export function liveSourcePlugin(env: Record<string, string | undefined>): Plugin {
+  const siteUrl = resolveSiteUrl(env);
+  let liveDir = "";
   return {
     name: "live-source",
-    async load(id) {
-      if (!id.endsWith(`/preview.tsx${SOURCE_QUERY}`)) return;
-      const folder = path.dirname(id.slice(0, -SOURCE_QUERY.length));
-      const files = await componentSources(folder);
-      for (const file of files) this.addWatchFile(path.join(folder, file.name));
-      return `export default ${JSON.stringify(files)};\n`;
+    configResolved(config) {
+      liveDir = path.join(config.root, "src/live");
+    },
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+        const [, slug, format] = pathname.match(/^\/code\/(.+)\.(json|md)$/) ?? [];
+        if (!slug || (format !== "json" && format !== "md")) return next();
+        readCodeCards(liveDir, slug).then(
+          cards => {
+            const body = codeFiles(cards, siteUrl).get(pathname);
+            response.statusCode = body === undefined ? 404 : 200;
+            response.setHeader("Content-Type", body === undefined ? "text/plain; charset=utf-8" : `${CONTENT_TYPES[format]}; charset=utf-8`);
+            response.end(body ?? "Not found");
+          },
+          error => next(error),
+        );
+      });
+    },
+    async generateBundle() {
+      for (const [file, source] of codeFiles(await readCodeCards(liveDir), siteUrl)) {
+        this.emitFile({ type: "asset", fileName: file.slice(1), source });
+      }
     },
   };
 }

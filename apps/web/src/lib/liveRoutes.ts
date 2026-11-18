@@ -20,6 +20,11 @@ export function livePath(slug: string | null): string {
   return slug ? `/${slug}` : "/";
 }
 
+/** Where a card's source is published: `json` for the code sheet, `md` for a person or an agent to download. */
+export function codePath(slug: string, format: "json" | "md"): string {
+  return `/code/${slug}.${format}`;
+}
+
 export function liveSlugFromPath(pathname: string): string | null {
   return pathname.replace(/^\/+|\/+$/g, "") || null;
 }

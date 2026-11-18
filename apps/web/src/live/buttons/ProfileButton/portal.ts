@@ -27,7 +27,10 @@ export type Geometry = RoomLayout & {
   /** Avatar center, in stage px. */
   avatar: Point;
   avatarRadius: number;
-  /** The portal's radius once open: far enough to cover every corner of the stage. */
+  /**
+   * The portal's radius once open: far enough to cover every corner of the stage. Whole
+   * pixels, so the portal's box sits on the avatar's pixel grid and a browser rounds both alike.
+   */
   reach: number;
 };
 
@@ -114,13 +117,14 @@ export function roomLayout(stage: Size): RoomLayout {
 }
 
 export function geometry(stage: Size, avatar: Point, avatarRadius: number): Geometry {
-  const reach =
+  const reach = Math.ceil(
     Math.max(
       Math.hypot(avatar.x, avatar.y),
       Math.hypot(stage.width - avatar.x, avatar.y),
       Math.hypot(avatar.x, stage.height - avatar.y),
       Math.hypot(stage.width - avatar.x, stage.height - avatar.y),
-    ) + 2;
+    ) + 2,
+  );
   return { ...roomLayout(stage), stage, avatar, avatarRadius, reach };
 }
 

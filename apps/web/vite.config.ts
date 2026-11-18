@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
       babel({ presets: [reactCompilerPreset()] }),
       liveCatalogPlugin(),
       previewMetaPlugin(),
-      liveSourcePlugin(),
+      liveSourcePlugin(env),
       previewPreloadPlugin(),
       themeTogglePlugin(env),
       liveRoutesPlugin(env),

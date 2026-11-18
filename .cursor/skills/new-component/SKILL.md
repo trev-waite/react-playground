@@ -14,9 +14,10 @@ A thin checklist. The detail lives in the skills and docs it links.
 - [ ] Straight in: write apps/web/src/live/<folder>/<Name>/<Name>.tsx and its preview.tsx (never `shells`)
 - [ ] As an idea: follow the `new-experiment` skill (and `gpu-idea` for shaders), then Make Live into apps/web/src/live/<folder>/<Name>/; after that, change the component in the idea and Update Live (below)
 - [ ] preview.tsx renders only <Name />; its `meta` sets the card's size, description, reset, and `surface` (below)
-- [ ] Write the `description` for a stranger: it is also the page's description and the text under a shared link
+- [ ] Write the `description` for a stranger: it is also the page's description, the text under a shared link, and the overview in the agent prompt, so say what it does and how it behaves
 - [ ] Pick a `size` and a place in live/order.ts where the grid still packs, and make it fit a phone page (below)
 - [ ] Grouping several components into one card? Add or update live/<folder>/family.ts
+- [ ] Keep its code in its folder, import helpers by name (not `* as`), and import other Live components as `@/live/<folder>/<Name>/<Name>`: the published code inlines all of it into one `<Name>.tsx`, and anything else (`@/gpu`) is named but left out (below)
 - [ ] Logic worth trusting (math, layout, timing) gets a test beside the component
 - [ ] Look at it in every state a visitor can reach (below)
 - [ ] Refresh the link-preview images (below): the card's own, and the site's
@@ -83,6 +84,10 @@ Each swatch already stands 1.2:1 apart from the site canvas and carries its foot
 Nothing registers a route. A card's URL is its Live slug: `/<folder>/<Name>` for a lone component, `/<folder>` for a family card, and each family member's `/<folder>/<Name>` opens the family card. Renaming or moving a component changes its URL; the old one becomes a 404.
 
 The build reads `meta` without running the component and writes each page's title, description, and link preview from it (`apps/web/vite/routeHead.ts`). So `meta` must stay a plain literal, and the `description` is worth a sentence that makes sense with no card beside it.
+
+## Its code and agent prompt
+
+Nothing to write: the build turns each component into one `<Name>.tsx` (`vite/oneFile.ts`) and publishes it at `/code/<slug>.md` (and `.json` for the Code sheet), and the sheet's Copy prompt button hands that link and the card's `description` to a reader's coding agent. `bun test apps/web/vite/oneFile.test.ts` type-checks every component's one file; if yours fails, it names the clash or the import it could not inline. Open the Code sheet on the card's page, press Copy prompt, and read `http://localhost:3000/code/<slug>.md`: the component should be one file, and anything it needs but leaves out should be named. `check:deploy` fails a build missing a card's code.
 
 ## Look at it
 

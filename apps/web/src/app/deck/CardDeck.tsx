@@ -159,6 +159,16 @@ function useViewport(
   return viewport;
 }
 
+/**
+ * The page column's height. Pages are a small viewport tall, but once Safari's
+ * toolbars collapse the document shows a large viewport, and the last page could
+ * no longer scroll up to its place, so a large viewport is kept below its top.
+ */
+function pagesHeight(count: number, pageHeight: number, scrollsDocument: boolean): number | string {
+  const column = count * pageHeight;
+  return scrollsDocument ? `max(${column}px, calc(${column - pageHeight}px + 100lvh))` : column;
+}
+
 /** The element whose scroll the reader sees: the document on phones, the deck's scroller elsewhere. */
 function scrollHost(scrollsDocument: boolean, scroller: HTMLElement | null): HTMLElement | null {
   return scrollsDocument ? document.documentElement : scroller;
@@ -615,7 +625,7 @@ export function CardDeck({
       >
         <div
           className={styles.content}
-          style={{ height: layout === "pages" ? cards.length * viewport.height : grid.height }}
+          style={{ height: layout === "pages" ? pagesHeight(cards.length, viewport.height, scrollsDocument) : grid.height }}
         >
           {layout === "pages"
             ? cards.map(card => (
