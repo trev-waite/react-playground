@@ -108,7 +108,7 @@
 /* A phone on its side has little height to spare, so the sheet takes nearly all of it and the code keeps most. */
 @media (pointer: coarse) and (max-height: 500px) {
   .sheet {
-    height: calc(100dvh - var(--space-2) - var(--safe-top));
+    height: calc(100dvh - var(--space-2) - var(--safe-top) - var(--safe-bottom));
   }
 }
 
@@ -200,6 +200,16 @@
 .labelRow[data-shown] {
   opacity: 1;
   filter: none;
+}
+
+/* The row's icon grows in from a quarter size, as the icon-only swap does. */
+.labelRow svg {
+  transform: scale(var(--icon-swap-start-scale));
+  transition: transform var(--icon-swap-dur) var(--icon-swap-ease);
+}
+
+.labelRow[data-shown] svg {
+  transform: none;
 }
 
 .copy[data-state="copied"] {
@@ -444,8 +454,8 @@
   }
 }
 
-/* Upright phones: the prompt button spans the sheet, under the thumb. */
-@media (max-width: 719px) {
+/* Upright phones: the prompt button spans the sheet, under the thumb. On its side it keeps its own size. */
+@media (max-width: 719px) and (orientation: portrait) {
   .prompt {
     flex: 1;
   }
@@ -491,7 +501,8 @@
 
   /* Icons and labels still cross-fade, without the blur and grow. */
   .swapIcon,
-  .labelRow {
+  .labelRow,
+  .labelRow svg {
     filter: none;
     transform: none;
     transition: opacity var(--reduced-motion-duration) var(--reduced-motion-easing);

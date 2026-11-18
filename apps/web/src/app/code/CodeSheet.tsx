@@ -61,18 +61,27 @@ export function CodeSheet({ card, attempt, open, onDismiss, onClose }: CodeSheet
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    // A click on the backdrop lands on the dialog itself, outside its box. Escape and the close button do the same by keyboard.
-    const dismiss = (event: MouseEvent) => {
-      if (event.target !== dialog) return;
+    // A click on the backdrop lands on the dialog itself, outside its box. It closes the sheet only when the press began
+    // there too: a selection dragged out of the code and let go outside it must not. Escape and the close button do the same by keyboard.
+    const onBackdrop = (event: MouseEvent) => {
+      if (event.target !== dialog) return false;
       const box = dialog.getBoundingClientRect();
-      const inside =
-        event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
-      if (!inside) dismissSheet();
+      return !(event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom);
+    };
+    const pressed = { onBackdrop: false };
+    const press = (event: PointerEvent) => {
+      pressed.onBackdrop = onBackdrop(event);
+    };
+    const dismiss = (event: MouseEvent) => {
+      if (pressed.onBackdrop && onBackdrop(event)) dismissSheet();
+      pressed.onBackdrop = false;
     };
     const release = holdPageUnder(dialog);
+    dialog.addEventListener("pointerdown", press);
     dialog.addEventListener("click", dismiss);
     return () => {
       release();
+      dialog.removeEventListener("pointerdown", press);
       dialog.removeEventListener("click", dismiss);
     };
   }, []);

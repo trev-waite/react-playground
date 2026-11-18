@@ -38,9 +38,13 @@ export function loadSource(card: SourceCard): Promise<SourceFile[]> {
   return cardSource(card);
 }
 
-/** Fetches the card's files and the highlighter before the sheet opens, so it opens on finished code. */
+/**
+ * Fetches the card's files and the highlighter before the sheet opens, so it
+ * opens on finished code. A fetch that already failed stays failed: only a
+ * press of Code or Try again asks again, so hovering never spends a try.
+ */
 export function prepareCode(card: SourceCard): void {
-  loadSource(card).catch(() => {});
+  cardSource(card).catch(() => {});
   warmHighlighter();
 }
 
