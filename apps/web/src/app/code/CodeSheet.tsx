@@ -17,10 +17,8 @@ import { holdPageUnder } from "./sheetTouch";
 import type { Run } from "./tokenize";
 import styles from "./CodeSheet.module.css";
 
-export type CodeSheetCard = PromptCard;
-
 type CodeSheetProps = {
-  card: CodeSheetCard;
+  card: PromptCard;
   /** The press this sheet shows, so a new one after a failed fetch starts the sheet afresh. */
   attempt: number;
   open: boolean;
@@ -98,7 +96,7 @@ export function CodeSheet({ card, attempt, open, onClose }: CodeSheetProps) {
   );
 }
 
-function Files({ card }: { card: CodeSheetCard }) {
+function Files({ card }: { card: PromptCard }) {
   const files = use(cardSource(card));
   const [selected, setSelected] = useState(0);
   const tabsId = useId();
