@@ -117,7 +117,10 @@ function baseName(file: string): string {
 }
 
 /** `.class` and `@keyframes` names of a CSS module, scoped under `prefix` as the build would hash them. */
-function scopeCss(css: string, prefix: string): { css: string; classes: Map<string, string> } {
+export function scopeCss(css: string, prefix: string): { css: string; classes: Map<string, string> } {
+  if (/:global|:local|\bcomposes\s*:/.test(css)) {
+    throw new Error(`${prefix}: :global, :local, and composes cannot be inlined into one file yet`);
+  }
   const classes = new Map<string, string>();
   const keyframes = new Map<string, string>();
   const protect = /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/g;

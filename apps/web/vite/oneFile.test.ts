@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import ts from "typescript";
 import { readLiveCards } from "./liveCards.ts";
-import { oneFileSources } from "./oneFile.ts";
+import { oneFileSources, scopeCss } from "./oneFile.ts";
 
 const web = path.join(import.meta.dir, "..");
 const live = path.join(web, "src/live");
@@ -31,6 +31,14 @@ describe("oneFileSources", () => {
     for (const name of named) expect(name).toStartWith("relay-dots-");
   });
 
+  test("scopes class selectors but not numbers, strings, or URLs, and refuses CSS-module features it cannot inline", () => {
+    const { css, classes } = scopeCss('.a.b > .c { margin: 0.5rem; background: url(./x.png); content: ".d"; }', "box");
+    expect(css).toBe('.box-a.box-b > .box-c { margin: 0.5rem; background: url(./x.png); content: ".d"; }');
+    expect([...classes.keys()]).toEqual(["a", "b", "c"]);
+    expect(() => scopeCss(":global(.a) { color: red; }", "box")).toThrow(":global");
+    expect(() => scopeCss(".a { composes: b; }", "box")).toThrow("composes");
+  });
+
   test("keeps a Web Worker as a file of its own, which the component still starts by URL", async () => {
     const files = await oneFileSources(path.join(live, "backgrounds/Topography"), live);
     expect(files.map(file => file.name)).toEqual(["Topography.tsx", "stillWorker.ts"]);
@@ -57,6 +65,8 @@ describe("oneFileSources", () => {
     const readFile = host.readFile;
     host.readFile = file => virtual.get(file) ?? readFile(file);
     host.fileExists = file => virtual.has(file) || ts.sys.fileExists(file);
+    const folders = new Set([...virtual.keys()].flatMap(file => file.split(path.sep).map((_, index, parts) => parts.slice(0, index).join(path.sep))));
+    host.directoryExists = folder => folders.has(folder) || ts.sys.directoryExists(folder);
     const program = ts.createProgram({ rootNames: [...virtual.keys(), path.join(web, "src/vite-env.d.ts")], options: config.options, host });
     const problems = ts
       .getPreEmitDiagnostics(program)
