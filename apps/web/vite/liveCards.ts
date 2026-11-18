@@ -6,7 +6,7 @@ import { cardOrder } from "../src/live/order.ts";
 import { previewMeta } from "./previewMetaPlugin.ts";
 
 /** A card as the build knows it: its face, and the slugs of the components on it. */
-export type BuildCard = CardFace & { members: { slug: string }[] };
+export type BuildCard = CardFace & { members: { slug: string; title: string }[] };
 
 /**
  * The Live catalog read from source, without running a component: the same
@@ -29,6 +29,6 @@ export async function readLiveCards(liveDir: string): Promise<BuildCard[]> {
   }
   return planCards({ entries: catalogEntries(Object.keys(metas), metas), families, order: cardOrder }).map(plan => ({
     ...cardFace(plan),
-    members: plan.entries.map(entry => ({ slug: entry.slug })),
+    members: plan.entries.map(entry => ({ slug: entry.slug, title: entry.title })),
   }));
 }

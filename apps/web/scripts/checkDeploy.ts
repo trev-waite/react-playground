@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { liveRoutes, type LiveRoute, type RouteCard } from "../src/lib/liveRoutes.ts";
+import { codePath, liveRoutes, type LiveRoute, type RouteCard } from "../src/lib/liveRoutes.ts";
 import { readLiveCards } from "../vite/liveCards.ts";
 import { routePageFile } from "../vite/liveRoutesPlugin.ts";
 import { cardImagePath, renderHead, routeHead, unescapeHtml } from "../vite/routeHead.ts";
@@ -20,6 +20,11 @@ export const PUBLIC_FILES = [
 
 /** Written by liveRoutesPlugin when the build knows its origin. */
 const GENERATED_FILES = ["robots.txt", "sitemap.xml"];
+
+/** Each card's published source, written by liveSourcePlugin. */
+function codeFiles(cards: readonly RouteCard[]): string[] {
+  return cards.flatMap(card => [codePath(card.slug, "json"), codePath(card.slug, "md")].map(file => file.slice(1)));
+}
 
 /** Vite's content-hashed scripts and styles. */
 const HASHED_ASSET = /^assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/;
@@ -118,6 +123,7 @@ export async function deployProblems(dist: string, publicDir: string, cards: rea
   const pages = new Map(expected.routes.map(route => [routePageFile(route), route]));
   /** public/ may also hold one link-preview image per card. */
   const shipped = [...PUBLIC_FILES, ...cards.map(card => cardImagePath(card.slug))];
+  const code = codeFiles(cards);
   if (cards.length === 0) problems.push("the catalog defines no cards");
 
   const { files: publicFiles, irregular: publicIrregular } = await listFiles(publicDir);
@@ -136,6 +142,9 @@ export async function deployProblems(dist: string, publicDir: string, cards: rea
   for (const [file, route] of pages) {
     if (distFiles.includes(file)) continue;
     problems.push(route.card ? `dist has no page for ${route.path}, so it would be a 404` : `dist/${file} is missing`);
+  }
+  for (const file of code) {
+    if (!distFiles.includes(file)) problems.push(`dist/${file} is missing, so that card's Code button and agent prompt would fail`);
   }
   if (distFiles.includes("index.html") && !expected.isApp) {
     problems.push("dist/index.html is not the app: it needs the #root element and a module script the build emitted");
@@ -163,7 +172,7 @@ export async function deployProblems(dist: string, publicDir: string, cards: rea
       continue;
     }
     const route = pages.get(file);
-    if (!route && !shipped.includes(file) && !GENERATED_FILES.includes(file) && !HASHED_ASSET.test(file)) {
+    if (!route && !shipped.includes(file) && !code.includes(file) && !GENERATED_FILES.includes(file) && !HASHED_ASSET.test(file)) {
       problems.push(`dist/${file} is not on the allowlist`);
       continue;
     }
@@ -173,7 +182,7 @@ export async function deployProblems(dist: string, publicDir: string, cards: rea
     if ((await stat(absolute)).size > MAX_FILE_BYTES) {
       problems.push(`dist/${file} is larger than ${MAX_FILE_BYTES} bytes`);
     }
-    if (/\.(?:js|css|html)$/.test(file)) {
+    if (/\.(?:js|css|html|json|md)$/.test(file)) {
       const text = await readFile(absolute, "utf8");
       for (const [pattern, what] of LEAKS) {
         if (pattern.test(text)) problems.push(`dist/${file} contains ${what}`);

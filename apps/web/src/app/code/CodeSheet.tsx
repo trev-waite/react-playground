@@ -3,23 +3,29 @@ import {
   Suspense,
   use,
   useEffect,
+  useEffectEvent,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
 import type { SourceFile } from "../../lib/types";
+import { agentPrompt, type PromptCard } from "./agentPrompt";
 import { cardSource, fileTokens } from "./cardSource";
 import { holdPageUnder } from "./sheetTouch";
 import type { Run } from "./tokenize";
 import styles from "./CodeSheet.module.css";
 
-export type CodeSheetCard = { slug: string; title: string; members: readonly { slug: string }[] };
-
 type CodeSheetProps = {
-  card: CodeSheetCard;
+  card: PromptCard;
+  /** The press this sheet shows, so a new one after a failed fetch starts the sheet afresh. */
+  attempt: number;
   open: boolean;
+  /** The reader is closing the sheet (close button, backdrop, or Escape), called at once, before the dialog's queued close event. */
+  onDismiss: () => void;
+  /** The dialog has closed, by the reader or because the code failed. */
   onClose: () => void;
 };
 
@@ -28,64 +34,124 @@ const COPIED_MS = 1600;
 
 /**
  * A card's source in a modal sheet: one tab per file, a copy button, and the
- * code. Plain text shows at once and takes its colors when the highlighter
- * has loaded, so nothing moves.
+ * code, plus a prompt that hands the component to the reader's coding agent.
+ * Plain text shows at once and takes its colors when the highlighter has
+ * loaded, so nothing moves.
  */
-export default function CodeSheet({ card, open, onClose }: CodeSheetProps) {
+export function CodeSheet({ card, attempt, open, onDismiss, onClose }: CodeSheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // The sheet itself takes focus: a control focused on open shows a ring a touch never asked for.
+      dialog.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
+
+  const dismissSheet = useEffectEvent(() => {
+    onDismiss();
+    ref.current?.close();
+  });
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    // A click on the backdrop lands on the dialog itself, outside its box. Escape and the close button do the same by keyboard.
-    const dismiss = (event: MouseEvent) => {
-      if (event.target !== dialog) return;
+    // A click on the backdrop lands on the dialog itself, outside its box. It closes the sheet only when the press began
+    // there too: a selection dragged out of the code and let go outside it must not. Escape and the close button do the same by keyboard.
+    const onBackdrop = (event: MouseEvent) => {
+      if (event.target !== dialog) return false;
       const box = dialog.getBoundingClientRect();
-      const inside =
-        event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
-      if (!inside) dialog.close();
+      return !(event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom);
+    };
+    const pressed = { onBackdrop: false };
+    const press = (event: PointerEvent) => {
+      pressed.onBackdrop = onBackdrop(event);
+    };
+    const dismiss = (event: MouseEvent) => {
+      if (pressed.onBackdrop && onBackdrop(event)) dismissSheet();
+      pressed.onBackdrop = false;
     };
     const release = holdPageUnder(dialog);
+    dialog.addEventListener("pointerdown", press);
     dialog.addEventListener("click", dismiss);
     return () => {
       release();
+      dialog.removeEventListener("pointerdown", press);
       dialog.removeEventListener("click", dismiss);
     };
   }, []);
 
   return (
-    <dialog ref={ref} className={styles.sheet} aria-labelledby={titleId} onClose={onClose}>
+    <dialog ref={ref} className={styles.sheet} tabIndex={-1} aria-labelledby={titleId} onCancel={onDismiss} onClose={onClose}>
       <header className={styles.header}>
         <h2 id={titleId} className={styles.title}>
           {card.title}
         </h2>
-        <button type="button" className={styles.close} aria-label="Close code" onClick={() => ref.current?.close()}>
+        <button
+          type="button"
+          className={styles.close}
+          aria-label="Close code"
+          onClick={() => {
+            onDismiss();
+            ref.current?.close();
+          }}
+        >
           <CloseIcon />
         </button>
       </header>
-      <SourceBoundary key={card.slug}>
+      <SourceBoundary key={`${card.slug}:${attempt}`}>
         <Suspense fallback={<Loading />}>
           <Files card={card} />
         </Suspense>
       </SourceBoundary>
+      <footer className={styles.footer}>
+        <CopyButton
+          text={() => agentPrompt(card, window.location.origin)}
+          label="Prompt"
+          name="Copy prompt"
+          className={styles.prompt}
+          title="Copy a prompt for your coding agent"
+        />
+      </footer>
     </dialog>
   );
 }
 
-function Files({ card }: { card: CodeSheetCard }) {
+function Files({ card }: { card: PromptCard }) {
   const files = use(cardSource(card));
   const [selected, setSelected] = useState(0);
   const tabsId = useId();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const file = files[selected];
+  const tabbed = files.length > 1;
+
+  // The row fades only toward files still out of view, so the last tab reads in full once it is reached.
+  useLayoutEffect(() => {
+    const tabs = tabsRef.current;
+    if (!tabs) return;
+    const update = () => {
+      tabs.toggleAttribute("data-more-start", tabs.scrollLeft > 1);
+      tabs.toggleAttribute("data-more-end", tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 1);
+    };
+    update();
+    tabs.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(tabs);
+    return () => {
+      tabs.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [tabbed]);
+
+  useEffect(() => {
+    tabRefs.current[selected]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selected]);
 
   if (!file) return <p className={styles.message}>This component has no source to show.</p>;
 
@@ -100,35 +166,42 @@ function Files({ card }: { card: CodeSheetCard }) {
   }
 
   return (
-    <>
-      <div className={styles.toolbar}>
-        <div className={styles.tabs} role="tablist" aria-label="Files" data-scrolls>
-          {files.map((each, index) => (
-            <button
-              key={each.name}
-              ref={element => {
-                tabRefs.current[index] = element;
-              }}
-              type="button"
-              role="tab"
-              id={`${tabsId}-${index}`}
-              className={styles.tab}
-              aria-selected={index === selected}
-              aria-controls={`${tabsId}-panel`}
-              tabIndex={index === selected ? 0 : -1}
-              onClick={() => setSelected(index)}
-              onKeyDown={event => onTabKey(event, index)}
-            >
-              {each.name}
-            </button>
-          ))}
-        </div>
-        <CopyButton key={file.name} code={file.code} />
+    <div className={styles.panel}>
+      <div className={styles.bar}>
+        {tabbed ? (
+          <div ref={tabsRef} className={styles.tabs} role="tablist" aria-label="Files" data-scrolls>
+            {files.map((each, index) => (
+              <button
+                key={each.name}
+                ref={element => {
+                  tabRefs.current[index] = element;
+                }}
+                type="button"
+                role="tab"
+                id={`${tabsId}-${index}`}
+                className={styles.tab}
+                aria-selected={index === selected}
+                aria-controls={`${tabsId}-panel`}
+                tabIndex={index === selected ? 0 : -1}
+                onClick={() => setSelected(index)}
+                onKeyDown={event => onTabKey(event, index)}
+              >
+                <FileName name={each.name} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p id={`${tabsId}-0`} className={styles.fileName}>
+            <FileName name={file.name} />
+          </p>
+        )}
+        <CopyButton key={file.name} text={() => file.code} name="Copy code" className={styles.copy} title="Copy code" />
       </div>
       <div
+        key={file.name}
         id={`${tabsId}-panel`}
         className={styles.code}
-        role="tabpanel"
+        role={tabbed ? "tabpanel" : "region"}
         aria-labelledby={`${tabsId}-${selected}`}
         tabIndex={0}
         data-scrolls
@@ -139,7 +212,7 @@ function Files({ card }: { card: CodeSheetCard }) {
           </Suspense>
         </TokenBoundary>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -173,7 +246,20 @@ function HighlightedLines({ file }: { file: SourceFile }) {
   return <Code lines={use(fileTokens(file))} />;
 }
 
-function CopyButton({ code }: { code: string }) {
+type CopyButtonProps = {
+  text: () => string;
+  /** What the button reads beside its icon, if anything: an icon-only button has none. */
+  label?: string;
+  /** What it is called to assistive tech. Copy feedback is announced on its own. */
+  name: string;
+  className?: string;
+  title?: string;
+};
+
+const FEEDBACK = { idle: "", copied: "Copied", failed: "Copy failed" } as const;
+const ICONS = { idle: <CopyIcon />, copied: <CheckIcon />, failed: <FailIcon /> } as const;
+
+function CopyButton({ text, label, name, className, title }: CopyButtonProps) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -182,7 +268,7 @@ function CopyButton({ code }: { code: string }) {
   async function copy() {
     clearTimeout(timer.current);
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(text());
       setState("copied");
     } catch {
       setState("failed");
@@ -191,26 +277,64 @@ function CopyButton({ code }: { code: string }) {
   }
 
   return (
-    <button type="button" className={styles.copy} data-state={state} onClick={copy}>
-      {state === "copied" ? <CheckIcon /> : <CopyIcon />}
-      <span aria-live="polite">{state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : "Copy"}</span>
+    <button type="button" className={className} data-state={state} title={title} aria-label={name} onClick={copy}>
+      {label ? (
+        // Each state's icon and words cross-fade as one, in one shared cell: the button holds the widest at any
+        // text size, so feedback never resizes it, and whichever shows sits centered.
+        <span className={styles.labels} aria-hidden="true">
+          {(["idle", "copied", "failed"] as const).map(each => (
+            <span key={each} className={styles.labelRow} data-shown={each === state || undefined}>
+              {ICONS[each]}
+              {each === "idle" ? label : FEEDBACK[each]}
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className={styles.iconSwap} data-state={state} aria-hidden="true">
+          {(["idle", "copied", "failed"] as const).map(each => (
+            <span key={each} className={styles.swapIcon} data-icon={each}>
+              {ICONS[each]}
+            </span>
+          ))}
+        </span>
+      )}
+      <span className={styles.srOnly} aria-live="polite">
+        {FEEDBACK[state]}
+      </span>
     </button>
+  );
+}
+
+/** A file name that, if it must wrap, breaks before its extension first. */
+function FileName({ name }: { name: string }) {
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) return name;
+  return (
+    <>
+      {name.slice(0, dot)}
+      <wbr />
+      {name.slice(dot)}
+    </>
   );
 }
 
 function Loading() {
   return (
-    <div className={styles.loading} role="status" aria-label="Loading code">
-      {[72, 48, 88, 64, 40, 80, 56].map((width, index) => (
-        <span key={index} className={styles.skeleton} style={{ width: `${width}%` }} />
-      ))}
+    <div className={styles.panel} role="status" aria-label="Loading code">
+      <div className={styles.bar}>
+        <p className={styles.barNote}>Loading code…</p>
+      </div>
+      <div className={styles.loading}>
+        {[72, 48, 88, 64, 40, 80, 56].map((width, index) => (
+          <span key={index} className={styles.skeleton} style={{ width: `${width}%` }} />
+        ))}
+      </div>
     </div>
   );
 }
 
 type BoundaryState = { failed: boolean };
-
-/** The code could not be fetched: say so, and let the reader try again. */
+/** The code could not be fetched. The sheet closes and a toast says so (`useCodeSheet`), so it shows nothing meanwhile. */
 class SourceBoundary extends Component<{ children: ReactNode }, BoundaryState> {
   override state: BoundaryState = { failed: false };
 
@@ -219,15 +343,7 @@ class SourceBoundary extends Component<{ children: ReactNode }, BoundaryState> {
   }
 
   override render() {
-    if (!this.state.failed) return this.props.children;
-    return (
-      <div className={styles.message} role="alert">
-        <p>The code couldn’t load. Check your connection and try again.</p>
-        <button type="button" className={styles.retry} onClick={() => this.setState({ failed: false })}>
-          Try again
-        </button>
-      </div>
-    );
+    return this.state.failed ? null : this.props.children;
   }
 }
 
@@ -257,6 +373,16 @@ function CopyIcon() {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <rect x="5.25" y="5.25" width="7.5" height="7.5" rx="1.75" stroke="currentColor" strokeWidth="1.5" />
       <path d="M10.75 3.25h-5.5a2 2 0 0 0-2 2v5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FailIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="5.75" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 5v3.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="10.75" r="0.85" fill="currentColor" />
     </svg>
   );
 }

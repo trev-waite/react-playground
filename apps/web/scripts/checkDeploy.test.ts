@@ -32,6 +32,8 @@ async function build(
     "index.html": INDEX,
     "controls.html": page(CARD),
     "controls/Switch.html": page(MEMBER),
+    "code/controls.json": "[]",
+    "code/controls.md": "# Controls",
     "assets/index-AbCd1234.js": "console.log(1)",
     "assets/style-EfGh5678.css": "body{}",
     ...Object.fromEntries(PUBLIC_FILES.map(file => [file, "x"])),
@@ -89,7 +91,8 @@ describe("deploy allowlist", () => {
 
   test("refuses a build missing a route's page, which would make that component a 404", async () => {
     const shader: RouteCard = { slug: "shaders/LightDispersion", title: "Light Dispersion", members: [{ slug: "shaders/LightDispersion" }] };
-    expect(await build({}, {}, undefined, [CONTROLS, shader])).toEqual([
+    const code = { "code/shaders/LightDispersion.json": "[]", "code/shaders/LightDispersion.md": "# Light Dispersion" };
+    expect(await build(code, {}, undefined, [CONTROLS, shader])).toEqual([
       "dist has no page for /shaders/LightDispersion, so it would be a 404",
     ]);
   });
@@ -164,6 +167,14 @@ describe("deploy allowlist", () => {
       "dist/controls/Switch.html is not the app page with /controls/Switch's own title and link preview",
     ]);
     expect(await build({}, { "og/retired.png": "x" })).toEqual(["public/og/retired.png is not on the allowlist"]);
+  });
+
+  test("requires each card's published code, and refuses code for a card the catalog does not have", async () => {
+    const problems = await build({ "code/buttons/Gone.md": "# Gone" }, {}, dist => rm(path.join(dist, "code/controls.json")));
+    expect(problems).toEqual([
+      "dist/code/controls.json is missing, so that card's Code button and agent prompt would fail",
+      "dist/code/buttons/Gone.md is not on the allowlist",
+    ]);
   });
 
   test("refuses a catalog with no cards, so a broken scan cannot pass everything", async () => {

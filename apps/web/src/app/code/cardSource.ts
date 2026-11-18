@@ -1,24 +1,48 @@
-import { loadSource } from "../../lib/liveSource";
+import { codePath } from "../../lib/liveRoutes";
 import type { SourceFile } from "../../lib/types";
 import { highlight, languageOf, warmHighlighter } from "./highlight";
 
-type SourceCard = { slug: string; members: readonly { slug: string }[] };
+type SourceCard = { slug: string };
 
 const sources = new Map<string, Promise<SourceFile[]>>();
 const tokens = new WeakMap<SourceFile, ReturnType<typeof highlight>>();
 
-/** Every file of every component on the card, fetched once. A failed fetch is forgotten, so the next ask tries again. */
+async function fetchSource(slug: string): Promise<SourceFile[]> {
+  const response = await fetch(codePath(slug, "json"));
+  if (!response.ok) throw new Error(`The code answered ${response.status}`);
+  return (await response.json()) as SourceFile[];
+}
+
+const failed = new WeakSet<Promise<SourceFile[]>>();
+
+/**
+ * Every file of every component on the card, fetched once. A failed fetch is
+ * kept, so the sheet that renders it once more after it settles does not start
+ * another; `loadSource` is what asks again.
+ */
 export function cardSource(card: SourceCard): Promise<SourceFile[]> {
   let files = sources.get(card.slug);
   if (!files) {
-    files = Promise.all(card.members.map(member => loadSource(member.slug))).then(lists => lists.flat());
-    files.catch(() => sources.delete(card.slug));
-    sources.set(card.slug, files);
+    const fetched = fetchSource(card.slug);
+    fetched.catch(() => failed.add(fetched));
+    sources.set(card.slug, fetched);
+    files = fetched;
   }
   return files;
 }
 
-/** Fetches the card's files and the highlighter before the sheet opens, so it opens on finished code. */
+/** The card's files, fetched again if the last fetch failed. */
+export function loadSource(card: SourceCard): Promise<SourceFile[]> {
+  const files = sources.get(card.slug);
+  if (files && failed.has(files)) sources.delete(card.slug);
+  return cardSource(card);
+}
+
+/**
+ * Fetches the card's files and the highlighter before the sheet opens, so it
+ * opens on finished code. A fetch that already failed stays failed: only a
+ * press of Code or Try again asks again, so hovering never spends a try.
+ */
 export function prepareCode(card: SourceCard): void {
   cardSource(card).catch(() => {});
   warmHighlighter();

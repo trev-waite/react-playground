@@ -7,7 +7,10 @@ import { CardDeck, type DeckView } from "./deck/CardDeck";
 import { BackPill, ChromeBar, DeckChromeSlot, DeckPager, DeckViewButton, ThemeButton } from "./deck/DeckChrome";
 import { RefreshCatalogButton } from "./RefreshCatalogButton";
 import { useTheme } from "./theme/theme";
-import { LazyCodeSheet, prepareCode } from "./code/LazyCodeSheet";
+import { prepareCode } from "./code/cardSource";
+import { CodeError } from "./code/CodeError";
+import { CodeSheet } from "./code/CodeSheet";
+import { useCodeSheet } from "./code/useCodeSheet";
 import styles from "./LivePage.module.css";
 
 /**
@@ -46,10 +49,14 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
   if (found >= 0 && slug !== lastSlug) setLastSlug(slug);
   const activeIndex = Math.max(0, found >= 0 ? found : cardIndexForSlug(cards, lastSlug));
   const card = cards[activeIndex];
-  /** The card whose code was last asked for. The sheet stays mounted once opened, so it can animate out. */
-  const [code, setCode] = useState<{ slug: string; open: boolean } | null>(null);
+  const sheet = useCodeSheet();
+  const { code, failure } = sheet;
   const codeCard = code ? cards.find(each => each.slug === code.slug) : undefined;
-  const codeOpen = Boolean(code?.open && code.slug === card?.slug && view === "page" && active);
+  const onPage = (slug: string) => slug === card?.slug && view === "page" && active;
+  const codeOpen = Boolean(code?.open && onPage(code.slug));
+  // Leaving the card abandons a fetch for its code, so coming back never opens the sheet or the toast unasked.
+  const leaveCard = useEffectEvent(() => sheet.abandon());
+  useEffect(() => leaveCard(), [card?.slug, view, active]);
 
   /** Pages to a card: the reader stays in the page view, so the URL only follows. */
   function page(index: number) {
@@ -126,17 +133,18 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
         documentScroll={documentScroll}
         onActiveChange={page}
         onOpen={open}
-        onShowCode={index => {
+        onShowCode={(index, trigger) => {
           const shown = cards[index];
-          if (shown) setCode({ slug: shown.slug, open: true });
+          if (shown) sheet.show(shown, trigger);
         }}
         onPrepareCode={index => {
           const shown = cards[index];
           if (shown) prepareCode(shown);
         }}
       />
-      {codeCard ? (
-        <LazyCodeSheet card={codeCard} open={codeOpen} onClose={() => setCode(current => current && { ...current, open: false })} />
+      {code && codeCard ? <CodeSheet card={codeCard} attempt={code.attempt} open={codeOpen} onDismiss={sheet.abandon} onClose={sheet.closed} /> : null}
+      {failure && card && onPage(failure.slug) ? (
+        <CodeError failure={failure} onRetry={() => sheet.retry(card)} onDismiss={sheet.dismiss} />
       ) : null}
     </div>
   );
