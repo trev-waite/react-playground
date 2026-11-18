@@ -37,7 +37,9 @@ describe("codeMarkdown", () => {
     const markdown = codeMarkdown(PROFILE, SITE);
     expect(markdown.startsWith("# Profile\n\nA picture you step into.\n")).toBe(true);
     expect(markdown).toContain(`${SITE}/buttons/Profile. It is one React and TypeScript file, \`Profile.tsx\``);
-    expect(markdown).toContain("Its styles are a `CSS` string");
+    expect(markdown).toContain("Use it as is: keep its look, behavior, motion, and accessibility identical");
+    expect(markdown).toContain("Its styles are a `CSS` string at the end of the file, added to the page once; keep them as they are.");
+    expect(markdown).not.toMatch(/if you prefer|conventions/);
     expect(markdown).toContain("- The npm package `vgpu`.");
     expect(markdown).toContain("`useGpu` and `GpuSession` from `@/gpu`");
   });

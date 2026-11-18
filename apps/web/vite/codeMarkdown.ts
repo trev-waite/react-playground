@@ -98,16 +98,21 @@ export function codeMarkdown(card: CodeCard, siteUrl: string | null): string {
 
   const lines = [`# ${card.title}`, ""];
   if (card.description) lines.push(card.description, "");
-  lines.push(`The source of ${card.title} from ${SITE_TITLE}, ${origin}${livePath(card.slug)}. ${shape(card)}`, "");
+  lines.push(
+    `The source of ${card.title} from ${SITE_TITLE}, ${origin}${livePath(card.slug)}. ${shape(card)}`,
+    "",
+    "Use it as is: keep its look, behavior, motion, and accessibility identical rather than restyling it to the project it goes into, change only what it needs to run there, then compare it with the live version at the link above.",
+    "",
+  );
   if (files.some(file => file.code.includes(STYLE_INJECTION))) {
-    lines.push("Its styles are a `CSS` string at the end of the file, added to the page once; move them into your own stylesheet if you prefer.", "");
+    lines.push("Its styles are a `CSS` string at the end of the file, added to the page once; keep them as they are.", "");
   }
 
   const needs = [
     ...imports.packages.map(name => `- The npm package \`${name}\`.`),
     ...[...imports.studio].map(([module, names]) => {
       const what = names.length ? `${list(names.map(name => `\`${name}\``))} from \`${module}\`` : `\`${module}\``;
-      return `- ${what}, the studio's own code, not included here: recreate what the component uses.`;
+      return `- ${what}, the studio's own code, not included here: recreate exactly what the component uses, so it behaves the same.`;
     }),
   ];
   if (needs.length) lines.push("It also needs:", "", ...needs, "");
