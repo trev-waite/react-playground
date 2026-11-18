@@ -29,6 +29,8 @@ export function useCodeSheet() {
   const origin = useRef<HTMLElement | null>(null);
   /** A failure is showing, so the sheet closing for it must not take focus from the toast. */
   const failing = useRef(false);
+  /** Each card's tries again so far, kept when the toast is dismissed, so pressing Code again never resets the count. */
+  const tries = useRef(new Map<string, number>());
 
   function returnFocus() {
     const target = origin.current;
@@ -39,6 +41,7 @@ export function useCodeSheet() {
     const id = ++attempt.current;
     const open = () => {
       failing.current = false;
+      tries.current.delete(card.slug);
       setFailure(null);
       setCode({ slug: card.slug, open: true, attempt: id });
     };
@@ -58,6 +61,7 @@ export function useCodeSheet() {
         clearTimeout(reveal);
         if (attempt.current !== id) return;
         failing.current = true;
+        tries.current.set(card.slug, retries);
         setCode(current => current && { ...current, open: false });
         setFailure({ slug: card.slug, retries, trying: false });
       },
@@ -73,11 +77,25 @@ export function useCodeSheet() {
   return {
     code,
     failure,
-    /** The Code button was pressed. While the toast is up for this card, the press is a try again within its count. */
+    /**
+     * The Code button was pressed. A card whose code failed before goes on from its count: a try again, shown on
+     * the toast, or, once the tries are spent, the toast asking for a refresh, without fetching.
+     */
     show: (card: CodeSlug, trigger: HTMLElement) => {
       origin.current = trigger;
       if (failure?.slug === card.slug) {
         retry(card);
+        return;
+      }
+      const taken = tries.current.get(card.slug);
+      if (taken !== undefined) {
+        failing.current = true;
+        if (taken >= MAX_RETRIES) {
+          setFailure({ slug: card.slug, retries: taken, trying: false });
+          return;
+        }
+        setFailure({ slug: card.slug, retries: taken, trying: true });
+        load(card, taken + 1);
         return;
       }
       failing.current = false;
