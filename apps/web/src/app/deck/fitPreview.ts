@@ -154,11 +154,20 @@ function place(fit: Fit) {
 /** Where the card is between tile (0) and page (1), or the end it has landed at. */
 type Progress = number | End | undefined;
 
+/**
+ * A morph this close to its page has landed there, for its preview. The
+ * spring to the grid overshoots, so it passes its end mid-flight and lands
+ * its layout then; the spring to a page doesn't, and only reaches it as it
+ * stops, so its last layout would go in just as the card comes to rest. From
+ * here it goes in while the card still moves enough to carry it.
+ */
+const LANDS_ON_PAGE_FROM = 0.98;
+
 function progressOf(fit: Fit): Progress {
   const at = fit.flight?.progress.get();
   if (at === undefined) return undefined;
-  // Sprung past an end, the morph has still landed there.
-  return at <= 0 ? "tile" : at >= 1 ? "page" : at;
+  // Sprung past an end, or all but on its page, the morph has landed there.
+  return at <= 0 ? "tile" : at >= LANDS_ON_PAGE_FROM ? "page" : at;
 }
 
 function moving(fit: Fit): boolean {

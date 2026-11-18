@@ -54,6 +54,9 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
   const codeCard = code ? cards.find(each => each.slug === code.slug) : undefined;
   const onPage = (slug: string) => slug === card?.slug && view === "page" && active;
   const codeOpen = Boolean(code?.open && onPage(code.slug));
+  // Leaving the card abandons a fetch for its code, so coming back never opens the sheet or the toast unasked.
+  const leaveCard = useEffectEvent(() => sheet.abandon());
+  useEffect(() => leaveCard(), [card?.slug, view, active]);
 
   /** Pages to a card: the reader stays in the page view, so the URL only follows. */
   function page(index: number) {
@@ -139,7 +142,7 @@ function LiveDeck({ slug, active, onNavigate, documentScroll }: Required<LivePag
           if (shown) prepareCode(shown);
         }}
       />
-      {code && codeCard ? <CodeSheet card={codeCard} attempt={code.attempt} open={codeOpen} onClose={sheet.close} /> : null}
+      {code && codeCard ? <CodeSheet card={codeCard} attempt={code.attempt} open={codeOpen} onDismiss={sheet.abandon} onClose={sheet.closed} /> : null}
       {failure && card && onPage(failure.slug) ? (
         <CodeError failure={failure} onRetry={() => sheet.retry(card)} onDismiss={sheet.dismiss} />
       ) : null}

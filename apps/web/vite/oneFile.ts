@@ -118,14 +118,17 @@ function baseName(file: string): string {
 
 /** `.class` and `@keyframes` names of a CSS module, scoped under `prefix` as the build would hash them. */
 export function scopeCss(css: string, prefix: string): { css: string; classes: Map<string, string> } {
-  if (/:global|:local|\bcomposes\s*:/.test(css)) {
-    throw new Error(`${prefix}: :global, :local, and composes cannot be inlined into one file yet`);
-  }
   const classes = new Map<string, string>();
   const keyframes = new Map<string, string>();
   const protect = /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/g;
   const parts = css.split(protect);
   const kept = css.match(protect) ?? [];
+  // Checked outside comments and strings, as a CSS module reads them: a property CSS modules compose with, in any case
+  // or spelling they accept, or a :global / :local selector.
+  const code = parts.join(" ");
+  if (/:(?:global|local)\b/i.test(code) || /(?:^|[\s;{])(?:composes|compose-with)\s*:/i.test(code)) {
+    throw new Error(`${prefix}: :global, :local, and composes cannot be inlined into one file yet`);
+  }
   for (const part of parts) {
     for (const [, name] of part.matchAll(/@keyframes\s+([\w-]+)/g)) keyframes.set(name!, `${prefix}-${name}`);
     for (const [, name] of part.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) if (!classes.has(name!)) classes.set(name!, `${prefix}-${name}`);

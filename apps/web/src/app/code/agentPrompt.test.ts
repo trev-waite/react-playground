@@ -25,6 +25,8 @@ describe("agentPrompt", () => {
     const prompt = agentPrompt({ slug: "controls", title: "Controls", members: [{ title: "Switch" }, { title: "Stepper" }] }, "");
     expect(prompt).toStartWith("Add the Controls components (Switch, Stepper) from Trev’s Studio to this project, exactly as they are.");
     expect(prompt).toContain("Copy them in as is.");
+    expect(prompt).toContain("names anything else they need.");
+    expect(prompt).toContain("Change only what they need to run here");
     expect(prompt).not.toContain("What it is");
   });
 });

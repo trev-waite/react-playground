@@ -37,6 +37,10 @@ describe("oneFileSources", () => {
     expect([...classes.keys()]).toEqual(["a", "b", "c"]);
     expect(() => scopeCss(":global(.a) { color: red; }", "box")).toThrow(":global");
     expect(() => scopeCss(".a { composes: b; }", "box")).toThrow("composes");
+    expect(() => scopeCss(".a { COMPOSES: b; }", "box")).toThrow("composes");
+    expect(() => scopeCss(".a { compose-with: b; }", "box")).toThrow("composes");
+    expect(() => scopeCss(".a { composes/**/: b; }", "box")).toThrow("composes");
+    expect(scopeCss('.a::after { content: ":global composes: b"; }', "box").css).toBe('.box-a::after { content: ":global composes: b"; }');
   });
 
   test("keeps a Web Worker as a file of its own, which the component still starts by URL", async () => {

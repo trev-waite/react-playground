@@ -75,6 +75,26 @@ export class CardMotions {
   }
 }
 
+/** Closer than this, a card drawn at its pose or here looks the same: half a pixel of place or size. */
+const NEAR_PX = 0.5;
+
+/**
+ * Whether a card is drawn within half a pixel of `pose`: its box, offset, and
+ * corners, its scale over its larger side, and its chrome over the widest
+ * padding it moves (64px from tile to page).
+ */
+export function nearPose(motion: CardMotion, pose: CardPose): boolean {
+  const side = Math.max(pose.rect.width, pose.rect.height, 1);
+  const PADDING_TRAVEL = 64;
+  return (
+    entries(pose).every(([key, value]) => {
+      if (key === "scale") return Math.abs(motion.scale.get() - value) * side < NEAR_PX;
+      if (key === "chrome") return Math.abs(motion.chrome.get() - value) * PADDING_TRAVEL < NEAR_PX;
+      return Math.abs(motion[key].get() - value) < NEAR_PX;
+    })
+  );
+}
+
 /** Places a card without animating, cancelling any flight in progress. */
 export function jumpCard(motion: CardMotion, pose: CardPose) {
   for (const [key, value] of entries(pose)) motion[key].jump(value);

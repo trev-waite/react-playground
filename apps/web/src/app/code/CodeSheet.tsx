@@ -3,6 +3,7 @@ import {
   Suspense,
   use,
   useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
@@ -22,6 +23,9 @@ type CodeSheetProps = {
   /** The press this sheet shows, so a new one after a failed fetch starts the sheet afresh. */
   attempt: number;
   open: boolean;
+  /** The reader is closing the sheet (close button, backdrop, or Escape), called at once, before the dialog's queued close event. */
+  onDismiss: () => void;
+  /** The dialog has closed, by the reader or because the code failed. */
   onClose: () => void;
 };
 
@@ -34,7 +38,7 @@ const COPIED_MS = 1600;
  * Plain text shows at once and takes its colors when the highlighter has
  * loaded, so nothing moves.
  */
-export function CodeSheet({ card, attempt, open, onClose }: CodeSheetProps) {
+export function CodeSheet({ card, attempt, open, onDismiss, onClose }: CodeSheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -49,6 +53,11 @@ export function CodeSheet({ card, attempt, open, onClose }: CodeSheetProps) {
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
+  const dismissSheet = useEffectEvent(() => {
+    onDismiss();
+    ref.current?.close();
+  });
+
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -58,7 +67,7 @@ export function CodeSheet({ card, attempt, open, onClose }: CodeSheetProps) {
       const box = dialog.getBoundingClientRect();
       const inside =
         event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
-      if (!inside) dialog.close();
+      if (!inside) dismissSheet();
     };
     const release = holdPageUnder(dialog);
     dialog.addEventListener("click", dismiss);
@@ -69,12 +78,20 @@ export function CodeSheet({ card, attempt, open, onClose }: CodeSheetProps) {
   }, []);
 
   return (
-    <dialog ref={ref} className={styles.sheet} tabIndex={-1} aria-labelledby={titleId} onClose={onClose}>
+    <dialog ref={ref} className={styles.sheet} tabIndex={-1} aria-labelledby={titleId} onCancel={onDismiss} onClose={onClose}>
       <header className={styles.header}>
         <h2 id={titleId} className={styles.title}>
           {card.title}
         </h2>
-        <button type="button" className={styles.close} aria-label="Close code" onClick={() => ref.current?.close()}>
+        <button
+          type="button"
+          className={styles.close}
+          aria-label="Close code"
+          onClick={() => {
+            onDismiss();
+            ref.current?.close();
+          }}
+        >
           <CloseIcon />
         </button>
       </header>

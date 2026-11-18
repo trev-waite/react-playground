@@ -3,7 +3,7 @@ import type { LiveCard } from "../../lib/catalog";
 import { frame as frameLoop } from "../motion/frameLoop";
 import { useReducedMotion } from "../motion/hooks";
 import { SPRING } from "../motion/transitions";
-import { CardMotions, jumpCard, moveCard, type CardMotion } from "./cardMotion";
+import { CardMotions, jumpCard, moveCard, nearPose, type CardMotion } from "./cardMotion";
 import { DeckCard } from "./DeckCard";
 import { nearCards, nextToWarm, type DeckPlace, type GridWindow } from "./mountPolicy";
 import { useDocumentScroll } from "./useDocumentScroll";
@@ -396,6 +396,12 @@ export function CardDeck({
         return;
       }
       const open = motionOf(cards[activeIndex]!, activeIndex);
+      // A card that arrived without overshooting is already in place, to the pixel: nothing is left to ease.
+      if (nearPose(open, pagePose({ ...pageAt(activeIndex).rect, y: flown.top }))) {
+        showPages();
+        setFlying(false);
+        return;
+      }
       const overshoot = open.top.get() - flown.top;
       jumpPages(host, activeIndex * viewport.height);
       scrolled.current = scrollPlace(host);
@@ -423,16 +429,28 @@ export function CardDeck({
       const open = cards[activeIndex];
       if (!focus || !open) return;
       const camera = offsetRect(frame, host.scrollTop);
-      const { chrome } = motionOf(open, activeIndex);
+      const opening = motionOf(open, activeIndex);
+      const destination = pagePose(camera);
       landing.current = { slug: open.slug, top: camera.y };
-      // Chrome springs to 1, so falling from past 1 is the top of the overshoot. A move with no bounce lands at rest.
-      let last = chrome.get();
-      const stopWatching = chrome.on(next => {
-        const arrived = next >= 1 && next < last;
+      // The page column takes over as the open card arrives: at the top of its overshoot (chrome springs past 1 and
+      // falls back), or, with no bounce, once its chrome has landed on 1, which puts its preview's page layout in,
+      // and the rest of it is drawn within half a pixel of its page. The cards flying out of view are placed
+      // directly then, rather than waited for.
+      let last = opening.chrome.get();
+      let watching = true;
+      const check = () => {
+        const next = opening.chrome.get();
+        const arrived = (next >= 1 && next < last) || (next >= 1 && nearPose(opening, destination));
         last = next;
-        if (arrived || flight.current !== id) stopWatching();
+        if (watching && (arrived || flight.current !== id)) stopWatching();
         if (arrived && flight.current === id) setPaged(true);
-      });
+      };
+      // Every value of the open card, not just its chrome: the far-travelling ones are the last within half a pixel.
+      const unsubscribes = Object.values(opening).map(value => value.on(check));
+      const stopWatching = () => {
+        watching = false;
+        for (const unsubscribe of unsubscribes) unsubscribe();
+      };
       fly(
         id,
         (card, index) =>

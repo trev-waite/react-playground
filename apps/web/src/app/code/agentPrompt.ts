@@ -17,6 +17,7 @@ export function agentPrompt(card: PromptCard, origin: string): string {
   const family = card.members.length > 1;
   const names = family ? `${card.title} components (${card.members.map(member => member.title).join(", ")})` : `${card.title} component`;
   const it = family ? "them" : "it";
+  const needs = family ? "they need" : "it needs";
   return [
     `Add the ${names} from ${SITE_TITLE} to this project, exactly as ${family ? "they are" : "it is"}.`,
     ...(card.description ? ["", `What it is: ${card.description}`] : []),
@@ -24,8 +25,8 @@ export function agentPrompt(card: PromptCard, origin: string): string {
     `Source: ${origin}${codePath(card.slug, "md")}`,
     `Live: ${origin}${livePath(card.slug)}`,
     "",
-    `1. Download the source. Each component is one React and TypeScript file, and the page names anything else ${it} needs.`,
-    `2. Copy ${it} in as is. Keep the look, behavior, motion, and accessibility identical; don't restyle ${it} to match this project. Change only what ${family ? "they need" : "it needs"} to run here, such as import paths or a missing dependency, and anything I ask for.`,
+    `1. Download the source. Each component is one React and TypeScript file, and the page names anything else ${needs}.`,
+    `2. Copy ${it} in as is. Keep the look, behavior, motion, and accessibility identical; don't restyle ${it} to match this project. Change only what ${needs} to run here, such as import paths or a missing dependency, and anything I ask for.`,
     `3. Render ${it} and compare with the live version, then fix any difference before you finish.`,
   ].join("\n");
 }

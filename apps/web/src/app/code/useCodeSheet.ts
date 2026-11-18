@@ -15,14 +15,15 @@ export type CodeFailure = { slug: string; retries: number; trying: boolean };
  * arrives, or on placeholders if it is slow; a fetch that fails closes the
  * sheet and shows the toast. Trying again keeps the toast up, its button
  * reading "Trying…", until the fetch settles: the sheet opens on the code, or
- * the toast says it failed again. Dismissing the toast or closing the sheet
- * hands focus back to the Code button that started it.
+ * the toast says it failed again. Closing the sheet, dismissing the toast, or
+ * leaving the card abandons the fetch, so a late answer neither opens the sheet
+ * nor brings the toast back. Focus goes back to the Code button that started it.
  */
 export function useCodeSheet() {
   /** The card whose code was last asked for. The sheet stays mounted once opened, so it can animate out. */
   const [code, setCode] = useState<{ slug: string; open: boolean; attempt: number } | null>(null);
   const [failure, setFailure] = useState<CodeFailure | null>(null);
-  /** Bumped by every press, try, dismissal, and close, so a fetch that settles late only acts for the press that started it. */
+  /** Bumped by every press, try, and abandonment, so a fetch that settles late only acts for the press that started it. */
   const attempt = useRef(0);
   /** The Code button that was pressed, to return focus to. */
   const origin = useRef<HTMLElement | null>(null);
@@ -63,19 +64,32 @@ export function useCodeSheet() {
     );
   }
 
+  function retry(card: CodeSlug) {
+    if (!failure || failure.trying || failure.retries >= MAX_RETRIES) return;
+    setFailure({ ...failure, trying: true });
+    load(card, failure.retries + 1);
+  }
+
   return {
     code,
     failure,
+    /** The Code button was pressed. While the toast is up for this card, the press is a try again within its count. */
     show: (card: CodeSlug, trigger: HTMLElement) => {
       origin.current = trigger;
+      if (failure?.slug === card.slug) {
+        retry(card);
+        return;
+      }
       failing.current = false;
       setFailure(null);
       load(card, 0);
     },
-    retry: (card: CodeSlug) => {
-      if (!failure || failure.trying) return;
-      setFailure({ ...failure, trying: true });
-      load(card, failure.retries + 1);
+    retry,
+    /** The reader closed the sheet, dismissed the toast, or left the card: nothing pending may act now. Runs at once, before the dialog's queued close event. */
+    abandon: () => {
+      attempt.current++;
+      failing.current = false;
+      setFailure(null);
     },
     dismiss: () => {
       attempt.current++;
@@ -83,8 +97,8 @@ export function useCodeSheet() {
       setFailure(null);
       returnFocus();
     },
-    close: () => {
-      attempt.current++;
+    /** The dialog has closed, by the reader or for a failure. Focus returns to Code unless the toast now holds it. */
+    closed: () => {
       setCode(current => current && { ...current, open: false });
       if (!failing.current) returnFocus();
     },
