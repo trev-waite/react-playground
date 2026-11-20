@@ -118,6 +118,21 @@ describe("visibleLoop", () => {
     expect(seen.map(([now]) => now)).toEqual([16, 432]);
   });
 
+  test("a wait that is not finite sleeps rather than running every frame", () => {
+    for (const answer of [Infinity, NaN]) {
+      frames = new Map();
+      timers = new Map();
+      const { loop, seen } = loopWith([answer, true]);
+      loop.wake();
+      runFrame(16);
+      runTimers();
+      runFrame(32);
+      expect(seen).toHaveLength(1);
+      expect(timers.size + frames.size).toBe(0);
+      loop.stop();
+    }
+  });
+
   test("the frame after a wait measures from the frame that asked for it", () => {
     const { loop, seen } = loopWith([300, undefined]);
     loop.wake();

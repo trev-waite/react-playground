@@ -119,8 +119,9 @@ describe("card contract", () => {
         );
       } else if (!importsAsItself(syntax, name, `./${name}`) || !rendersElement(syntax, preview, name, `./${name}`)) {
         violations.push(
-          `${file}: ${name}Preview() must import { ${name} } from "./${name}" and render <${name} /> in every JSX it returns ` +
-            "(wrappers are fine, a condition or an early return of something else is not), so the card, its code, and its download are the same thing.",
+          `${file}: ${name}Preview() must import { ${name} } from "./${name}" and end by returning JSX with exactly one <${name} /> ` +
+            "in it, as every return must (layout wrappers and other controls are fine; a condition, an early return of something " +
+            "else, a hidden or inert wrapper, or a second copy is not), so the card, its code, and its download are the same thing.",
         );
       }
     }

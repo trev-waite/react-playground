@@ -1,6 +1,6 @@
 /**
  * What a frame asks for next: `true` for another frame, a number of milliseconds to wait before the
- * next one, or nothing to sleep until `wake()`.
+ * next one, or nothing (or a wait that is not finite) to sleep until `wake()`.
  */
 export type FrameRequest = boolean | number | void;
 
@@ -69,7 +69,7 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
     }
     if (stopped || slept || !visible || queued || wait !== undefined) return;
     if (next === true) queued = requestAnimationFrame(run);
-    else if (typeof next === "number") wait = setTimeout(continueAfterWait, Math.max(0, next));
+    else if (typeof next === "number" && Number.isFinite(next)) wait = setTimeout(continueAfterWait, Math.max(0, next));
   };
 
   function continueAfterWait() {

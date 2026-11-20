@@ -66,22 +66,32 @@ function returnedExpressions(fn: ts.FunctionLikeDeclaration): (ts.Expression | u
 }
 
 /** True when `expression` is JSX that contains an element whose tag `isTag` accepts, wrapped only by other elements. */
-function plainlyContains(expression: ts.Expression, isTag: (tag: ts.JsxTagNameExpression) => boolean): boolean {
-  const target = ts.isParenthesizedExpression(expression) ? plainlyContains(expression.expression, isTag) : undefined;
-  if (target !== undefined) return target;
-  if (ts.isJsxSelfClosingElement(expression)) return isTag(expression.tagName);
+function hidesChildren(element: ts.JsxOpeningLikeElement): boolean {
+  return element.attributes.properties.some(attribute => {
+    if (!ts.isJsxAttribute(attribute) || !["hidden", "inert"].includes(attribute.name.getText())) return false;
+    const value = attribute.initializer;
+    return !(value && ts.isJsxExpression(value) && value.expression?.kind === ts.SyntaxKind.FalseKeyword);
+  });
+}
+
+/** How many elements whose tag `isTag` accepts `expression` renders plainly: wrapped only by other elements, none of them hidden or inert. */
+function plainCount(expression: ts.Node, isTag: (tag: ts.JsxTagNameExpression) => boolean): number {
+  if (ts.isParenthesizedExpression(expression)) return plainCount(expression.expression, isTag);
+  const children = (nodes: ts.NodeArray<ts.JsxChild>) =>
+    nodes.reduce((sum, child) => sum + (ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child) ? plainCount(child, isTag) : 0), 0);
+  if (ts.isJsxSelfClosingElement(expression)) return !hidesChildren(expression) && isTag(expression.tagName) ? 1 : 0;
   if (ts.isJsxElement(expression)) {
-    return isTag(expression.openingElement.tagName) || expression.children.some(child => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child) ? plainlyContains(child, isTag) : false);
+    if (hidesChildren(expression.openingElement)) return 0;
+    return (isTag(expression.openingElement.tagName) ? 1 : 0) + children(expression.children);
   }
-  if (ts.isJsxFragment(expression)) {
-    return expression.children.some(child => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child) ? plainlyContains(child, isTag) : false);
-  }
-  return false;
+  if (ts.isJsxFragment(expression)) return children(expression.children);
+  return 0;
 }
 
 /**
  * True when `fn` always renders `name` imported from `module`: it ends in a return, so no path falls
- * through to nothing, and every value it returns is JSX holding that element, wrapped only by other elements, never behind a condition, a call, or braces, and the
+ * through to nothing, and every value it returns is JSX holding exactly one of that element, wrapped
+ * only by other elements (none hidden or inert), never behind a condition, a call, or braces, and the
  * tag resolves to the import itself rather than anything that shadows it.
  */
 export function rendersElement(source: ts.SourceFile, fn: ts.FunctionLikeDeclaration, name: string, module: string): boolean {
@@ -95,7 +105,7 @@ export function rendersElement(source: ts.SourceFile, fn: ts.FunctionLikeDeclara
   };
   const returns = returnedExpressions(fn);
   const endsInReturn = !!fn.body && (!ts.isBlock(fn.body) || (fn.body.statements.length > 0 && ts.isReturnStatement(fn.body.statements[fn.body.statements.length - 1]!)));
-  return endsInReturn && returns.every(expression => !!expression && plainlyContains(expression, isTag));
+  return endsInReturn && returns.every(expression => !!expression && plainCount(expression, isTag) === 1);
 }
 
 /** True when the module imports `name` as itself, unrenamed, from `module`. */
@@ -205,7 +215,10 @@ function frameArgument(checker: ts.TypeChecker, call: ts.CallExpression): ts.Exp
   if (ts.isImportSpecifier(declaration)) {
     const from = declaration.parent.parent.parent.moduleSpecifier;
     const imported = (declaration.propertyName ?? declaration.name).text;
-    if (imported === "visibleLoop" && ts.isStringLiteral(from) && /(^|\/)kit\/visibleLoop$/.test(from.text)) return call.arguments[1];
+    if (!ts.isStringLiteral(from)) return undefined;
+    if (imported === "visibleLoop" && /(^|\/)kit\/visibleLoop$/.test(from.text)) return call.arguments[1];
+    if (imported === "pausableLoop" && from.text === "@/gpu") return call.arguments[2];
+    if (imported === "frameLoop" && from.text === "vgpu") return call.arguments[1];
   }
   return undefined;
 }
@@ -213,7 +226,7 @@ function frameArgument(checker: ts.TypeChecker, call: ts.CallExpression): ts.Exp
 /** Calls whose function arguments run later, not during the frame that makes the call. */
 const DEFERRING_CALLS = new Set([
   "setTimeout", "setInterval", "requestAnimationFrame", "requestIdleCallback", "queueMicrotask",
-  "addEventListener", "then", "catch", "finally", "visibleLoop",
+  "addEventListener", "then", "catch", "finally", "visibleLoop", "pausableLoop", "frameLoop",
 ]);
 
 function calledName(call: ts.CallExpression): string | undefined {
@@ -292,21 +305,55 @@ function isAssigned(node: ts.Node): boolean {
     parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
 }
 
-/** True when `receiver` is plain data this file defines (an object literal or a local type), such as cached measurements, not a DOM node. */
+/** True when a type node is a plain record this file defines: an object type, or a local interface or alias that resolves to one. */
+function isPlainType(checker: ts.TypeChecker, type: ts.TypeNode, depth = 0): boolean {
+  if (ts.isTypeLiteralNode(type)) return true;
+  if (!ts.isTypeReferenceNode(type) || depth > 4) return false;
+  const local = checker.getSymbolAtLocation(type.typeName)?.declarations?.[0];
+  if (!local || local.getSourceFile() !== type.getSourceFile()) return false;
+  if (ts.isInterfaceDeclaration(local)) {
+    return (local.heritageClauses ?? []).every(clause => clause.types.every(base => {
+      const parent = checker.getSymbolAtLocation(base.expression)?.declarations?.[0];
+      return !!parent && ts.isInterfaceDeclaration(parent) && parent.getSourceFile() === type.getSourceFile();
+    }));
+  }
+  return ts.isTypeAliasDeclaration(local) && isPlainType(checker, local.type, depth + 1);
+}
+
+/** True when a value is plain data: an object literal, `useRef({ … })`, or something typed as a plain record. */
+function isPlainValue(checker: ts.TypeChecker, initializer: ts.Expression | undefined, type: ts.TypeNode | undefined): boolean {
+  if (type) return isPlainType(checker, type);
+  if (!initializer) return false;
+  const value = unwrap(initializer);
+  if (ts.isObjectLiteralExpression(value)) return true;
+  if (ts.isCallExpression(value) && calledName(value) === "useRef") {
+    const [first] = value.arguments;
+    const typeArgument = value.typeArguments?.[0];
+    return typeArgument ? isPlainType(checker, typeArgument) : !!first && ts.isObjectLiteralExpression(unwrap(first));
+  }
+  return false;
+}
+
+/**
+ * True when `receiver` is plain data this file defines, such as sizes a ResizeObserver cached, rather
+ * than a DOM node: a variable, field, or parameter that holds an object literal or a `useRef` of one,
+ * or is typed as a local record; or the `.current` of such a ref.
+ */
 function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression): boolean {
-  const target = unwrap(receiver);
+  let target = unwrap(receiver);
+  let throughRef = false;
+  if (ts.isPropertyAccessExpression(target) && target.name.text === "current" && target.expression.kind !== ts.SyntaxKind.ThisKeyword) {
+    target = unwrap(target.expression);
+    throughRef = true;
+  }
   const name = ts.isIdentifier(target) ? target : isThisMember(target) ? target.name : undefined;
   const declaration = name && checker.getSymbolAtLocation(name)?.declarations?.[0];
   if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration) || ts.isParameter(declaration))) return false;
-  if (declaration.initializer && ts.isObjectLiteralExpression(unwrap(declaration.initializer))) return true;
-  const type = declaration.type;
-  if (!type) return false;
-  if (ts.isTypeLiteralNode(type)) return true;
-  if (ts.isTypeReferenceNode(type)) {
-    const local = checker.getSymbolAtLocation(type.typeName)?.declarations?.[0];
-    return !!local && (ts.isInterfaceDeclaration(local) || ts.isTypeAliasDeclaration(local)) && local.getSourceFile() === receiver.getSourceFile();
+  if (throughRef) {
+    const init = declaration.initializer && unwrap(declaration.initializer);
+    return !!init && ts.isCallExpression(init) && calledName(init) === "useRef" && isPlainValue(checker, init, undefined);
   }
-  return false;
+  return isPlainValue(checker, declaration.initializer, declaration.type);
 }
 
 /** True when a call updates React state: it is the setter slot of a `useState` or `useReducer` pair, whatever it is named. */

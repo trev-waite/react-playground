@@ -211,8 +211,8 @@ describe("performance lint: Live components", () => {
   test("GPU components loop through pausableLoop, which pauses off screen and primes pipelines", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx}")) {
-      for (const match of text.matchAll(/\bframeLoop\(/g)) {
-        violations.push(`${file}:${lineOf(text, match.index!)} calls vgpu frameLoop directly; use pausableLoop from @/gpu.`);
+      for (const match of text.matchAll(/\bimport\s*(?:type\s*)?\{[^}]*\bframeLoop\b[^}]*\}\s*from\s*["']vgpu["']|\bimport\s*\*\s*as\s+\w+\s+from\s*["']vgpu["']/g)) {
+        violations.push(`${file}:${lineOf(text, match.index!)} imports vgpu's frameLoop, under any name; loop through pausableLoop from @/gpu.`);
       }
     }
     report(violations);
