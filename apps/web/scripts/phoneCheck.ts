@@ -397,19 +397,22 @@ try {
     if (await tallCard.locator("[data-placed]").count() > 0) failures.push("A two-finger gesture should leave the letter in its original slot.");
     await allLanded();
   }
-  const teeStart = await teeCenter();
-  await send("touchStart", teeStart);
-  await tallCard.locator("[data-lifted]").waitFor({ timeout: SETTLE_TIMEOUT_MS });
-  await send("touchMove", { x: teeStart.x + 120, y: teeStart.y + 60 });
-  await send("touchEnd");
-  const contact = await teeCenter();
-  await send("touchStart", contact);
-  await tee.and(tallCard.locator("[data-lifted]")).waitFor({ timeout: SETTLE_TIMEOUT_MS });
-  const regrabbed = await teeCenter();
-  if (Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
-    failures.push("A touch re-grab should lift the returning letter under the original contact.");
+  const dragStart = await teeCenter();
+  const dragPause = { x: dragStart.x + 72, y: dragStart.y };
+  const dragEnd = { x: dragStart.x + 96, y: dragStart.y };
+  await send("touchStart", dragStart);
+  await send("touchMove", dragPause);
+  await tee.and(tallLifted).waitFor({ timeout: SETTLE_TIMEOUT_MS });
+  await page.waitForTimeout(260);
+  await send("touchMove", dragEnd);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const heldCenter = await teeCenter();
+  const contactError = Math.hypot(heldCenter.x - dragEnd.x, heldCenter.y - dragEnd.y);
+  if (contactError > 12) {
+    failures.push(`A horizontal Letterpress drag drifted ${contactError.toFixed(1)}px from the finger after the hold timer expired.`);
   }
   await send("touchEnd");
+  await allLanded();
 
   await openPage(page, "Letterpress");
   const bounds = await stage.boundingBox();
@@ -462,6 +465,28 @@ try {
   await checkPortableHologram(page);
   await checkCompactHologram();
   await checkLargeText();
+  await page.clock.install();
+  await openPage(page, "Letterpress");
+  await page.clock.pauseAt(Date.now() + 1000);
+  await rail.press("End");
+  await page.clock.runFor(1000);
+  if (await tee.getAttribute("data-home") === null) throw new Error("The re-grab check needs the assembled Letterpress title.");
+  const teeStart = await teeCenter();
+  await send("touchStart", teeStart);
+  await page.clock.runFor(200);
+  if (!await tee.and(tallLifted).count()) throw new Error("The re-grab check should start by lifting T from its slot.");
+  await send("touchMove", { x: teeStart.x + 120, y: teeStart.y + 60 });
+  await page.clock.runFor(16);
+  await send("touchEnd");
+  await page.clock.runFor(32);
+  const contact = await teeCenter();
+  await send("touchStart", contact);
+  await page.clock.runFor(200);
+  const regrabbed = await teeCenter();
+  if (!await tee.and(tallLifted).count() || Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
+    failures.push("A touch re-grab should lift the returning letter under the original contact.");
+  }
+  await send("touchEnd");
 } finally {
   await browser.close();
   await server.close();

@@ -405,11 +405,25 @@ async function checkLetterpressInWebKit() {
     await page.goto(`${origin}${route}`);
     await settle(page, current => current.path === route && isPageOf(current, "Letterpress"));
     await page.locator("[data-letterpress] [data-ready]").waitFor();
-    for (const [x, y, glyph] of [[553.5, 509.5, "7"], [603.5, 465.5, "0"]] as const) {
-      await page.mouse.move(x, y);
+    for (const [glyph, overlap] of [["7", true], ["0", false]] as const) {
+      const point = await page.locator(`[data-letter="${glyph}"]`).evaluate((letter, overlap) => {
+        const bounds = letter.querySelector("[data-glyph-art]")!.getBoundingClientRect();
+        for (let y = Math.ceil(bounds.top); y < bounds.bottom; y += 2) {
+          for (let x = Math.ceil(bounds.left); x < bounds.right; x += 2) {
+            const hits = document.elementsFromPoint(x, y);
+            const ink = hits.find(node => node.matches("[data-glyph-art] path"));
+            const top = hits[0]?.closest("[data-letter]");
+            if (ink && letter.contains(ink) && (!overlap || (top && top !== letter))) return { x, y };
+          }
+        }
+        return null;
+      }, overlap);
+      expect(point !== null, `WebKit should expose painted ink for glyph ${glyph}${overlap ? " under an overlapping letter" : ""}`);
+      if (!point) continue;
+      await page.mouse.move(point.x, point.y);
       await page.mouse.down();
       const lifted = await page.locator("[data-lifted]").evaluateAll(nodes => nodes[0]?.getAttribute("data-letter"));
-      expect(lifted === glyph, `the visible glyph at (${x}, ${y}) should lift in WebKit; expected ${glyph}, picked ${lifted}`);
+      expect(lifted === glyph, `the visible glyph at (${point.x}, ${point.y}) should lift in WebKit; expected ${glyph}, picked ${lifted}`);
       await page.keyboard.press("Escape");
       await page.mouse.up();
     }
