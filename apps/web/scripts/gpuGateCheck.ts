@@ -52,7 +52,7 @@ async function load(browser: Browser, webGpu: boolean) {
   );
   // The library is requested once the first GPU card mounts.
   const broken = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('article[data-deck-card] [role="alert"]'), alert => alert.textContent ?? ""),
+    Array.from(document.querySelectorAll('article[data-deck-card] [data-deck-error]'), alert => alert.textContent ?? ""),
   );
   return { broken, fetched, errors };
 }

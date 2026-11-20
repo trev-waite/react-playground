@@ -116,7 +116,7 @@ export function DeckCard({
     <article
       ref={cardRef}
       className={styles.card}
-      data-deck-card
+      data-deck-card={card.slug}
       data-theme={surface.theme}
       data-raised={raised || undefined}
       data-current={current || undefined}
@@ -338,7 +338,7 @@ function LoadedPreview({ module }: { module: Promise<PreviewModule> }) {
 
 function PreviewError({ title, message }: { title: string; message?: string }) {
   return (
-    <p className={styles.error} role="alert">
+    <p className={styles.error} role="alert" data-deck-error>
       {title} could not load{message ? `: ${message}` : "."}
     </p>
   );

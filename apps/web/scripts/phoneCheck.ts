@@ -5,7 +5,7 @@ import { chromium, type Locator, type Page } from "playwright";
 import { preview } from "vite";
 import type { SourceFile } from "../src/lib/types.ts";
 import { FRONT_PITCH, FRONT_YAW, orbitRadiansPerPixel } from "../src/live/particles/GandalfHologram/orbit.ts";
-import { deckCard } from "./deckCards.ts";
+import { deckCard, type CardKey } from "./deckCards.ts";
 
 /**
  * Opens every card as a page on a phone-sized screen and fails when a preview
@@ -30,17 +30,18 @@ const browser = await chromium.launch();
 const failures: string[] = [];
 
 /** Opens a card from the grid and waits until its page has landed and its preview has loaded. */
-async function openPage(page: Page, title: string) {
+async function openPage(page: Page, key: CardKey) {
   await page.goto(url!);
-  const card = deckCard(page, title);
+  const card = deckCard(page, key);
   await card.locator(":scope > a").click();
   await page.waitForFunction(
-    name => {
+    key => {
       const scroller = document.querySelector('[data-layout="pages"]:not([data-flying])');
-      const article = Array.from(document.querySelectorAll("article[data-deck-card]")).find(a => a.getAttribute("aria-label") === name);
+      const article = Array.from(document.querySelectorAll("article[data-deck-card]")).find(a =>
+        typeof key === "string" ? a.getAttribute("aria-label") === key : a.getAttribute("data-deck-card") === key.slug);
       return scroller !== null && article !== undefined && article.querySelector("[data-deck-loading]") === null;
     },
-    title,
+    key,
     { timeout: SETTLE_TIMEOUT_MS },
   );
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -267,13 +268,13 @@ try {
   const context = await browser.newContext(PHONE);
   const page = await context.newPage();
   await page.goto(url);
-  const titles = await page
+  const cards = await page
     .locator("article[data-deck-card]")
-    .evaluateAll(cards => cards.map(card => card.getAttribute("aria-label") ?? ""));
-  if (titles.length === 0) throw new Error("The deck rendered no cards.");
+    .evaluateAll(cards => cards.map(card => ({ slug: card.getAttribute("data-deck-card") ?? "", title: card.getAttribute("aria-label") ?? "" })));
+  if (cards.length === 0) throw new Error("The deck rendered no cards.");
 
-  for (const title of titles) {
-    const card = await openPage(page, title);
+  for (const { slug, title } of cards) {
+    const card = await openPage(page, { slug });
     const fit = card.locator("[data-deck-fit]");
     const transform = await fit.evaluate(element => (element as HTMLElement).style.transform);
     const scale = /scale\(([\d.]+)\)/.exec(transform)?.[1];

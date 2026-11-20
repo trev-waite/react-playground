@@ -211,12 +211,12 @@ function functionOf(checker: ts.TypeChecker, declaration: ts.Declaration, depth 
   return [];
 }
 
-/** The function React keeps for `useCallback(fn)` or returns from `useMemo(() => fn)` (an expression or a block); anything else as it is. */
+/** The function React keeps for `useCallback(fn)` or `useEffectEvent(fn)`, or returns from `useMemo(() => fn)` (an expression or a block); anything else as it is. */
 function hookedFunction(value: ts.Expression): ts.Expression {
   if (!ts.isCallExpression(value) || !value.arguments[0]) return value;
   const name = calledName(value);
   const first = unwrap(value.arguments[0]);
-  if (name === "useCallback") return first;
+  if (name === "useCallback" || name === "useEffectEvent") return first;
   if (name === "useMemo" && (ts.isArrowFunction(first) || ts.isFunctionExpression(first))) {
     const returned = returnedExpressions(first).flatMap(expression => (expression ? [unwrap(expression)] : []));
     if (returned.length === 1) return returned[0]!;
@@ -404,6 +404,36 @@ function isPlainRef(checker: ts.TypeChecker, call: ts.CallExpression): boolean {
   return !!first && ts.isObjectLiteralExpression(unwrap(first));
 }
 
+/**
+ * The object literal an expression holds when its path can be followed to one: a name bound to an
+ * object literal, a plain `useRef({ … })`'s `.current`, or a property of either whose value is itself
+ * an object literal, such as `scene.current.size`.
+ */
+function plainLiteralOf(checker: ts.TypeChecker, expression: ts.Expression, depth = 0): ts.ObjectLiteralExpression | undefined {
+  const target = unwrap(expression);
+  if (depth > 6) return undefined;
+  if (ts.isObjectLiteralExpression(target)) return target;
+  if (ts.isIdentifier(target)) {
+    const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
+    return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+      ? plainLiteralOf(checker, declaration.initializer, depth + 1)
+      : undefined;
+  }
+  if (!ts.isPropertyAccessExpression(target)) return undefined;
+  if (target.name.text === "current" && ts.isIdentifier(unwrap(target.expression))) {
+    const declaration = checker.getSymbolAtLocation(unwrap(target.expression))?.declarations?.[0];
+    const init = declaration && ts.isVariableDeclaration(declaration) && declaration.initializer && unwrap(declaration.initializer);
+    if (init && ts.isCallExpression(init) && calledName(init) === "useRef" && init.arguments[0]) {
+      return plainLiteralOf(checker, init.arguments[0], depth + 1);
+    }
+  }
+  const holder = plainLiteralOf(checker, target.expression, depth + 1);
+  const property = holder?.properties.find(
+    (each): each is ts.PropertyAssignment => ts.isPropertyAssignment(each) && each.name.getText() === target.name.text,
+  );
+  return property ? plainLiteralOf(checker, property.initializer, depth + 1) : undefined;
+}
+
 function isNullish(expression: ts.Expression): boolean {
   const value = unwrap(expression);
   return value.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(value) && value.text === "undefined");
@@ -422,6 +452,8 @@ function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0
     const records = [target.whenTrue, target.whenFalse].map(unwrap).filter(branch => !isNullish(branch));
     return records.length > 0 && records.every(branch => isPlainData(checker, branch, depth + 1));
   }
+  const literal = plainLiteralOf(checker, target);
+  if (literal) return true;
   if (ts.isPropertyAccessExpression(target) && target.name.text === "current" && target.expression.kind !== ts.SyntaxKind.ThisKeyword) {
     const ref = unwrap(target.expression);
     const name = ts.isIdentifier(ref) ? ref : undefined;

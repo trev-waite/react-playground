@@ -3,7 +3,7 @@ import { chromium, webkit, type Page } from "playwright";
 import { preview } from "vite";
 import { livePath, routeTitle, SITE_TITLE } from "../src/lib/liveRoutes.ts";
 import { readLiveCards } from "../vite/liveCards.ts";
-import { deckCard } from "./deckCards.ts";
+import { deckCard, type CardKey } from "./deckCards.ts";
 
 /**
  * Drives the built app in a browser to hold the routing to what a reader
@@ -84,7 +84,7 @@ async function settle(page: Page, done: (current: State) => boolean): Promise<St
   }
 }
 
-const tile = (page: Page, title: string) => deckCard(page, title).getByRole("link");
+const tile = (page: Page, key: CardKey) => deckCard(page, key).getByRole("link");
 
 /** The card is the one asked for and spans the viewport as a page does. */
 function isPageOf(current: State, title: string): boolean {
@@ -121,10 +121,10 @@ async function openedTab(open: () => Promise<void>): Promise<string | null> {
 }
 
 /** Opens a tile from the grid on a stopped clock and runs the clock into the flight, so the next step interrupts it mid-air. */
-async function startFlight(page: Page, title: string) {
+async function startFlight(page: Page, key: CardKey) {
   await page.goto(`${origin}/`);
   await settle(page, current => current.layout === "grid");
-  await tile(page, title).click();
+  await tile(page, key).click();
   await page.clock.runFor(MID_FLIGHT_MS);
 }
 
@@ -441,9 +441,9 @@ try {
   await page.goto(`${origin}/`);
   const grid = await settle(page, current => current.layout === "grid");
   expect(grid.layout === "grid" && grid.title === SITE_TITLE, `/ should show the grid titled ${SITE_TITLE}: ${JSON.stringify(grid)}`);
-  expect((await tile(page, second.title).getAttribute("href")) === livePath(second.slug), `the ${second.title} tile should link to ${livePath(second.slug)}`);
+  expect((await tile(page, { slug: second.slug }).getAttribute("href")) === livePath(second.slug), `the ${second.title} tile should link to ${livePath(second.slug)}`);
 
-  await tile(page, second.title).click();
+  await tile(page, { slug: second.slug }).click();
   const opened = await settle(page, current => current.layout === "pages" && isPageOf(current, second.title));
   expect(
     opened.path === livePath(second.slug) && opened.layout === "pages" && !opened.flying && opened.title === routeTitle(second) && opened.entries === grid.entries + 1,
@@ -469,7 +469,7 @@ try {
 
   await page.goto(`${origin}/`);
   await settle(page, current => current.layout === "grid");
-  const tab = await openedTab(() => tile(page, first.title).click({ modifiers: ["ControlOrMeta"] }));
+  const tab = await openedTab(() => tile(page, { slug: first.slug }).click({ modifiers: ["ControlOrMeta"] }));
   expect(tab !== null && new URL(tab).pathname === livePath(first.slug), `a modified click should open ${livePath(first.slug)} in a new tab, not ${tab}`);
   expect((await state(page)).path === "/", "a modified click should leave this tab on the grid");
 
@@ -496,7 +496,7 @@ try {
   flight.on("pageerror", error => failures.push(`page error: ${error.message}`));
 
   // Paging on while the camera is still flying in: the page that lands must be the one asked for, whole, in every frame.
-  await startFlight(flight, first.title);
+  await startFlight(flight, { slug: first.slug });
   await flight.evaluate(() => {
     const frames: { layout: string | null; left: number; right: number }[] = [];
     Object.assign(window, { __frames: frames });
@@ -529,13 +529,13 @@ try {
   );
 
   // Turning back to the grid mid-flight.
-  await startFlight(flight, second.title);
+  await startFlight(flight, { slug: second.slug });
   expect(await clickMidFlight(flight, "Show all components"), "the check should turn back while the camera is still flying");
   const reversed = await settle(flight, current => current.layout === "grid");
   expect(reversed.path === "/" && reversed.layout === "grid" && !reversed.flying, `turning back mid-flight should rest on the grid: ${JSON.stringify(reversed)}`);
 
   // A resize mid-flight: the page lands at the new size.
-  await startFlight(flight, second.title);
+  await startFlight(flight, { slug: second.slug });
   expect((await state(flight)).layout === "flight", "the check should resize while the camera is still flying");
   await flight.setViewportSize({ width: 1100, height: 700 });
   const resized = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.title));
