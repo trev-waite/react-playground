@@ -260,6 +260,7 @@ export class ParticleField {
   }
 
   private render(dtMs: number): boolean {
+    // perf-allow: lays out again only when the device pixel ratio changes.
     if (this.ink && Math.abs(this.ink.dpr - effectiveDpr()) > 0.001) this.relayout(true);
     const count = this.particles.length;
     if (count === 0) return false;

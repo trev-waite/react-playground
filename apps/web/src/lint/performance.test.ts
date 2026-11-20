@@ -54,19 +54,31 @@ function blockFrom(text: string, from: number): { body: string; start: number } 
   return null;
 }
 
-/** The body of the function or arrow named `name` in `text`, declared as a function, a const, or a class field. */
+const KEYWORDS = new Set(["if", "for", "while", "switch", "catch", "return", "function", "typeof", "new", "super"]);
+
+/** The body of the function, arrow, or method named `name` in `text`: a function, a const, a class field, or a method. */
 function functionBody(text: string, name: string): { body: string; start: number } | null {
+  if (KEYWORDS.has(name)) return null;
   const declaration = new RegExp(
-    `(?:(?:const|let)\\s+|(?:private|public|protected|readonly)\\s+(?:readonly\\s+)?)${name}\\s*=\\s*${PARAMS_AND_TYPE}|function\\s+${name}\\s*\\(`,
+    `(?:(?:const|let)\\s+|(?:private|public|protected|readonly)\\s+(?:readonly\\s+)?)${name}\\s*=\\s*${PARAMS_AND_TYPE}|function\\s+${name}\\s*\\(` +
+      `|^[ \\t]*(?:(?:private|public|protected|static|async|override)\\s+)*${name}\\s*\\([^)]*\\)\\s*(?::\\s*[^{=;]+)?\\{`,
+    "m",
   ).exec(text);
   return declaration ? blockFrom(text, declaration.index + declaration[0].length - 1) : null;
 }
 
+/** Local functions and `this.` methods a block calls, except calls marked `perf-allow: <reason>` on their line or the one above. */
+function callees(source: string, { body, start }: { body: string; start: number }): string[] {
+  return [...body.matchAll(new RegExp(`(?:(?<=\\bthis\\.)|(?<![.\\w$]))(${IDENTIFIER})\\(`, "g"))]
+    .filter(call => !allowedNear(source, start + call.index, ALLOW, 1))
+    .map(call => call[1]!);
+}
+
 /**
  * The code that runs every frame, comments blanked: functions handed to requestAnimationFrame or
- * visibleLoop, by name or inline, and the local functions they call, one call deep. A call marked
- * `perf-allow: <reason>` (one that runs only when something changed, or at most every so often) is
- * not followed.
+ * visibleLoop, by name or inline, and the local functions and methods they call, two calls deep. A
+ * call marked `perf-allow: <reason>` (one that runs only when something changed, or at most every so
+ * often) is not followed.
  */
 function frameCallbacks(source: string): { body: string; start: number }[] {
   const text = blankComments(source);
@@ -74,20 +86,19 @@ function frameCallbacks(source: string): { body: string; start: number }[] {
     ...text.matchAll(new RegExp(`requestAnimationFrame\\(\\s*(?:this\\.)?(${IDENTIFIER})\\s*\\)`, "g")),
     ...text.matchAll(new RegExp(`visibleLoop\\([^,()]+,\\s*(?:this\\.)?(${IDENTIFIER})\\s*[,)]`, "g")),
   ].map(match => match[1]!);
-  const callbacks = [...new Set(named)].flatMap(name => functionBody(text, name) ?? []);
+  const blocks = new Map<number, { body: string; start: number }>();
+  for (const block of [...new Set(named)].flatMap(name => functionBody(text, name) ?? [])) blocks.set(block.start, block);
   for (const match of text.matchAll(new RegExp(`visibleLoop\\([^,()]+,\\s*${PARAMS_AND_TYPE}`, "g"))) {
     const block = blockFrom(text, match.index! + match[0].length - 1);
-    if (block) callbacks.push(block);
+    if (block) blocks.set(block.start, block);
   }
-  const callees = new Set(
-    callbacks.flatMap(({ body, start }) =>
-      [...body.matchAll(new RegExp(`(?<![.\\w$])(${IDENTIFIER})\\(`, "g"))]
-        .filter(call => !allowedNear(source, start + call.index, ALLOW, 1))
-        .map(call => call[1]!),
-    ),
-  );
-  const calledBodies = [...callees].flatMap(name => functionBody(text, name) ?? []);
-  return [...new Map([...callbacks, ...calledBodies].map(block => [block.start, block])).values()];
+  let frontier = [...blocks.values()];
+  for (let hop = 0; hop < 2; hop++) {
+    const names = new Set(frontier.flatMap(block => callees(source, block)));
+    frontier = [...names].flatMap(name => functionBody(text, name) ?? []).filter(block => !blocks.has(block.start));
+    for (const block of frontier) blocks.set(block.start, block);
+  }
+  return [...blocks.values()];
 }
 
 /** `// …` and `/* … *\/` comments blanked to spaces, so offsets still line up. */
@@ -200,7 +211,7 @@ describe("performance lint: code", () => {
 
   test("frame loops read no layout and set no font, which would restyle the page after the deck moves a card", async () => {
     const violations: string[] = [];
-    const read = /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
+    const read = /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b(?!\s*=(?!=))|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
     for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
       for (const { body, start } of frameCallbacks(text)) {
         for (const match of body.matchAll(read)) {

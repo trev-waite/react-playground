@@ -19,7 +19,11 @@ export type VisibleLoop = {
 };
 
 export type VisibleLoopOptions = {
-  /** Called as the target leaves the screen, after the loop has paused, and as it returns, before it wakes. */
+  /**
+   * Called as the target leaves the screen, after the loop has paused, and as it comes back, before it
+   * wakes. A target that starts on screen never left, so this is not called for it: start work with
+   * `wake()`, and use this for what leaving and returning change, such as a timer.
+   */
   onVisibleChange?: (visible: boolean) => void;
 };
 
