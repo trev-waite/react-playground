@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"field":50,"beamRate":50,"persistence":40};
 
@@ -86,9 +87,6 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
   let nextSpillAt = 0;
   let ink = "#000";
   let inkCheckedAt = -Infinity;
-  let visible = true;
-  let frame = 0;
-  let lastTime = 0;
   let screenScale = 1;
   let viewMin = 800;
   let screenCheckedAt = -Infinity;
@@ -192,6 +190,7 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
   function draw(time: number) {
     if (time - inkCheckedAt > INK_CHECK_MS) {
       inkCheckedAt = time;
+      // perf-allow: reads the ink at most once every INK_CHECK_MS.
       ink = getComputedStyle(canvas).color || ink;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -293,23 +292,20 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
     }
   }
 
-  function tick(time: number) {
-    frame = 0;
-    const seconds = Math.min(0.034, Math.max(0, (time - lastTime) / 1000));
-    lastTime = time;
+  function tick(time: number, delta: number) {
+    const seconds = Math.min(0.034, delta / 1000);
+    // perf-allow: measures at most once every SCREEN_CHECK_MS.
     measureScreen(time);
     if (!reducedMotion.matches) {
       if (settings.current.progress >= 0.5 && clock >= nextSpillAt) spill();
       advance(seconds);
     }
     draw(time);
-    if (visible && !reducedMotion.matches) frame = requestAnimationFrame(tick);
+    return !reducedMotion.matches;
   }
 
   function wake() {
-    if (frame || !visible) return;
-    lastTime = performance.now();
-    frame = requestAnimationFrame(tick);
+    loop.wake();
   }
 
   function onClick(event: MouseEvent) {
@@ -325,24 +321,19 @@ function startChamber(canvas: HTMLCanvasElement, settings: RefObject<Settings>):
     resize();
     wake();
   });
-  const intersectionObserver = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    wake();
-  });
   const onMotionChange = () => {
     developed = false;
     resize();
     wake();
   };
   resizeObserver.observe(canvas);
-  intersectionObserver.observe(canvas);
+  const loop = visibleLoop(canvas, tick);
   canvas.addEventListener("click", onClick);
   reducedMotion.addEventListener("change", onMotionChange);
 
   return () => {
-    cancelAnimationFrame(frame);
+    loop.stop();
     resizeObserver.disconnect();
-    intersectionObserver.disconnect();
     canvas.removeEventListener("click", onClick);
     reducedMotion.removeEventListener("change", onMotionChange);
   };

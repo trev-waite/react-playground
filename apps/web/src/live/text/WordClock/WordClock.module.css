@@ -1,0 +1,117 @@
+.stage {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.face {
+  display: grid;
+  width: min(100%, 24rem);
+}
+
+.sentence {
+  min-height: calc(3 * 1.15em);
+  font-size: clamp(1.75rem, 10cqw, 2.5rem);
+}
+
+.part {
+  min-height: 1.5em;
+  margin-top: 8px;
+}
+
+.run {
+  position: relative;
+  display: block;
+}
+
+.ghost {
+  position: absolute;
+  pointer-events: none;
+}
+
+.minute {
+  position: relative;
+  height: 1px;
+  margin-top: 24px;
+  overflow: hidden;
+  background: var(--stage-hairline);
+}
+
+.minuteFill {
+  position: absolute;
+  inset: 0;
+  background: var(--stage-accent);
+  transform-origin: 0 50%;
+  animation: minute 60s linear both;
+  animation-delay: calc(var(--second) * -1s);
+}
+
+@keyframes minute {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  margin-inline-start: -12px;
+}
+
+.wind,
+.now {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--stage-control);
+  min-height: var(--stage-control);
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--stage-muted);
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    color 200ms var(--stage-fade-ease),
+    background-color 200ms var(--stage-fade-ease);
+}
+
+.now[data-hidden] {
+  visibility: hidden;
+}
+
+.wind:active,
+.now:active {
+  color: var(--stage-ink);
+  background: var(--stage-hover);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .wind:hover,
+  .now:hover {
+    color: var(--stage-ink);
+    background: var(--stage-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .minuteFill {
+    animation-play-state: paused;
+  }
+
+  .wind,
+  .now {
+    transition: none;
+  }
+}

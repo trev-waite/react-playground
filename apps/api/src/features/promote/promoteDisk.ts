@@ -66,7 +66,7 @@ export async function publishIdeaToDisk(
   const dir = path.join(liveRoot, targetFolder, componentName);
   const componentFile = path.join(dir, `${componentName}.tsx`);
   const previewFile = path.join(dir, "preview.tsx");
-  const artifact = buildLiveArtifact(document, slug);
+  const artifact = buildLiveArtifact(document, slug, await exists(path.join(liveRoot, targetFolder, "family.ts")));
 
   if (!(await exists(dir)) && (await createLiveFolder(dir, componentName, artifact))) {
     return { slug, dir, reused: false };

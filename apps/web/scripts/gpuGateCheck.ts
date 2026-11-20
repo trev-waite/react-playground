@@ -44,15 +44,15 @@ async function load(browser: Browser, webGpu: boolean) {
   await page.goto(url!);
   await page.waitForFunction(
     () => {
-      const cards = Array.from(document.querySelectorAll("article"));
-      return cards.length > 0 && cards.every(card => card.querySelector('[class*="_fit_"] > :not([class*="_loading_"])') !== null);
+      const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
+      return cards.length > 0 && cards.every(card => card.querySelector("[data-deck-members]") !== null && card.querySelector("[data-deck-loading]") === null);
     },
     null,
     { timeout: SETTLE_TIMEOUT_MS },
   );
   // The library is requested once the first GPU card mounts.
   const broken = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('article [role="alert"]'), alert => alert.textContent ?? ""),
+    Array.from(document.querySelectorAll('article[data-deck-card] [data-deck-error]'), alert => alert.textContent ?? ""),
   );
   return { broken, fetched, errors };
 }

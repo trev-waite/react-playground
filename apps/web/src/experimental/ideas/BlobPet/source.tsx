@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"bounce":75,"wobble":45,"tempo":30};
 
@@ -726,6 +727,7 @@ function toViewBox(svg: SVGSVGElement | null, clientX: number, clientY: number):
 }
 
 function animateBlob({
+  svgRef,
   bodyRef,
   shadowRef,
   featureRefs,
@@ -734,6 +736,7 @@ function animateBlob({
   pokeRef,
   settings,
 }: {
+  svgRef: RefObject<SVGSVGElement | null>;
   bodyRef: RefObject<SVGPathElement | null>;
   shadowRef: RefObject<SVGEllipseElement | null>;
   featureRefs: RefObject<(SVGPathElement | null)[]>;
@@ -759,8 +762,6 @@ function animateBlob({
   let formedAt = 0;
   let blinkAt = 2;
   let poke = pokeRef.current;
-  let last = performance.now();
-  let raf = 0;
 
   const morphTo = (next: number) => {
     index = next;
@@ -776,9 +777,8 @@ function animateBlob({
     if (!reduce) squash.velocity += 1 + 2.4 * bounce;
   };
 
-  const tick = (ms: number) => {
-    const dt = Math.min(1 / 30, (ms - last) / 1000);
-    last = ms;
+  const tick = (_ms: number, delta: number) => {
+    const dt = Math.min(1 / 30, delta / 1000);
     now += dt;
     const { bounce, wobble, tempo, playing } = settings.current;
 
@@ -884,11 +884,13 @@ function animateBlob({
       shadow.setAttribute("opacity", (0.13 * (1 - 0.6 * lift)).toFixed(3));
     }
 
-    raf = requestAnimationFrame(tick);
+    return true;
   };
 
-  raf = requestAnimationFrame(tick);
-  return () => cancelAnimationFrame(raf);
+  const svg = svgRef.current;
+  if (!svg) return () => {};
+  const loop = visibleLoop(svg, tick);
+  return loop.stop;
 }
 
 export function Example({
@@ -915,7 +917,7 @@ export function Example({
     };
   }, [sliders, progress]);
 
-  useEffect(() => animateBlob({ bodyRef, shadowRef, featureRefs, pupilRefs, lookRef, pokeRef, settings }), []);
+  useEffect(() => animateBlob({ svgRef, bodyRef, shadowRef, featureRefs, pupilRefs, lookRef, pokeRef, settings }), []);
 
   const restEyes = REST_FORM.features.slice(0, 2).map(centroid);
 
