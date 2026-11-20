@@ -64,7 +64,7 @@ const loop = visibleLoop(canvas, (now, delta) => {
 // loop.wake() after input or a resize; loop.stop() on unmount
 ```
 
-A frame returns `true` for another frame, milliseconds to wait (an idle tick), or nothing to sleep until `wake()`. Shared parts like this live in `live/kit/`, which the one-file download inlines; `kit` holds no cards.
+A frame returns `true` for another frame, milliseconds to wait (an idle tick, in place of `setInterval`), or nothing to sleep until `wake()`. Start work by calling `wake()`; `onVisibleChange` is only for what leaving and returning change, such as a timer. The lint reads whatever runs each frame, in any callback form, and the functions and methods it calls two deep: read sizes in a `ResizeObserver` and keep them. Shared parts like this live in `live/kit/`, which the one-file download inlines; `kit` holds no cards.
 
 ## Straight into Live, or an idea first
 

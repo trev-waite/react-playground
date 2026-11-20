@@ -43,7 +43,7 @@ iOS Safari, where the deck scrolls and snaps the document itself (`apps/web/src/
 - A `touch-action: none` region can outlive the style that made it, and swipes over it never scroll. Hold a page still with a cancelled `touchmove` instead.
 - `touch-action: pan-y` still pans a diagonal swipe. A sideways control must cancel `touchmove` itself, before the finger passes Safari's pan slop.
 
-`apps/web/src/lint/performance.test.ts` enforces these rules in `bun run test`, reading each frame callback and the local functions it calls. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code. On the line above a call in a frame callback, it marks a call that runs only when something changed or at most every so often, such as a size check every 500 ms.
+`apps/web/src/lint/performance.test.ts` enforces these rules in `bun run test`, reading each frame callback, in any form, and the local functions and methods it calls two deep; in Live, `requestAnimationFrame` and `setInterval` need `visibleLoop` or a reason. When an exception is justified, say why with a `perf-allow: <reason>` comment on the CSS rule, or on or just above the line of code. On the line above a call in a frame callback, it marks a call that runs only when something changed or at most every so often, such as a size check every 500 ms.
 
 ## Checks
 

@@ -74,22 +74,56 @@ function callees(source: string, { body, start }: { body: string; start: number 
     .map(call => call[1]!);
 }
 
+/** The arguments of the call whose `(` is at `open`, with their offsets, split at top-level commas. */
+function callArguments(text: string, open: number): { text: string; start: number }[] {
+  const args: { text: string; start: number }[] = [];
+  let depth = 0;
+  let start = open + 1;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const close = text.indexOf(ch, i + 1);
+      i = close < 0 ? text.length : close;
+    } else if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch) && --depth === 0) {
+      args.push({ text: text.slice(start, i), start });
+      return args;
+    } else if (ch === "," && depth === 1) {
+      args.push({ text: text.slice(start, i), start });
+      start = i + 1;
+    }
+  }
+  return args;
+}
+
+/** The body a frame callback argument runs: a named function or method, a block, or an arrow's expression. */
+function callbackBody(text: string, arg: { text: string; start: number }): { body: string; start: number } | null {
+  const trimmed = arg.text.trim();
+  const offset = arg.start + arg.text.indexOf(trimmed);
+  const named = new RegExp(`^(?:this\\.)?(${IDENTIFIER})(?:\\.bind\\([^)]*\\))?$`).exec(trimmed);
+  if (named) return functionBody(text, named[1]!);
+  const arrow = /^(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)(?:\s*:\s*[\w<>|\s]+?)?\s*=>\s*/.exec(trimmed);
+  if (arrow) {
+    const rest = offset + arrow[0].length;
+    return text[rest] === "{" ? blockFrom(text, rest) : { body: trimmed.slice(arrow[0].length), start: rest };
+  }
+  if (/^(?:async\s+)?function\b/.test(trimmed)) return blockFrom(text, offset + trimmed.indexOf(")") + 1);
+  return null;
+}
+
 /**
- * The code that runs every frame, comments blanked: functions handed to requestAnimationFrame or
- * visibleLoop, by name or inline, and the local functions and methods they call, two calls deep. A
- * call marked `perf-allow: <reason>` (one that runs only when something changed, or at most every so
+ * The code that runs every frame, comments blanked: the callbacks handed to requestAnimationFrame or
+ * visibleLoop, in any form, and the local functions and methods they call, two calls deep. A call
+ * marked `perf-allow: <reason>` (one that runs only when something changed, or at most every so
  * often) is not followed.
  */
 function frameCallbacks(source: string): { body: string; start: number }[] {
   const text = blankComments(source);
-  const named = [
-    ...text.matchAll(new RegExp(`requestAnimationFrame\\(\\s*(?:this\\.)?(${IDENTIFIER})\\s*\\)`, "g")),
-    ...text.matchAll(new RegExp(`visibleLoop\\([^,()]+,\\s*(?:this\\.)?(${IDENTIFIER})\\s*[,)]`, "g")),
-  ].map(match => match[1]!);
   const blocks = new Map<number, { body: string; start: number }>();
-  for (const block of [...new Set(named)].flatMap(name => functionBody(text, name) ?? [])) blocks.set(block.start, block);
-  for (const match of text.matchAll(new RegExp(`visibleLoop\\([^,()]+,\\s*${PARAMS_AND_TYPE}`, "g"))) {
-    const block = blockFrom(text, match.index! + match[0].length - 1);
+  for (const call of text.matchAll(/\b(requestAnimationFrame|visibleLoop)\(/g)) {
+    const args = callArguments(text, call.index! + call[0].length - 1);
+    const callback = args[call[1] === "visibleLoop" ? 1 : 0];
+    const block = callback && callbackBody(text, callback);
     if (block) blocks.set(block.start, block);
   }
   let frontier = [...blocks.values()];
@@ -211,7 +245,8 @@ describe("performance lint: code", () => {
 
   test("frame loops read no layout and set no font, which would restyle the page after the deck moves a card", async () => {
     const violations: string[] = [];
-    const read = /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b(?!\s*=(?!=))|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
+    const read =
+      /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b(?!\s*=(?!=))|\{[^{}]*\b(?:client|offset|scroll)(?:Width|Height|Left|Top)\b[^{}]*\}\s*=(?!=)|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
     for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
       for (const { body, start } of frameCallbacks(text)) {
         for (const match of body.matchAll(read)) {
@@ -261,11 +296,12 @@ describe("performance lint: Live components", () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx}")) {
       if (file.startsWith("live/kit/")) continue;
-      for (const match of blankComments(text).matchAll(/requestAnimationFrame\(/g)) {
+      for (const match of blankComments(text).matchAll(/\b(requestAnimationFrame|setInterval)\(/g)) {
         if (allowedNear(text, match.index)) continue;
         violations.push(
-          `${file}:${lineOf(text, match.index)} runs requestAnimationFrame itself. Run frames on visibleLoop from ` +
-            "@/live/kit/visibleLoop, or say why a short, input-driven animation needs its own with `perf-allow: <reason>`.",
+          `${file}:${lineOf(text, match.index)} runs ${match[1]} itself. Run frames on visibleLoop from ` +
+            "@/live/kit/visibleLoop (a frame can return milliseconds to wait), or say why a short, input-driven " +
+            "animation needs its own with `perf-allow: <reason>`.",
         );
       }
     }
