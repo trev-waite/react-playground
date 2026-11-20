@@ -93,9 +93,10 @@ async function checkTouchRelease(canvas: Locator) {
     const drop = gl.getUniform(program, gl.getUniformLocation(program, "uDrop")!) as number;
     return { yaw: Math.atan2(heading[1]!, heading[0]!), pitch: Math.atan2(tilt[1]!, tilt[0]!), drop };
   });
-  const touch = (type: "touchStart" | "touchMove" | "touchEnd", xOffset = 0, yOffset = 0) =>
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", xOffset = 0, yOffset = 0, timestamp?: number) =>
     input.send("Input.dispatchTouchEvent", {
       type,
+      timestamp,
       touchPoints: type === "touchEnd" ? [] : [{ x: box.x + box.width / 2 + xOffset, y: box.y + box.height / 2 + yOffset }],
     });
 
@@ -133,24 +134,27 @@ async function checkTouchRelease(canvas: Locator) {
     failures.push("Home should return both rotation axes of the hat to the front.");
   }
 
-  for (const [label, offsets, pace] of [
-    ["slow touch", [1, 2, 3, 4, 5, 6, 7, 8], 100],
-    ["slow orbit", [8, 11, 14, 17, 20], 120],
-    ["flick", [8, 15, 22, 34], 0],
+  for (const [label, offsets, sampleMs, shouldCoast] of [
+    ["slow touch", [1, 2, 3, 4, 5, 6, 7, 8], 100, false],
+    ["slow orbit", [8, 11, 14, 17, 20], 120, false],
+    ["flick", [8, 15, 22, 34], 16, true],
   ] as const) {
     const start = (await pose()).yaw;
-    await touch("touchStart");
-    for (const offset of offsets) {
-      if (pace) await page.waitForTimeout(pace);
-      await touch("touchMove", offset);
+    const interval = sampleMs / 1000;
+    const releaseAt = Date.now() / 1000;
+    const started = releaseAt - (offsets.length + 1) * interval;
+    await touch("touchStart", 0, 0, started);
+    for (const [index, offset] of offsets.entries()) {
+      if (!shouldCoast) await page.waitForTimeout(sampleMs);
+      await touch("touchMove", offset, 0, started + (index + 1) * interval);
     }
-    await touch("touchEnd");
+    await touch("touchEnd", 0, 0, releaseAt);
     await page.waitForTimeout(450);
     const drag = offsets.at(-1)! * orbitRadiansPerPixel(box.width, box.height);
     const released = await pose();
     const coast = released.yaw - start - drag;
     if (released.drop >= 0) failures.push(`The hat fell during ${label}.`);
-    if (pace ? Math.abs(coast) > 0.035 : coast < 0.04) {
+    if (shouldCoast ? coast < 0.04 : Math.abs(coast) > 0.035) {
       failures.push(`The hat's ${label} coasted ${coast.toFixed(2)} rad beyond the held drag.`);
     }
   }
