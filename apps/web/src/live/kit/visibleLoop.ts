@@ -36,12 +36,19 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
   let queued = 0;
   let wait: ReturnType<typeof setTimeout> | undefined;
   let last = 0;
+  let running = false;
 
   const run = (now: number) => {
     queued = 0;
     const delta = Math.max(0, now - last);
     last = now;
-    const next = frame(now, delta);
+    running = true;
+    let next: FrameRequest;
+    try {
+      next = frame(now, delta);
+    } finally {
+      running = false;
+    }
     if (stopped || !visible || queued || wait !== undefined) return;
     if (next === true) queued = requestAnimationFrame(run);
     else if (typeof next === "number") wait = setTimeout(wake, Math.max(0, next));
@@ -51,7 +58,7 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
     clearTimeout(wait);
     wait = undefined;
     if (stopped || !visible || queued) return;
-    last = performance.now();
+    if (!running) last = performance.now();
     queued = requestAnimationFrame(run);
   }
 

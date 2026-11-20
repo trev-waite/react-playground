@@ -147,6 +147,20 @@ describe("visibleLoop", () => {
     expect(frames.size).toBe(1);
   });
 
+  test("a wake from inside a frame keeps measuring from that frame", () => {
+    const seen: number[] = [];
+    const loop: { current?: ReturnType<typeof visibleLoop> } = {};
+    loop.current = visibleLoop({} as Element, (now, delta) => {
+      seen.push(delta);
+      clock = now + 9;
+      loop.current?.wake();
+    });
+    loop.current.wake();
+    runFrame(16);
+    runFrame(32);
+    expect(seen).toEqual([16, 16]);
+  });
+
   test("stop drops everything and ignores later wakes", () => {
     const { loop } = loopWith([true]);
     loop.wake();
