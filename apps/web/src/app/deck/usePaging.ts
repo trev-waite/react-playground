@@ -11,10 +11,10 @@ const PAGE_KEYS: Record<string, -1 | 1> = {
 
 function scrollsWithin(target: EventTarget | null, boundary: HTMLElement, deltaY: number): boolean {
   for (let node = target instanceof Element ? target : null; node && node !== boundary; node = node.parentElement) {
-    const { overflowY } = getComputedStyle(node);
+    const { overflowY, overscrollBehaviorY } = getComputedStyle(node);
     if (overflowY !== "auto" && overflowY !== "scroll") continue;
     const room = deltaY > 0 ? node.scrollHeight - node.clientHeight - node.scrollTop : node.scrollTop;
-    if (room > 1) return true;
+    if (room > 1 || (overscrollBehaviorY !== "auto" && node.scrollHeight > node.clientHeight)) return true;
   }
   return false;
 }
@@ -81,8 +81,10 @@ export function usePaging(scrollerRef: RefObject<HTMLElement | null>, enabled: b
       const direction = PAGE_KEYS[event.key];
       if (!direction || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTyping(event.target) || (event.key === " " && event.target instanceof HTMLButtonElement)) return;
+      const step = event.shiftKey && event.key === " " ? -1 : direction;
+      if (scrollsWithin(event.target, scroller!, step)) return;
       event.preventDefault();
-      latestInput().step(event.shiftKey && event.key === " " ? -1 : direction);
+      latestInput().step(step);
     }
 
     scroller.addEventListener("wheel", onWheel, { passive: false });

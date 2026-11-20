@@ -18,6 +18,7 @@ export const cardOrder: readonly string[] = [
   "dither/MoonPhase",
   "text/FlipDots",
   "particles/BubbleChamber",
+  "particles/GandalfHologram",
   "dither/EPaper",
   "navigation/MenuPill",
   "navigation/ProjectRail",

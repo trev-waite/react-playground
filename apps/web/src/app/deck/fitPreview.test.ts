@@ -131,6 +131,14 @@ describe("stepping a layout in flight", () => {
   });
 });
 
+test("short or narrow pages use the available space while tiles keep their preview scale", () => {
+  const area = { width: 552, height: 147 };
+  expect(restLayout(area, "page")).toEqual({ ...area, scale: 1 });
+  expect(restLayout(area, "tile")).toEqual(restLayout(area));
+  expect(restLayout(area, "tile").height).toBe(PREVIEW_MIN_SIZE);
+  expect(restLayout({ width: 240, height: 582 }, "page")).toEqual({ width: 240, height: 582, scale: 1 });
+});
+
 describe("previewScale", () => {
   test("keeps previews at full size on a page", () => {
     expect(previewScale(1200, 700)).toBe(1);
@@ -425,6 +433,27 @@ describe("observeFit", () => {
       const tile = fly(0);
       expect(new Set(sizes([tile.flying.at(-1)!, ...tile.springing, tile.rest]))).toEqual(new Set(["320px x 320px"]));
       expect(tile.rest.transform).toBe("scale(0.8)");
+    }
+  });
+
+  test("a first flight holds a short page's layout before its final approach", async () => {
+    const { fly, cards } = await flyingPreview({ mounted: "tile", canvas: true });
+    cards.page = { width: 667, height: 343 };
+    const flight = fly(1, 100);
+    for (const layout of [...flight.flying.slice(90), ...flight.springing, flight.rest]) {
+      expect(parseFloat(layout.width)).toBeCloseTo(619);
+      expect(parseFloat(layout.height)).toBeCloseTo(147);
+    }
+  });
+
+  test("a page shorter than a tile's minimum holds its layout by the final quarter", async () => {
+    const { fly, cards, pads } = await flyingPreview({ mounted: "tile", canvas: true });
+    cards.page = { width: 288, height: 248 };
+    pads.page = { width: 48, height: 158 };
+    const flight = fly(1, 100);
+    for (const layout of [...flight.flying.slice(75), ...flight.springing, flight.rest]) {
+      expect(parseFloat(layout.width)).toBeCloseTo(240);
+      expect(parseFloat(layout.height)).toBeCloseTo(90);
     }
   });
 

@@ -5,6 +5,7 @@ import {
   use,
   useCallback,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -23,19 +24,15 @@ import { footerOpacity, type Size } from "./deckLayout";
 import { familyLayoutWidth, observeFit, refitArea } from "./fitPreview";
 import styles from "./DeckCard.module.css";
 
-/** Padding as a tile (chrome 0) and as a page (chrome 1). The page top clears the floating chrome. */
 const TILE_PADDING = 16;
-const PAGE_PADDING = { top: 80, inline: 24 };
-/** The page bottom clears the footer: its measured height, its 24px inset, and 16px above it. */
-const FOOTER_CLEARANCE = 40;
+const PAGE_INLINE_PADDING = 24;
 
-function padding(page: number, chrome: number, safeArea?: "--safe-top" | "--safe-bottom") {
-  const value = px(TILE_PADDING + (page - TILE_PADDING) * chrome);
-  return safeArea ? `calc(${value} + ${chrome} * var(${safeArea}))` : value;
+function topPadding(chrome: number) {
+  return `calc(${px(TILE_PADDING)} + (var(--preview-top) - ${px(TILE_PADDING)} + var(--safe-top)) * ${chrome})`;
 }
 
 function footerPadding(chrome: number) {
-  const page = `var(--footer-height) + ${px(FOOTER_CLEARANCE - TILE_PADDING)}`;
+  const page = `var(--footer-height) + var(--footer-inset) + var(--footer-gap) - ${px(TILE_PADDING)}`;
   return `calc(${px(TILE_PADDING)} + (${page}) * ${chrome} + ${chrome} * var(--safe-bottom))`;
 }
 
@@ -50,7 +47,7 @@ type DeckCardProps = {
   mounted: boolean;
   /** Previews take input; off while the card is a tile or in flight. */
   interactive: boolean;
-  /** The page the reader is on. Only its footer takes focus, so Tab never lands on a neighbor and scrolls to it. */
+  /** The page the reader is on. Only that page takes input. */
   current: boolean;
   /** Present in the grid: the whole tile opens the page. */
   onOpen?: () => void;
@@ -80,11 +77,12 @@ export function DeckCard({
   const areaRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<HTMLDivElement>(null);
   const { left, top, width, height, x, y, scale, radius, chrome } = values;
+  const pageInteractive = interactive && current;
   const theme = useTheme();
   const surface = card.surface[theme];
   const membersWidth = familyLayoutWidth(
     { width: tile.width - TILE_PADDING * 2, height: tile.height - TILE_PADDING * 2 },
-    page.width - PAGE_PADDING.inline * 2,
+    page.width - PAGE_INLINE_PADDING * 2,
   );
 
   const cardStyle = useMotionStyle(cardRef, [left, top, width, height, x, y, scale, radius], style => {
@@ -97,8 +95,8 @@ export function DeckCard({
   });
 
   const previewStyle = useMotionStyle(previewRef, [chrome], style => {
-    const inline = padding(PAGE_PADDING.inline, chrome.get());
-    style("paddingTop", padding(PAGE_PADDING.top, chrome.get(), "--safe-top"));
+    const inline = px(TILE_PADDING + (PAGE_INLINE_PADDING - TILE_PADDING) * chrome.get());
+    style("paddingTop", topPadding(chrome.get()));
     style("paddingBottom", footerPadding(chrome.get()));
     style("paddingLeft", inline);
     style("paddingRight", inline);
@@ -122,19 +120,15 @@ export function DeckCard({
       data-raised={raised || undefined}
       data-current={current || undefined}
       aria-label={card.title}
-      style={{ ...cardStyle, "--card-background": surface.background } as CSSProperties}
+      style={{ ...cardStyle, "--card-background": surface.background, "--page-height": px(page.height) } as CSSProperties}
     >
-      <div ref={previewRef} className={styles.preview} style={previewStyle} inert={interactive ? undefined : true}>
+      <div ref={previewRef} className={styles.preview} style={previewStyle} inert={!pageInteractive}>
         <FitStage areaRef={areaRef} fitRef={fitRef}>
           {mounted ? <Members key={resetKey} members={card.members} familyWidth={membersWidth} /> : null}
         </FitStage>
       </div>
 
-      <CardFooter chrome={chrome} interactive={interactive && current}>
-        <div className={styles.caption}>
-          <h2 className={styles.title}>{card.title}</h2>
-          {card.description ? <p className={styles.description}>{card.description}</p> : null}
-        </div>
+      <CardFooter chrome={chrome} interactive={pageInteractive} title={card.title} description={card.description}>
         {onShowCode ? (
           <button
             type="button"
@@ -180,8 +174,19 @@ export function DeckCard({
 }
 
 /** The page's caption bar. It tells the card its height, so the preview above never runs under it. */
-function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; interactive: boolean; children: ReactNode }) {
+function CardFooter({ chrome, interactive, title, description, children }: {
+  chrome: MotionValue;
+  interactive: boolean;
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLElement>(null);
+  const captionRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const titleId = useId();
+  const [overflow, setOverflow] = useState(false);
+  const scrollable = interactive && overflow;
   const footerStyle = useMotionStyle(ref, [chrome], style => {
     style("opacity", opacity(footerOpacity(chrome.get())));
     style("transform", transform({ y: (1 - chrome.get()) * 16 }));
@@ -204,8 +209,58 @@ function CardFooter({ chrome, interactive, children }: { chrome: MotionValue; in
     return () => observer.disconnect();
   }, []);
 
+  useLayoutEffect(() => {
+    const caption = captionRef.current;
+    const text = caption?.firstElementChild;
+    const thumb = thumbRef.current;
+    if (!interactive || !caption || !text || !thumb) return;
+    const travel = { scroll: 0, thumb: 0 };
+    const moveThumb = () => {
+      if (travel.scroll === 0) return;
+      const progress = Math.min(1, Math.max(0, caption.scrollTop / travel.scroll));
+      thumb.style.transform = `translateY(${progress * travel.thumb}%)`;
+    };
+    const update = () => {
+      const visible = caption.clientHeight;
+      const total = caption.scrollHeight;
+      travel.scroll = Math.max(0, total - visible);
+      setOverflow(travel.scroll > 0);
+      if (travel.scroll === 0) return;
+      const fraction = Math.max(0.22, visible / total);
+      thumb.style.blockSize = `${fraction * 100}%`;
+      travel.thumb = (1 / fraction - 1) * 100;
+      moveThumb();
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(caption);
+    observer.observe(text);
+    caption.addEventListener("scroll", moveThumb, { passive: true });
+    return () => {
+      observer.disconnect();
+      caption.removeEventListener("scroll", moveThumb);
+    };
+  }, [interactive]);
+
   return (
     <footer ref={ref} className={styles.footer} style={footerStyle} inert={interactive ? undefined : true}>
+      <div className={styles.captionFrame}>
+        <div
+          ref={captionRef}
+          className={styles.caption}
+          role={scrollable ? "region" : undefined}
+          aria-labelledby={scrollable ? titleId : undefined}
+          tabIndex={scrollable ? 0 : undefined}
+        >
+          <div className={styles.captionText}>
+            <h2 id={titleId} className={styles.title}>{title}</h2>
+            {description ? <p className={styles.description}>{description}</p> : null}
+          </div>
+        </div>
+        <div data-caption-scroll className={styles.captionScroll} hidden={!scrollable} aria-hidden="true">
+          <span ref={thumbRef} className={styles.captionThumb} />
+        </div>
+      </div>
       {children}
     </footer>
   );

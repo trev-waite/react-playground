@@ -6,6 +6,11 @@
   --card-bar-border: rgba(28, 36, 48, 0.06);
   /* A one-line footer, until DeckCard measures the real one. */
   --footer-height: 60px;
+  --chrome-growth: clamp(0px, 100svh - 320px, 64px);
+  --preview-top: calc(58px + clamp(0px, (100svh - 280px) * 0.15, 6px) + var(--chrome-growth) / 4);
+  --footer-inset: calc(var(--space-2) + var(--chrome-growth) / 8);
+  --footer-gap: calc(var(--space-1) + var(--chrome-growth) / 8);
+  --preview-min-height: 90px;
 
   position: absolute;
   overflow: hidden;
@@ -137,14 +142,15 @@
 .footer {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--space-3) + var(--safe-bottom));
+  bottom: calc(var(--footer-inset) + var(--safe-bottom));
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: max-content;
   max-width: min(560px, calc(100% - var(--space-6)));
   min-height: 60px;
-  padding: var(--space-1);
+  max-height: max(62px, calc(var(--page-height) - var(--preview-top) - var(--footer-inset) - var(--footer-gap) - var(--safe-top) - var(--safe-bottom) - var(--preview-min-height)));
+  padding: clamp(3px, (100svh - 280px) / 8 + 3px, var(--space-1)) var(--space-1);
   border: 1px solid var(--card-bar-border);
   /* A pill while it is one line high; a rounded box, not a circle, when the text wraps. */
   border-radius: var(--space-4);
@@ -154,17 +160,97 @@
   translate: -50% 0;
 }
 
+.captionFrame {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+}
+
 .caption {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  justify-content: safe center;
   min-width: 0;
   padding: 0 var(--space-1) 0 var(--space-2);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--card-ink-muted) transparent;
+  overflow-wrap: anywhere;
 }
 
-.caption:last-child {
+.captionFrame:last-child .caption {
   padding-right: var(--space-2);
+}
+
+.caption:focus-visible {
+  outline: 2px solid var(--card-ink);
+  outline-offset: -2px;
+  border-radius: var(--space-1);
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .caption {
+    scrollbar-color: auto;
+  }
+
+  .caption::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .caption::-webkit-scrollbar-thumb {
+    background: var(--card-ink-muted);
+    border-radius: var(--space-1);
+  }
+}
+
+.captionScroll {
+  display: none;
+  position: absolute;
+  inset-block: 4px;
+  inset-inline-end: 2px;
+  width: 3px;
+  border-radius: var(--space-1);
+  background: color-mix(in srgb, var(--card-ink) 18%, transparent);
+  pointer-events: none;
+}
+
+.captionThumb {
+  display: block;
+  width: 100%;
+  height: 25%;
+  border-radius: inherit;
+  background: var(--card-ink-muted);
+}
+
+@media (pointer: coarse) {
+  .caption {
+    scrollbar-width: none;
+  }
+
+  .captionScroll:not([hidden]) {
+    display: block;
+  }
+}
+
+@media (forced-colors: active) {
+  .captionScroll {
+    forced-color-adjust: none;
+    background: Canvas;
+  }
+
+  .captionThumb {
+    background: CanvasText;
+  }
+}
+
+.captionText {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .title {

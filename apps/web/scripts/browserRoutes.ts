@@ -135,6 +135,41 @@ function clickMidFlight(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
+async function checkKeyboardFocus(page: Page) {
+  const title = "Gandalf’s Hat";
+  const path = livePath("particles/GandalfHologram");
+  for (const entry of [path, "/"]) {
+    await page.goto(`${origin}${entry}`);
+    if (entry === "/") {
+      await tile(page, title).focus();
+      await page.keyboard.press("Enter");
+    }
+    await settle(page, current => current.layout === "pages" && isPageOf(current, title));
+    const card = page.getByRole("article", { name: title, exact: true });
+    const scene = card.locator("[data-projecting], [data-still]");
+    await scene.waitFor({ state: "attached" });
+    const controls = await scene.locator('button[tabindex="0"]:visible').evaluateAll(buttons =>
+      buttons.map(button => button.getAttribute("aria-label")),
+    );
+    const reached: (string | null)[] = [];
+    let code = false;
+    for (let step = 0; step < 12 && !code; step++) {
+      await page.keyboard.press("Tab");
+      const focused = await page.evaluate(() => ({
+        card: document.activeElement?.closest("article")?.getAttribute("aria-label"),
+        label: document.activeElement?.getAttribute("aria-label") ?? null,
+        code: document.activeElement?.getAttribute("aria-haspopup") === "dialog",
+        path: location.pathname,
+      }));
+      if ((focused.card && focused.card !== title) || focused.path !== path) break;
+      if (focused.card === title && !focused.code) reached.push(focused.label);
+      code = focused.card === title && focused.code;
+    }
+    expect(code && JSON.stringify(reached) === JSON.stringify(controls),
+      `Tab from ${entry} should reach the hat and Code without leaving the page. Reached ${JSON.stringify(reached)}, Code ${code}.`);
+  }
+}
+
 try {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
@@ -184,6 +219,7 @@ try {
       expect(isPageOf(direct, card.title), `${livePath(slug)} should fill the page with ${card.title}`);
     }
   }
+  await checkKeyboardFocus(page);
   await context.close();
 
   // The camera interrupted mid-flight, on a clock stopped before the page loads.
