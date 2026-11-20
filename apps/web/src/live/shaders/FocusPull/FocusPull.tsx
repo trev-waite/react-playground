@@ -149,11 +149,14 @@ function startFocus({ gpu, surface, canvas }: GpuSession, rack: Rack, holder: HT
     },
   });
   const unsubscribeError = gpu.onError(error => console.error("Focus Pull could not draw", error));
-  let page: Page = fitPage(1, layout.aspect);
+  const rows = layout.rows.filter(Number.isFinite);
+  const lineHalf = (rows[1]! - rows[0]!) / 2;
+  const content = { left: 0.03, right: 0.94, top: rows[0]! - lineHalf, bottom: rows.at(-1)! + lineHalf };
+  let page: Page = fitPage(1, layout.aspect, content);
   let aspect = 1;
   const unsubscribeResize = surface.onResize(({ width, height }) => {
     aspect = Math.max(1, width) / Math.max(1, height);
-    page = fitPage(aspect, layout.aspect);
+    page = fitPage(aspect, layout.aspect, content);
     paint.set({ params: { resolution: [width, height], page: [page.width, page.height], lens: [page.zoom, page.shift], tilt: page.tilt, dark: isDarkTone(holder) ? 1 : 0 } });
   });
   rack.aim(place => pageRowAt(page, aspect, place.x * 2 - 1, 1 - place.y * 2));

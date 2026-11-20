@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { blurLevel, fitPage, MAX_BLUR_LEVEL, pageRowAt, projectPage } from "./focus";
+import { blurLevel, fitPage, MAX_BLUR_LEVEL, pageRowAt, projectPage, SCREEN_MARGIN } from "./focus";
 import { layoutPoem, POEM } from "./poem";
 
 const ASPECTS = [0.6, 1, 1.6, 2.4];
@@ -9,15 +9,29 @@ describe("Focus Pull page", () => {
     const page = fitPage(aspect, 1.3);
     for (const [u, v] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) {
       const corner = projectPage(page, aspect, u, v);
-      expect(Math.abs(corner.x)).toBeLessThanOrEqual(0.861);
-      expect(Math.abs(corner.y)).toBeLessThanOrEqual(0.861);
+      expect(Math.abs(corner.x)).toBeLessThanOrEqual(SCREEN_MARGIN + 0.001);
+      expect(Math.abs(corner.y)).toBeLessThanOrEqual(SCREEN_MARGIN + 0.001);
     }
     const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => projectPage(page, aspect, u!, v!));
     const top = Math.max(...corners.map(corner => corner.y));
     const bottom = Math.min(...corners.map(corner => corner.y));
     const reach = Math.max(...corners.map(corner => Math.abs(corner.x)));
-    expect(Math.max(reach, (top - bottom) / 2)).toBeGreaterThan(0.85);
+    expect(Math.max(reach, (top - bottom) / 2)).toBeGreaterThan(SCREEN_MARGIN - 0.01);
     expect(top + bottom).toBeCloseTo(0, 6);
+  });
+
+  test("fitting to the content zooms past the page's empty margins and keeps the content on screen", () => {
+    const content = { left: 0.05, right: 0.9, top: 0.15, bottom: 0.85 };
+    for (const aspect of ASPECTS) {
+      const whole = fitPage(aspect, 1.1);
+      const fitted = fitPage(aspect, 1.1, content);
+      expect(fitted.zoom).toBeGreaterThan(whole.zoom);
+      for (const [u, v] of [[0.05, 0.15], [0.9, 0.15], [0.05, 0.85], [0.9, 0.85]] as const) {
+        const corner = projectPage(fitted, aspect, u, v);
+        expect(Math.abs(corner.x)).toBeLessThanOrEqual(SCREEN_MARGIN + 0.001);
+        expect(Math.abs(corner.y)).toBeLessThanOrEqual(SCREEN_MARGIN + 0.001);
+      }
+    }
   });
 
   test("the far edge of the page draws narrower than the near edge", () => {

@@ -6,7 +6,7 @@
 export const CAMERA = { tan: 0.5, distance: 2.4 } as const;
 /** How far the page leans back, in radians: steep on a wide screen, flatter on a narrow one, so the poem stays readable on a phone. */
 export function tiltFor(aspect: number): number {
-  return Math.min(0.95, Math.max(0.5, 0.35 + 0.27 * aspect));
+  return Math.min(0.95, Math.max(0.3, 0.2 + 0.33 * aspect));
 }
 
 /** Blur at the page's far and near edges when the focus sits on the other. */
@@ -14,7 +14,7 @@ export const MAX_BLUR_LEVEL = 3;
 /** Page rows (0 top, 1 bottom) of blur per level: focus falls off over about a fifth of the page. */
 export const ROWS_PER_LEVEL = 0.09;
 /** How far the page may reach toward the screen's edges. */
-const SCREEN_MARGIN = 0.86;
+export const SCREEN_MARGIN = 0.8;
 
 /**
  * The page's size on its plane, and the lens shift and zoom that center its
@@ -59,10 +59,19 @@ export function pageRowAt(page: Page, aspect: number, screenX: number, screenY: 
   return Math.min(1, Math.max(0, v));
 }
 
-/** The page of this shape (height over width), shifted and zoomed so its picture fills the screen inside the margin. */
-export function fitPage(aspect: number, pageAspect: number): Page {
+/** The part of the page that must stay on screen, as shares of its width and height. */
+export type Content = { left: number; right: number; top: number; bottom: number };
+
+const WHOLE_PAGE: Content = { left: 0, right: 1, top: 0, bottom: 1 };
+
+/**
+ * The page of this shape (height over width), shifted and zoomed so the
+ * picture of its content, not its empty margins, fills the screen inside the margin.
+ */
+export function fitPage(aspect: number, pageAspect: number, content: Content = WHOLE_PAGE): Page {
   const plain: Page = { width: PAGE_WIDTH, height: PAGE_WIDTH * pageAspect, tilt: tiltFor(aspect), zoom: 1, shift: 0 };
-  const corners = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => projectPage(plain, aspect, u!, v!));
+  const { left, right, top: first, bottom: last } = content;
+  const corners = [[left, first], [right, first], [left, last], [right, last]].map(([u, v]) => projectPage(plain, aspect, u!, v!));
   const reach = Math.max(...corners.map(corner => Math.abs(corner.x)));
   const top = Math.max(...corners.map(corner => corner.y));
   const bottom = Math.min(...corners.map(corner => corner.y));

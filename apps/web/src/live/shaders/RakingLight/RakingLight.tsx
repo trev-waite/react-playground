@@ -40,11 +40,12 @@ fn depth(uv: vec2f) -> f32 {
 
 @fragment fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
   let resolution = max(params.resolution, vec2f(1.0));
-  let aspect = resolution.x / resolution.y;
+  // Distances are in units of the stage's shorter side, so the pool keeps its size on a tall phone stage.
+  let unit = resolution / min(resolution.x, resolution.y);
   let pixel = 1.0 / resolution;
   let presence = params.presence;
 
-  let paperUv = vec2f(uv.x * aspect, uv.y);
+  let paperUv = uv * unit;
   let fiber = fbm(paperUv * vec2f(260.0, 90.0)) - 0.5;
   let grain = valueNoise(paperUv * 900.0) - 0.5;
 
@@ -56,17 +57,17 @@ fn depth(uv: vec2f) -> f32 {
 
   let core = tap(mask, uv);
   let surface = vec3f(paperUv, -depth(uv) * 0.02);
-  let lamp = vec3f(params.lamp.x * aspect, params.lamp.y, LAMP_HEIGHT);
+  let lamp = vec3f(params.lamp * unit, LAMP_HEIGHT);
   let toLamp = lamp - surface;
   let span = length(toLamp);
   let toward = toLamp / span;
   // Falls to nothing well before the stage's edge, so the light never meets the card's border.
   let falloff = exp(-span * span * 6.0);
-  let edge = smoothstep(0.0, 0.08, min(min(uv.x, 1.0 - uv.x) * aspect, min(uv.y, 1.0 - uv.y)));
+  let edge = smoothstep(0.0, 0.08, min(min(uv.x, 1.0 - uv.x) * unit.x, min(uv.y, 1.0 - uv.y) * unit.y));
 
   // A wall between the floor and the lamp shades the floor behind it.
   let reach = normalize(toLamp.xy + vec2f(1e-4, 0.0)) * 0.016;
-  let wall = tap(near, uv + vec2f(reach.x / aspect, reach.y));
+  let wall = tap(near, uv + reach / unit);
   let shadow = saturate((core - wall) * 1.6) * smoothstep(0.0, 0.6, 1.0 - toward.z);
 
   let lit = dot(normal, toward);

@@ -39,7 +39,7 @@
 }
 
 .lens {
-  --lens: clamp(112px, 44cqh, 196px);
+  --lens: clamp(104px, min(44cqh, 50cqw), 196px);
   --bezel: calc(var(--lens) * 0.035 + 2px);
 
   position: absolute;
