@@ -224,6 +224,13 @@ describe("observeFit", () => {
     const preview = (name: string, natural: number) => {
       const content = {
         style: new Proxy({} as Record<string, string>, {
+          get(target, key) {
+            if (key !== "setProperty") return target[String(key)];
+            return (name: string, value: string) => {
+              log.push("write");
+              target[name] = value;
+            };
+          },
           set(target, key, value) {
             log.push("write");
             target[String(key)] = value;
@@ -265,6 +272,7 @@ describe("observeFit", () => {
     expect(pattern).toMatch(/^w+r+w*$/);
     // The overflowing preview shrinks further to fit its tile.
     expect(cards[1]!.content.style.transform).toBe(`scale(${(280 / 320) * (320 / 900)})`);
+    expect(Number(cards[1]!.content.style["--preview-scale"])).toBeCloseTo(280 / 900, 10);
   });
 
   type Laid = { width: string; height: string; transform: string };
@@ -273,7 +281,10 @@ describe("observeFit", () => {
   async function flyingPreview({ canvas = false, mounted = "page" as "tile" | "page" } = {}) {
     const { observeFit } = await import("./fitPreview");
 
-    const style: Record<string, string> = {};
+    const values: Record<string, string> = {};
+    const style = Object.assign(values, {
+      setProperty(name: string, value: string) { values[name] = value; },
+    });
     const layoutWidth = () => parseFloat(style.width ?? "0");
     const layoutHeight = () => parseFloat(style.height ?? "0");
     const content = {
@@ -391,6 +402,15 @@ describe("observeFit", () => {
       if (frame > 0) expect(parseFloat(width)).toBeGreaterThan(parseFloat(widths(flying)[frame - 1]!));
     });
     expect(flying.at(-1)!.width).toBe("1360px");
+  });
+
+  test("the preview eases into its page layout before holding it", async () => {
+    const { fly } = await flyingPreview();
+    const { flying } = fly(1, 100);
+    const [before, approaching, almostThere, landed] = widths(flying).slice(94, 98).map(Number.parseFloat);
+    expect(landed).toBe(1360);
+    expect(landed! - before!).toBeLessThan(landed! * 0.005);
+    expect(landed! - almostThere!).toBeLessThan((approaching! - before!) / 2);
   });
 
   test("once a canvas is seen to resize with the layout, the preview lays out only at its stops, and last at the layout it lands on", async () => {

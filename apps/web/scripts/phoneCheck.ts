@@ -70,8 +70,9 @@ try {
   if (!box) throw new Error("Spacing Tidy has no Square 1 on its page.");
   const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const touch = await context.newCDPSession(page);
-  const send = (type: "touchStart" | "touchMove" | "touchEnd", at?: { x: number; y: number }) =>
-    touch.send("Input.dispatchTouchEvent", { type, touchPoints: at ? [at] : [] });
+  type TouchPoint = { x: number; y: number; id?: number };
+  const send = (type: "touchStart" | "touchMove" | "touchEnd", ...points: TouchPoint[]) =>
+    touch.send("Input.dispatchTouchEvent", { type, touchPoints: points.map((point, index) => ({ ...point, id: point.id ?? index })) });
   await send("touchStart", start);
   for (let step = 1; step <= 10; step++) {
     await send("touchMove", { x: start.x + (DRAG.x * step) / 10, y: start.y + (DRAG.y * step) / 10 });
@@ -84,6 +85,152 @@ try {
         `${Math.round((moved?.x ?? box.x) - box.x)}, ${Math.round((moved?.y ?? box.y) - box.y)}.`,
     );
   }
+
+  await page.addInitScript(() => { Math.random = () => 0; });
+  for (const [width, height] of [[320, 320], [360, 360], [667, 375], [375, 375], [390, 390]] as const) {
+    await page.setViewportSize({ width, height });
+    const scene = await openPage(page, "Letterpress");
+    const { hints, rail, play } = await scene.locator("[data-letterpress]").evaluate((stage: HTMLElement) => {
+      const scale = stage.getBoundingClientRect().width / stage.offsetWidth;
+      const hints = Array.from(stage.querySelectorAll<HTMLElement>("[data-compact-hint]"))
+        .filter(hint => hint.getClientRects().length > 0)
+        .map(hint => Number.parseFloat(getComputedStyle(hint).fontSize) * scale);
+      const rail = stage.querySelector("[role=slider]")!.getBoundingClientRect().height;
+      const playback = stage.querySelector("[data-playback]")!.getBoundingClientRect();
+      return { hints, rail, play: Math.min(playback.width, playback.height) };
+    });
+    if (hints.length !== 1 || hints.some(size => size < 11.5) || rail < 44) {
+      failures.push(`Letterpress at ${width}×${height} needs readable hints and a 44px scrubber. Measured ${hints.map(size => size.toFixed(1)).join(", ")}px hints and a ${rail.toFixed(1)}px scrubber.`);
+    }
+    if (play < 43.9) failures.push(`Letterpress needs a 44px playback target at ${width}×${height}; the button measured ${play.toFixed(1)}px.`);
+    if (width === 320) {
+      const clipped = await scene.locator("[data-letterpress]").evaluate(stage => {
+        const art = Array.from(stage.querySelectorAll("[data-glyph-art]"));
+        const port = stage.closest("[data-scroll-scene]")!;
+        const start = performance.now();
+        let worst = 0;
+        port.scrollTop = port.scrollHeight;
+        return new Promise<number>(resolve => {
+          function sample(now: number) {
+            const bounds = stage.getBoundingClientRect();
+            for (const artwork of art) {
+              const glyph = artwork.getBoundingClientRect();
+              worst = Math.max(worst, bounds.top - glyph.top, glyph.bottom - bounds.bottom);
+            }
+            if (now - start < 1000) requestAnimationFrame(sample);
+            else resolve(worst);
+          }
+          requestAnimationFrame(sample);
+        });
+      });
+      if (clipped > 1) failures.push(`Letterpress clips its letters by ${clipped.toFixed(1)}px during the 320×320 reveal.`);
+      const target = await scene.locator("[data-letter]").evaluateAll(letters => Math.min(...letters.flatMap(letter => {
+        const { width, height } = letter.getBoundingClientRect();
+        return [width, height];
+      })));
+      if (target < 43.9) failures.push(`Letterpress needs 44px press areas at 320×320. The smallest measured ${target.toFixed(1)}px.`);
+    }
+  }
+  const letterpress = page.getByRole("article", { name: "Letterpress" });
+  const scrubber = letterpress.getByRole("slider", { name: "Scroll to assemble" });
+  await scrubber.focus();
+  await page.keyboard.press("End");
+  await page.waitForFunction(() => !document.querySelector("[data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
+  const letter = await letterpress.getByRole("button", { name: "Letter k", exact: true }).boundingBox();
+  if (!letter) throw new Error("Letterpress should show the letter k.");
+  await send("touchStart", { x: letter.x + letter.width / 2 - 6, y: letter.y + letter.height / 2 });
+  const lifted = letterpress.locator("[data-letter][data-lifted]");
+  await lifted.waitFor({ timeout: SETTLE_TIMEOUT_MS });
+  if (await lifted.getAttribute("aria-label") !== "Letter k") failures.push("Touching the left side of k should lift k in compact Letterpress.");
+  await send("touchEnd");
+
+  await page.setViewportSize(PHONE.viewport);
+  const tallCard = await openPage(page, "Letterpress");
+  const stage = tallCard.locator("[data-letterpress]");
+  const rail = tallCard.getByRole("slider");
+  const tee = tallCard.getByRole("button", { name: "Letter T", exact: true });
+  const allLanded = () => page.waitForFunction(() => !document.querySelector("[data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
+  const teeCenter = async () => {
+    const box = await tee.boundingBox();
+    if (!box) throw new Error("Letterpress should show the letter T.");
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  await rail.focus();
+  await page.keyboard.press("End");
+  await allLanded();
+  const tallLifted = tallCard.locator("[data-lifted]");
+  for (const alreadyLifted of [false, true]) {
+    const first = await teeCenter();
+    await send("touchStart", first);
+    if (alreadyLifted) await tallLifted.waitFor({ timeout: SETTLE_TIMEOUT_MS });
+    await send("touchStart", first, { x: first.x + 60, y: 38 });
+    if (!alreadyLifted) await page.waitForTimeout(200);
+    if (await tallLifted.count() > 0) failures.push("A second touch should cancel a Letterpress hold.");
+    await send("touchEnd");
+    if (await tallCard.locator("[data-placed]").count() > 0) failures.push("A two-finger gesture should leave the letter in its original slot.");
+    await allLanded();
+  }
+  const teeStart = await teeCenter();
+  await send("touchStart", teeStart);
+  await tallCard.locator("[data-lifted]").waitFor({ timeout: SETTLE_TIMEOUT_MS });
+  await send("touchMove", { x: teeStart.x + 120, y: teeStart.y + 60 });
+  await send("touchEnd");
+  const contact = await teeCenter();
+  await send("touchStart", contact);
+  await tee.and(tallCard.locator("[data-lifted]")).waitFor({ timeout: SETTLE_TIMEOUT_MS });
+  const regrabbed = await teeCenter();
+  if (Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
+    failures.push("A touch re-grab should lift the returning letter under the original contact.");
+  }
+  await send("touchEnd");
+
+  await openPage(page, "Letterpress");
+  const bounds = await stage.boundingBox();
+  if (!bounds) throw new Error("Letterpress should show a stage.");
+  const swipeFrom = { x: bounds.x + bounds.width * 0.24, y: bounds.y + bounds.height * 0.88 };
+  const scrollTop = () => page.evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+  async function swipe(distance: number, staggerRelease = false) {
+    await send("touchStart", swipeFrom);
+    for (let step = 1; step <= 8; step++) {
+      await send("touchMove", { x: swipeFrom.x, y: swipeFrom.y - distance * step / 8 });
+    }
+    const beforeRelease = await scrollTop();
+    if (staggerRelease) {
+      const inside = { x: swipeFrom.x, y: swipeFrom.y - distance, id: 0 };
+      const outside = { x: swipeFrom.x + 60, y: 38, id: 1 };
+      await send("touchStart", inside, outside);
+      await send("touchEnd", inside);
+      await send("touchEnd", outside);
+    } else {
+      await send("touchEnd");
+    }
+    return beforeRelease;
+  }
+  const play = stage.locator("[data-playback]");
+  const playBox = await play.boundingBox();
+  if (!playBox) throw new Error("Letterpress should show its playback control.");
+  await send("touchStart", { x: playBox.x + playBox.width / 2, y: playBox.y + playBox.height / 2 });
+  await send("touchEnd");
+  const playbackProgress = async () => Number(await rail.getAttribute("aria-valuenow"));
+  await page.waitForFunction(() => Number(document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 35);
+  const beforeManualProgress = await playbackProgress();
+  const beforeManualSwipe = await scrollTop();
+  const duringManualSwipe = await swipe(90);
+  if (await play.getAttribute("data-playing") !== null || duringManualSwipe !== beforeManualSwipe ||
+      await playbackProgress() <= beforeManualProgress) {
+    failures.push("A phone swipe during playback should advance from the current Letterpress frame.");
+  }
+  await openPage(page, "Letterpress");
+  const deckStart = await scrollTop();
+  await swipe(575);
+  const duringSecond = await swipe(275, true);
+  await allLanded();
+  if (Math.abs(duringSecond - deckStart) > 1 || Math.abs(await scrollTop() - deckStart) > 1) {
+    failures.push("A touch swipe should stay on Letterpress until the title lands.");
+  }
+  const duringFresh = await swipe(525);
+  if (duringFresh === deckStart) failures.push("The first fresh swipe after a split touch release should move to the next card.");
+  else await page.waitForURL("**/inputs/StretchSlider", { timeout: SETTLE_TIMEOUT_MS });
 } finally {
   await browser.close();
   await server.close();
@@ -93,4 +240,4 @@ if (failures.length > 0) {
   console.error(`On a ${PHONE.viewport.width}px phone:\n${failures.map(line => `  ${line}`).join("\n")}`);
   process.exit(1);
 }
-console.log(`Every card fits its ${PHONE.viewport.width}px phone page, and a finger drags Spacing Tidy.`);
+console.log(`Every card fits its ${PHONE.viewport.width}px phone page, and touch targeting works in Spacing Tidy and Letterpress.`);
