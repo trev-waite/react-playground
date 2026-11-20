@@ -1,6 +1,10 @@
 import path from "node:path";
-import { chromium, type Page } from "playwright";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { chromium, type Locator, type Page } from "playwright";
 import { preview } from "vite";
+import type { SourceFile } from "../src/lib/types.ts";
+import { FRONT_PITCH, FRONT_YAW, orbitRadiansPerPixel } from "../src/live/particles/GandalfHologram/orbit.ts";
 
 /**
  * Opens every card as a page on a phone-sized screen and fails when a preview
@@ -42,6 +46,193 @@ async function openPage(page: Page, title: string) {
   return card;
 }
 
+async function checkPortableHologram(page: Page) {
+  const slug = "particles/GandalfHologram";
+  const sources = await Bun.file(path.join(webRoot, "dist/code", slug + ".json")).json() as SourceFile[];
+  const [source] = sources;
+  if (sources.length !== 1 || !source) throw new Error("Gandalf’s Hat must be exported as one file.");
+  const directory = await mkdtemp(path.join(tmpdir(), "portable-hologram-"));
+  try {
+    const dependencies = path.join(directory, "node_modules");
+    await mkdir(dependencies);
+    await Promise.all(["react", "react-dom"].map(name =>
+      symlink(path.join(webRoot, "node_modules", name), path.join(dependencies, name), "dir"),
+    ));
+    const entry = path.join(directory, "GandalfHologram.tsx");
+    const mount = 'import { createRoot } from "react-dom/client"; createRoot(document.querySelector("#root")!).render(<GandalfHologram />);';
+    await Bun.write(entry, source.code + "\n" + mount);
+    const bundle = await Bun.build({
+      entrypoints: [entry],
+      target: "browser",
+      define: { "process.env.NODE_ENV": '"production"' },
+    });
+    const script = bundle.outputs[0];
+    if (!script) throw new Error("The downloaded hat component did not bundle.");
+    await page.goto("about:blank");
+    await page.setContent('<!doctype html><meta name="viewport" content="width=device-width"><div id="root" style="width:360px"></div>');
+    await page.addScriptTag({ content: await script.text(), type: "module" });
+    const canvas = page.locator("#root canvas");
+    await canvas.waitFor({ state: "attached" });
+    const size = await canvas.boundingBox();
+    if (!size || size.height < 200) failures.push("The downloaded hat component collapses inside an auto-height host.");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function checkTouchRelease(canvas: Locator) {
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("The landscape hologram has no canvas for the touch check.");
+  const page = canvas.page();
+  const input = await page.context().newCDPSession(page);
+  const pose = () => canvas.evaluate(element => {
+    const gl = (element as HTMLCanvasElement).getContext("webgl2")!;
+    const program = gl.getParameter(gl.CURRENT_PROGRAM) as WebGLProgram;
+    const heading = gl.getUniform(program, gl.getUniformLocation(program, "uYaw")!) as Float32Array;
+    const tilt = gl.getUniform(program, gl.getUniformLocation(program, "uPitch")!) as Float32Array;
+    const drop = gl.getUniform(program, gl.getUniformLocation(program, "uDrop")!) as number;
+    return { yaw: Math.atan2(heading[1]!, heading[0]!), pitch: Math.atan2(tilt[1]!, tilt[0]!), drop };
+  });
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", xOffset = 0, yOffset = 0, timestamp?: number) =>
+    input.send("Input.dispatchTouchEvent", {
+      type,
+      timestamp,
+      touchPoints: type === "touchEnd" ? [] : [{ x: box.x + box.width / 2 + xOffset, y: box.y + box.height / 2 + yOffset }],
+    });
+
+  await page.touchscreen.tap(box.x + 3, box.y + 3);
+  if ((await pose()).drop >= 0) failures.push("Tapping outside the hat made the dots fall.");
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  for (const falling of [true, false]) {
+    await canvas.evaluate((element, falling) => new Promise<void>((resolve, reject) => {
+      const gl = (element as HTMLCanvasElement).getContext("webgl2")!;
+      const program = gl.getParameter(gl.CURRENT_PROGRAM) as WebGLProgram;
+      const drop = gl.getUniformLocation(program, "uDrop")!;
+      const start = performance.now();
+      const check = () => {
+        if ((gl.getUniform(program, drop) >= 0) === falling) resolve();
+        else if (performance.now() - start > 4500) reject(new Error(falling ? "The hat did not fall on tap." : "The hat did not reform."));
+        else requestAnimationFrame(check);
+      };
+      check();
+    }), falling);
+  }
+
+  const route = page.url();
+  await touch("touchStart");
+  for (const offset of [4, 9, 16, 24, 34]) await touch("touchMove", 0, offset);
+  await touch("touchEnd");
+  await page.waitForTimeout(450);
+  const vertical = await pose();
+  if (vertical.pitch < FRONT_PITCH + 0.5 || Math.abs(vertical.yaw - FRONT_YAW) > 0.01 || vertical.drop >= 0 || page.url() !== route) {
+    failures.push("A vertical drag starting on the hat should tilt it without paging or dropping the dots.");
+  }
+  await page.getByRole("button", { name: "Drop the dots" }).press("Home");
+  await page.waitForTimeout(600);
+  const reset = await pose();
+  if (Math.abs(reset.pitch - FRONT_PITCH) > 0.01 || Math.abs(reset.yaw - FRONT_YAW) > 0.01) {
+    failures.push("Home should return both rotation axes of the hat to the front.");
+  }
+
+  for (const [label, offsets, sampleMs, shouldCoast] of [
+    ["slow touch", [1, 2, 3, 4, 5, 6, 7, 8], 100, false],
+    ["slow orbit", [8, 11, 14, 17, 20], 120, false],
+    ["flick", [8, 15, 22, 34], 16, true],
+  ] as const) {
+    const start = (await pose()).yaw;
+    const interval = sampleMs / 1000;
+    const releaseAt = Date.now() / 1000;
+    const started = releaseAt - (offsets.length + 1) * interval;
+    await touch("touchStart", 0, 0, started);
+    for (const [index, offset] of offsets.entries()) {
+      if (!shouldCoast) await page.waitForTimeout(sampleMs);
+      await touch("touchMove", offset, 0, started + (index + 1) * interval);
+    }
+    await touch("touchEnd", 0, 0, releaseAt);
+    await page.waitForTimeout(450);
+    const drag = offsets.at(-1)! * orbitRadiansPerPixel(box.width, box.height);
+    const released = await pose();
+    const coast = released.yaw - start - drag;
+    if (released.drop >= 0) failures.push(`The hat fell during ${label}.`);
+    if (shouldCoast ? coast < 0.04 : Math.abs(coast) > 0.035) {
+      failures.push(`The hat's ${label} coasted ${coast.toFixed(2)} rad beyond the held drag.`);
+    }
+  }
+}
+
+async function checkHologramStage(card: Locator, width: number, height: number) {
+  const scene = card.locator("[data-projecting], [data-still]");
+  await scene.waitFor({ state: "attached" });
+  const live = await scene.evaluate(element => element.hasAttribute("data-projecting"));
+  const canvas = scene.locator("canvas");
+  const artwork = await canvas.boundingBox();
+  if (!artwork || artwork.height < 64) {
+    failures.push(`The hat’s artwork is too short at ${width}×${height}.`);
+  }
+  if (live) {
+    const target = scene.getByRole("button", { name: "Drop the dots" });
+    const usable = await target.evaluate(button => {
+      const { x, y, width, height } = button.getBoundingClientRect();
+      return width >= 44 && height >= 44 && button.contains(document.elementFromPoint(x + width / 2, y + height / 2));
+    });
+    if (!usable) failures.push(`The hat does not receive input at ${width}×${height}.`);
+  }
+  return live ? canvas : null;
+}
+
+async function checkCompactHologram() {
+  const sizes = [
+    [320, 280], [320, 310], [375, 320], [375, 321], [375, 374], [375, 375], [375, 376],
+    [450, 280], [450, 320], [480, 320], [568, 320], [667, 375], [874, 402],
+  ] as const;
+  for (const [width, height] of sizes) {
+    const viewport = { width, height };
+    const context = await browser.newContext({ ...PHONE, viewport });
+    const card = await openPage(await context.newPage(), "Gandalf’s Hat");
+    const canvas = await checkHologramStage(card, width, height);
+    if (canvas && width === 450 && height === 320) await checkTouchRelease(canvas);
+    await context.close();
+  }
+}
+
+async function checkLargeText() {
+  const largeText = await chromium.launch({ args: ["--blink-settings=defaultFontSize=32"] });
+  try {
+    for (const [width, height] of [[320, 280], [375, 375]] as const) {
+      const page = await largeText.newPage({ ...PHONE, viewport: { width, height } });
+      const card = await openPage(page, "Gandalf’s Hat");
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
+      const rootFont = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+      if (rootFont !== "32px") failures.push(`The large-text check ran at ${rootFont} instead of 32px.`);
+      await checkHologramStage(card, width, height);
+      const caption = card.getByRole("region", { name: "Gandalf’s Hat" });
+      const thumb = card.locator("[data-caption-scroll] > span");
+      const thumbBefore = await thumb.count() ? await thumb.boundingBox() : null;
+      const route = page.url();
+      if (await caption.count()) {
+        await caption.focus();
+        await page.keyboard.press("PageDown");
+        const scrolled = await page.waitForFunction(() => (document.activeElement?.scrollTop ?? 0) > 0, undefined, { timeout: 2000 })
+          .then(() => true, () => false);
+        const thumbAfter = thumbBefore && await thumb.boundingBox();
+        if (!thumbBefore || !thumbAfter || thumbAfter.y <= thumbBefore.y) {
+          failures.push(`At ${width}×${height} with a 32px default font, the caption should show its scroll position.`);
+        }
+        await page.keyboard.press("Tab");
+        const codeFocused = await page.evaluate(() => document.activeElement?.getAttribute("aria-haspopup") === "dialog");
+        if (scrolled && codeFocused && page.url() === route) {
+          await page.close();
+          continue;
+        }
+      }
+      failures.push(`At ${width}×${height} with a 32px default font, the caption should scroll by keyboard and keep Code reachable.`);
+      await page.close();
+    }
+  } finally {
+    await largeText.close();
+  }
+}
+
 try {
   const context = await browser.newContext(PHONE);
   const page = await context.newPage();
@@ -53,13 +244,21 @@ try {
 
   for (const title of titles) {
     const card = await openPage(page, title);
-    const transform = await card.locator('[class*="_fit_"]').evaluate(fit => (fit as HTMLElement).style.transform);
+    const fit = card.locator('[class*="_fit_"]');
+    const transform = await fit.evaluate(element => (element as HTMLElement).style.transform);
     const scale = /scale\(([\d.]+)\)/.exec(transform)?.[1];
     if (scale && Number(scale) < MIN_SCALE) {
       failures.push(
         `${title} is scaled to ${Math.round(Number(scale) * 100)}% to fit the page. ` +
           "Give it a phone layout (a `@media (max-width: 48rem)` rule) so it fits unscaled.",
       );
+    }
+    if (title === "Gandalf’s Hat") {
+      const stage = await fit.boundingBox();
+      const portrait = await fit.locator("canvas").boundingBox();
+      if (!stage || !portrait || portrait.x < stage.x - 1 || portrait.x + portrait.width > stage.x + stage.width + 1) {
+        failures.push("Gandalf Hologram extends beyond its phone stage.");
+      }
     }
   }
 
@@ -84,13 +283,16 @@ try {
         `${Math.round((moved?.x ?? box.x) - box.x)}, ${Math.round((moved?.y ?? box.y) - box.y)}.`,
     );
   }
+  await checkPortableHologram(page);
+  await checkCompactHologram();
+  await checkLargeText();
 } finally {
   await browser.close();
   await server.close();
 }
 
 if (failures.length > 0) {
-  console.error(`On a ${PHONE.viewport.width}px phone:\n${failures.map(line => `  ${line}`).join("\n")}`);
+  console.error(`Phone or standalone checks failed.\n${failures.map(line => `  ${line}`).join("\n")}`);
   process.exit(1);
 }
-console.log(`Every card fits its ${PHONE.viewport.width}px phone page, and a finger drags Spacing Tidy.`);
+console.log(`Every card fits its ${PHONE.viewport.width}px phone page, a finger drags Spacing Tidy, and the hologram fits compact screens, large text, and a standalone host.`);

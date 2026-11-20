@@ -120,6 +120,29 @@ try {
   await roundTrip(phone, STEPPED, " on a phone");
   await roundTrip(phone, STEPPED, " on a phone, in steps");
   await turnBackWhilePlacing(phone, "Controls", "On a phone");
+
+  const landscape = await (await browser.newContext({ ...PHONE, viewport: { width: 667, height: 375 } })).newPage();
+  await landscape.addInitScript(installFlightRecorder);
+  await landscape.goto(url);
+  await atRest(landscape, "grid");
+  await roundTrip(landscape, "Gandalf’s Hat", " on a landscape phone");
+
+  const shortLandscape = await (await browser.newContext({ ...PHONE, viewport: { width: 568, height: 320 } })).newPage();
+  await shortLandscape.addInitScript(installFlightRecorder);
+  await shortLandscape.goto(url);
+  await atRest(shortLandscape, "grid");
+  await roundTrip(shortLandscape, "Profile Button", " on a short landscape phone");
+  await roundTrip(shortLandscape, "Profile Button", " on a short landscape phone, reopened");
+
+  const compact = await (await browser.newContext({ ...PHONE, viewport: { width: 320, height: 280 } })).newPage();
+  await compact.addInitScript(installFlightRecorder);
+  await compact.addInitScript(() => document.addEventListener("DOMContentLoaded", () => {
+    document.documentElement.style.fontSize = "32px";
+  }, { once: true }));
+  await compact.goto(url);
+  await atRest(compact, "grid");
+  await roundTrip(compact, "Gandalf’s Hat", " at 200% text");
+  await roundTrip(compact, "Gandalf’s Hat", " at 200% text, in steps");
 } finally {
   await browser.close();
   await server.close();
@@ -130,5 +153,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `${CARDS.length + AFTER_RESIZE.length} cards on a desktop and one on a phone fly to their pages and back without a jump, a late layout, or a layout shift for the cards around them, and a flight turned back as it lands leaves nothing hidden. In all, with the flying cards' own motion, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
+  `Desktop, portrait phone, short landscape, and 200% text flights land without a jump, a late layout, or a layout shift for nearby cards. Reversing during landing leaves nothing hidden. Across all flights, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
 );

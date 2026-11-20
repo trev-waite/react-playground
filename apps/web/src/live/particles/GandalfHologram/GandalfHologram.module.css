@@ -1,0 +1,76 @@
+.frame {
+  container-type: inline-size;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+}
+
+.scene {
+  container-type: size;
+  contain-intrinsic-block-size: min(110cqw, 540px);
+  display: grid;
+  place-items: stretch center;
+  overflow: hidden;
+  background: #000;
+}
+
+.hat {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: min(100%, 600px);
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hat canvas,
+.still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.scene[data-projecting] .hat {
+  cursor: grab;
+}
+
+.scene[data-projecting] .hat[data-dragging] {
+  cursor: grabbing;
+}
+
+.hat:focus-visible {
+  outline: 1px solid #aaa;
+  outline-offset: -3px;
+}
+
+.still {
+  display: none;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+.scene[data-still] .still {
+  display: block;
+}
+
+@media (forced-colors: active) {
+  .scene {
+    forced-color-adjust: none;
+  }
+
+  .hat:focus-visible {
+    outline-color: Highlight;
+  }
+}
