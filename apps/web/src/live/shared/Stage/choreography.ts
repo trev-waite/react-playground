@@ -68,15 +68,17 @@ const DONE: Playback = { finished: Promise.resolve(), cancel: () => {} };
 
 /**
  * Plays `verb` over `elements` in a cascade. Under reduced motion nothing
- * moves: entering verbs land at once, leaving verbs hide at once.
+ * moves: entering verbs land at once, clearing whatever hid the elements
+ * before, and leaving verbs hide them at once until cancelled.
  */
 export function play(elements: readonly Element[], verb: Verb, options: CascadeOptions = {}): Playback {
   if (elements.length === 0) return DONE;
-  if (prefersReducedMotion() || typeof elements[0]!.animate !== "function") {
-    if (verb === "recede") {
-      for (const element of elements) element.animate?.([{ opacity: 0 }, { opacity: 0 }], { duration: 0, fill: "forwards" });
-    }
-    return DONE;
+  if (typeof elements[0]!.animate !== "function") return DONE;
+  if (prefersReducedMotion()) {
+    for (const element of elements) for (const animation of element.getAnimations()) animation.cancel();
+    if (verb !== "recede") return DONE;
+    const hidden = elements.map(element => element.animate([{ opacity: 0 }, { opacity: 0 }], { duration: 0, fill: "forwards" }));
+    return { finished: Promise.resolve(), cancel: () => hidden.forEach(animation => animation.cancel()) };
   }
   const delays = cascadeDelays(elements.length, options);
   const duration = options.durationMs ?? MOTION.enterMs;

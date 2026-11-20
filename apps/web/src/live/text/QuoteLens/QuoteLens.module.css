@@ -65,10 +65,6 @@
   visibility: hidden;
 }
 
-.lens[data-lifted] {
-  touch-action: none;
-}
-
 .body {
   position: absolute;
   inset: 0;

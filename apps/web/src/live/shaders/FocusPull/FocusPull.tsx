@@ -4,7 +4,7 @@ import { createBlurChain, pausableLoop, useGpu, type GpuSession } from "@/gpu";
 import { MOTION, play, prefersReducedMotion } from "@/live/shared/Stage/choreography";
 import { Stage } from "@/live/shared/Stage/Stage";
 import stageStyles from "@/live/shared/Stage/Stage.module.css";
-import { followPointer, isDarkTone, type PointerPlace } from "@/live/shared/Stage/tone";
+import { followPointer, watchTone, type PointerPlace } from "@/live/shared/Stage/tone";
 import { blurLevel, CAMERA, fitPage, idleFocus, MAX_BLUR_LEVEL, pageRowAt, ROWS_PER_LEVEL, type Page } from "./focus";
 import { POEM, rasterPoem } from "./poem";
 import styles from "./FocusPull.module.css";
@@ -148,6 +148,7 @@ function startFocus({ gpu, surface, canvas }: GpuSession, rack: Rack, holder: HT
       params: { resolution: [1, 1], page: [1, 1], lens: [1, 0], tilt: 0.9, focus: 0.5, presence: 0, dark: 0, accent: 1 },
     },
   });
+  const unwatchTone = watchTone(holder, dark => paint.set({ params: { dark: dark ? 1 : 0 } }));
   const unsubscribeError = gpu.onError(error => console.error("Focus Pull could not draw", error));
   const rows = layout.rows.filter(Number.isFinite);
   const lineHalf = (rows[1]! - rows[0]!) / 2;
@@ -157,7 +158,7 @@ function startFocus({ gpu, surface, canvas }: GpuSession, rack: Rack, holder: HT
   const unsubscribeResize = surface.onResize(({ width, height }) => {
     aspect = Math.max(1, width) / Math.max(1, height);
     page = fitPage(aspect, layout.aspect, content);
-    paint.set({ params: { resolution: [width, height], page: [page.width, page.height], lens: [page.zoom, page.shift], tilt: page.tilt, dark: isDarkTone(holder) ? 1 : 0 } });
+    paint.set({ params: { resolution: [width, height], page: [page.width, page.height], lens: [page.zoom, page.shift], tilt: page.tilt } });
   });
   rack.aim(place => pageRowAt(page, aspect, place.x * 2 - 1, 1 - place.y * 2));
 
@@ -176,6 +177,7 @@ function startFocus({ gpu, surface, canvas }: GpuSession, rack: Rack, holder: HT
     loop.stop();
     unsubscribeResize();
     unsubscribeError();
+    unwatchTone();
     blur.destroy();
     texture.destroy();
   };

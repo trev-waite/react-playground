@@ -76,11 +76,21 @@ function initialClock(): Clock {
   return settle(null, minute, second, 0, false);
 }
 
+/** Where an element is drawn now relative to its layout box, so a glide cut short by the next one starts from there, not from its last layout. */
+function offsetOf(element: HTMLElement): { x: number; y: number } {
+  if (element.getAnimations().length === 0) return { x: 0, y: 0 };
+  const transform = getComputedStyle(element).transform;
+  if (!transform || transform === "none") return { x: 0, y: 0 };
+  const matrix = new DOMMatrixReadOnly(transform);
+  return { x: matrix.m41, y: matrix.m42 };
+}
+
 /** Moves words that stayed, raises words that arrived, and lets removed words fade where they stood. */
 function WordRun({ run, version }: { run: Run; version: number }) {
   const ref = useRef<HTMLSpanElement>(null);
   const places = useRef(new Map<number, { x: number; y: number }>());
   const laidOut = useRef(false);
+  const gliding = useRef<Playback | null>(null);
 
   useLayoutEffect(() => {
     const root = ref.current;
@@ -95,8 +105,14 @@ function WordRun({ run, version }: { run: Run; version: number }) {
       const at = { x: element.offsetLeft, y: element.offsetTop };
       next.set(id, at);
       const was = places.current.get(id);
-      if (!was) entering.push(element);
-      else if (Math.abs(was.x - at.x) > 0.5 || Math.abs(was.y - at.y) > 0.5) moves.push({ element, dx: was.x - at.x, dy: was.y - at.y });
+      if (!was) {
+        entering.push(element);
+        continue;
+      }
+      const still = offsetOf(element);
+      const dx = was.x - at.x + still.x;
+      const dy = was.y - at.y + still.y;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) moves.push({ element, dx, dy });
     }
     const leaving: Element[] = [];
     for (const ghost of Array.from(root.querySelectorAll<HTMLElement>("[data-ghost]"))) {
@@ -109,7 +125,8 @@ function WordRun({ run, version }: { run: Run; version: number }) {
     places.current = next;
     if (first) return;
     play(leaving, "recede", { durationMs: LEAVE_MS, staggerMs: 0 });
-    glide(moves);
+    gliding.current?.cancel();
+    gliding.current = glide(moves);
     play(entering, "rise", { delayMs: leaving.length ? ARRIVE_AFTER_MS : 0 });
   }, [version]);
 

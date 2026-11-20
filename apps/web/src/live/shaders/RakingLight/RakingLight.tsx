@@ -3,7 +3,7 @@ import { effect, sampler, type Frame } from "vgpu";
 import { createBlurChain, createTextMask, maskFits, pausableLoop, useGpu, viewportMaskSize, WGSL_HASH, WGSL_NOISE, type GpuSession } from "@/gpu";
 import { Stage } from "@/live/shared/Stage/Stage";
 import stageStyles from "@/live/shared/Stage/Stage.module.css";
-import { DISPLAY_FONT, isDarkTone } from "@/live/shared/Stage/tone";
+import { DISPLAY_FONT, watchTone } from "@/live/shared/Stage/tone";
 import { createLamp, type Lamp } from "./lamp";
 import styles from "./RakingLight.module.css";
 
@@ -104,6 +104,7 @@ function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTM
       params: { resolution: [1, 1], lamp: [0.5, 0.5], presence: 0, dark: 0 },
     },
   });
+  const unwatchTone = watchTone(stage, dark => press.set({ params: { dark: dark ? 1 : 0 } }));
   const unsubscribeError = gpu.onError(error => console.error("Raking Light could not draw", error));
 
   let pending: { aspect: number; dpr: number; width: number; height: number } | null = null;
@@ -119,7 +120,7 @@ function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTM
     if (pressed && performance.now() - resizedAt < RESIZE_SETTLE_MS) return;
     const { aspect, dpr, width, height } = pending;
     pending = null;
-    press.set({ params: { resolution: [width, height], dark: isDarkTone(stage) ? 1 : 0 } });
+    press.set({ params: { resolution: [width, height] } });
     const size = viewportMaskSize(aspect, [window.innerWidth, window.innerHeight], dpr);
     if (pressed && maskFits(mask.size, size)) return;
     pressed = true;
@@ -140,6 +141,7 @@ function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTM
     loop.stop();
     unsubscribeResize();
     unsubscribeError();
+    unwatchTone();
     shoulders.destroy();
     mask.destroy();
   };

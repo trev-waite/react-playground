@@ -140,20 +140,19 @@ export function FoundPoem({ passage = PASSAGE, source = SOURCE, suggested = SUGG
           </p>
         </div>
         <div className={styles.controls} data-after-words data-reveal>
+          <button
+            type="button"
+            className={styles.primary}
+            disabled={mode === "passage" && kept.size === 0}
+            onClick={() => switchTo(mode === "passage" ? "poem" : "passage")}
+          >
+            {mode === "passage" ? "Erase the rest" : "Bring the words back"}
+          </button>
           {mode === "passage" ? (
-            <>
-              <button type="button" className={styles.primary} disabled={kept.size === 0} onClick={() => switchTo("poem")}>
-                Erase the rest
-              </button>
-              <button type="button" className={styles.quiet} disabled={kept.size === 0} onClick={() => setKept(new Set())}>
-                Clear
-              </button>
-            </>
-          ) : (
-            <button type="button" className={styles.primary} onClick={() => switchTo("passage")}>
-              Bring the words back
+            <button type="button" className={styles.quiet} disabled={kept.size === 0} onClick={() => setKept(new Set())}>
+              Clear
             </button>
-          )}
+          ) : null}
           <p className={`${stageStyles.support} ${styles.count}`} aria-live="polite">
             {kept.size === 1 ? "1 word kept" : `${kept.size} words kept`}
           </p>

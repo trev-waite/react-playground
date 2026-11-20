@@ -26,6 +26,8 @@ const DRIFT_RATE = 2.5;
 const ZOOM_RATE = 12;
 /** Left alone this long, the glass goes back to drifting over the page. */
 const IDLE_MS = 3500;
+/** Quiet time after the page last resized before the magnified copy lays out at the new size. */
+const RESIZE_SETTLE_MS = 120;
 const KEY_STEP = 16;
 const KEY_LEAP = 48;
 
@@ -51,7 +53,11 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   let last = 0;
   let driftFrom = 0;
   let touchedAt = 0;
-  let grab: { id: number; offset: Point; from: Point; moved: boolean } | null = null;
+  let grab: { id: number; offset: Point; from: Point; claimed: boolean } | null = null;
+  let tap: { id: number; from: Point } | null = null;
+  let mouseInside = false;
+  let sized = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
   let dragged = false;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -84,7 +90,7 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     clearTimeout(idleTimer);
     if (reduced) return;
     idleTimer = setTimeout(() => {
-      if (grab || lens.matches(":focus-visible") || page.parentElement?.matches(":hover")) return rest();
+      if (grab || mouseInside || lens.matches(":focus-visible")) return rest();
       drifting = true;
       driftFrom = performance.now() - 2000;
       wake();
@@ -109,40 +115,72 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     aim(local(event));
   };
 
+  const onMouseEnter = (event: PointerEvent) => {
+    if (event.pointerType === "mouse") mouseInside = true;
+  };
+
+  const onMouseLeave = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse") return;
+    mouseInside = false;
+    rest();
+  };
+
+  /** A finger on the page places the glass where it lifts, unless it moved: then it was a swipe for the deck. */
   const onPageDown = (event: PointerEvent) => {
     if (event.pointerType === "mouse" || !shown || lens.contains(event.target as Node)) return;
     if ((event.target as Element).closest("a")) return;
-    touchedAt = event.timeStamp;
-    aim(local(event));
+    tap = { id: event.pointerId, from: local(event) };
   };
 
+  const onPageUp = (event: PointerEvent) => {
+    if (!tap || event.pointerId !== tap.id) return;
+    const at = local(event);
+    const still = Math.hypot(at.x - tap.from.x, at.y - tap.from.y) <= DRAG_SLOP;
+    tap = null;
+    if (!still) return;
+    touchedAt = event.timeStamp;
+    aim(at);
+  };
+
+  const onPageCancel = () => {
+    tap = null;
+  };
+
+  /** A finger on the glass drags it only once it moves sideways; a vertical swipe is left to page the deck. */
   const onDown = (event: PointerEvent) => {
     if (event.pointerType === "mouse" || grab || !shown) return;
     const at = local(event);
-    grab = { id: event.pointerId, offset: { x: current.x - at.x, y: current.y - at.y }, from: at, moved: false };
-    lens.setPointerCapture(event.pointerId);
+    grab = { id: event.pointerId, offset: { x: current.x - at.x, y: current.y - at.y }, from: at, claimed: false };
   };
 
   const onMove = (event: PointerEvent) => {
     if (!grab || event.pointerId !== grab.id) return;
     const at = local(event);
-    if (!grab.moved && Math.hypot(at.x - grab.from.x, at.y - grab.from.y) > DRAG_SLOP) {
-      grab.moved = true;
+    if (!grab.claimed) {
+      const dx = at.x - grab.from.x;
+      const dy = at.y - grab.from.y;
+      if (Math.hypot(dx, dy) <= DRAG_SLOP) return;
+      if (Math.abs(dy) > Math.abs(dx)) {
+        grab = null;
+        return;
+      }
+      grab.claimed = true;
+      lens.setPointerCapture(event.pointerId);
       lens.dataset.lifted = "";
     }
-    if (grab.moved) aim({ x: at.x + grab.offset.x, y: at.y + grab.offset.y });
+    aim({ x: at.x + grab.offset.x, y: at.y + grab.offset.y });
   };
 
   const onUp = (event: PointerEvent) => {
     if (!grab || event.pointerId !== grab.id) return;
-    dragged = grab.moved;
+    dragged = grab.claimed;
     grab = null;
     delete lens.dataset.lifted;
     rest();
   };
 
   const onTouchMove = (event: TouchEvent) => {
-    if (grab) event.preventDefault();
+    if (grab?.claimed) event.preventDefault();
   };
 
   const onClick = (event: MouseEvent) => {
@@ -169,11 +207,25 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     aim({ x: (drifting ? current.x : target.x) + move.x, y: (drifting ? current.y : target.y) + move.y });
   };
 
+  /** The copy relays out its text only once the page has stopped resizing, so a deck flight lays out one quote a frame, not two. */
+  const sizeClone = () => {
+    clone.style.width = `${size.width}px`;
+    clone.style.height = `${size.height}px`;
+    clone.style.visibility = "";
+    draw();
+  };
+
   const resize = new ResizeObserver(() => {
     size = { width: page.clientWidth, height: page.clientHeight };
     radius = lens.offsetWidth / 2;
-    clone.style.width = `${size.width}px`;
-    clone.style.height = `${size.height}px`;
+    clearTimeout(settleTimer);
+    if (sized) {
+      clone.style.visibility = "hidden";
+      settleTimer = setTimeout(sizeClone, RESIZE_SETTLE_MS);
+    } else {
+      sized = true;
+      sizeClone();
+    }
     target = drifting ? target : clampCenter(target, size);
     current = clampCenter(current, size);
     draw();
@@ -195,8 +247,11 @@ function startLens({ page, lens, clone }: LensParts): Lens {
 
   const surface = page.parentElement!;
   surface.addEventListener("pointermove", onHover);
-  surface.addEventListener("pointerleave", rest);
+  surface.addEventListener("pointerenter", onMouseEnter);
+  surface.addEventListener("pointerleave", onMouseLeave);
   page.addEventListener("pointerdown", onPageDown);
+  page.addEventListener("pointerup", onPageUp);
+  page.addEventListener("pointercancel", onPageCancel);
   lens.addEventListener("pointerdown", onDown);
   lens.addEventListener("pointermove", onMove);
   lens.addEventListener("pointerup", onUp);
@@ -218,11 +273,15 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     stop: () => {
       cancelAnimationFrame(frame);
       clearTimeout(idleTimer);
+      clearTimeout(settleTimer);
       resize.disconnect();
       observer.disconnect();
       surface.removeEventListener("pointermove", onHover);
-      surface.removeEventListener("pointerleave", rest);
+      surface.removeEventListener("pointerenter", onMouseEnter);
+      surface.removeEventListener("pointerleave", onMouseLeave);
       page.removeEventListener("pointerdown", onPageDown);
+      page.removeEventListener("pointerup", onPageUp);
+      page.removeEventListener("pointercancel", onPageCancel);
       lens.removeEventListener("pointerdown", onDown);
       lens.removeEventListener("pointermove", onMove);
       lens.removeEventListener("pointerup", onUp);
