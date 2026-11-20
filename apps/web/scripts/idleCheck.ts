@@ -5,11 +5,13 @@ import { preview } from "vite";
 import { judgeIdle, previewChunks, sourceOf, type IdleRecord } from "./idle/judge.ts";
 
 /**
- * The deck keeps every card mounted, so a card's own work must stop while it is off screen. This opens
- * a still card's page, waits until every card has mounted, then records which code schedules animation
- * frames or short timers for a few seconds. Anything that keeps running is a card working off screen,
- * however its loop is written; the lint steers authors to visibleLoop, and this proves the result.
- * Run it after `bun run build`.
+ * The deck keeps every card mounted, so a card's own work must stop while it is off screen. This is a
+ * cold-idle regression check: it opens a still card's page, waits until every card's preview has
+ * mounted, then records which code schedules animation frames, short timers, or intervals for a few
+ * seconds. Anything recurring more than about once a second is a card working off screen, however
+ * its loop is written. It does not see work started by interaction, work slower than once a second,
+ * MessageChannel loops, or CSS animations; the lint and visibleLoop cover those paths, and a browser
+ * trace is the tool for anything else. Run it after `bun run build`.
  */
 
 const STILL_CARD = "/buttons/PrimaryButton";
@@ -29,8 +31,11 @@ if (!url) throw new Error("vite preview did not report a local URL.");
 const browser = await chromium.launch();
 
 let records: { kind: IdleRecord["kind"]; stack: string }[] = [];
+const errors: string[] = [];
+let mountedCards = 0;
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(() => {
     const idle: { on: boolean; seen: { kind: string; stack: string }[] } = { on: false, seen: [] };
     (window as unknown as { __idle: typeof idle }).__idle = idle;
@@ -63,15 +68,21 @@ try {
   });
   await page.goto(new URL(STILL_CARD, url).href);
   await page.waitForFunction(
-    () => {
+    still => {
       const cards = Array.from(document.querySelectorAll("article"));
-      return document.querySelector('[data-layout="pages"]:not([data-flying])') !== null &&
-        cards.length > 1 && cards.every(card => card.querySelector('[class*="_loading_"]') === null);
+      const mounted = (card: Element) =>
+        card.querySelector('[class*="_fit_"] [class*="_frame_"], [class*="_fit_"] [class*="_family_"]') !== null &&
+        card.querySelector('[class*="_loading_"]') === null;
+      return location.pathname === still &&
+        document.querySelector('[data-layout="pages"]:not([data-flying])') !== null &&
+        cards.length > 1 && cards.every(mounted);
     },
-    undefined,
+    STILL_CARD,
     { timeout: WARM_TIMEOUT_MS, polling: 200 },
   );
+  mountedCards = await page.evaluate(() => document.querySelectorAll("article").length);
   await page.waitForTimeout(SETTLE_MS);
+  if (new URL(page.url()).pathname !== STILL_CARD) throw new Error(`The idle check left ${STILL_CARD} for ${page.url()}.`);
   records = await page.evaluate(async watch => {
     const idle = (window as unknown as { __idle: { on: boolean; seen: { kind: "frame" | "timer"; stack: string }[] } }).__idle;
     idle.seen = [];
@@ -83,6 +94,12 @@ try {
 } finally {
   await browser.close();
   await server.close();
+}
+
+const loadErrors = errors.filter(message => !/requestAdapter|WebGPU|navigator\.gpu/i.test(message));
+if (loadErrors.length > 0) {
+  console.error(`Cards failed while the idle check waited for them to mount:\n${loadErrors.map(message => `  ${message}`).join("\n")}`);
+  process.exit(1);
 }
 
 const verdict = judgeIdle(
@@ -97,4 +114,7 @@ if (!verdict.ok) {
   );
   process.exit(1);
 }
-console.log(`With every card mounted and one still card on screen, nothing kept running off screen (${records.length} one-off callbacks in ${WATCH_MS / 1000}s).`);
+console.log(
+  `With all ${mountedCards} cards mounted and one still card on screen, nothing kept running off screen ` +
+    `(${records.length} one-off callbacks in ${WATCH_MS / 1000}s).`,
+);

@@ -68,18 +68,38 @@ function returnedExpressions(fn: ts.FunctionLikeDeclaration): (ts.Expression | u
 /** True when `expression` is JSX that contains an element whose tag `isTag` accepts, wrapped only by other elements. */
 const HIDING_ATTRIBUTES = ["hidden", "inert"];
 
+/** True, false, or unknown: what a JSX attribute value is when it can be read without running anything. */
+function staticBoolean(value: ts.Expression | undefined): boolean | undefined {
+  if (!value) return true;
+  const target = unwrap(value);
+  if (target.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (target.kind === ts.SyntaxKind.FalseKeyword) return false;
+  return undefined;
+}
+
+/**
+ * True when an element hides what it holds: `hidden` or `inert` is on, or might be, once its
+ * attributes and literal spreads are applied in order, so a later `hidden={false}` wins.
+ */
 function hidesChildren(element: ts.JsxOpeningLikeElement): boolean {
-  return element.attributes.properties.some(attribute => {
+  const state = new Map<string, boolean | undefined>();
+  for (const attribute of element.attributes.properties) {
     if (ts.isJsxSpreadAttribute(attribute)) {
       const spread = unwrap(attribute.expression);
-      return ts.isObjectLiteralExpression(spread) && spread.properties.some(property =>
-        ts.isPropertyAssignment(property) && HIDING_ATTRIBUTES.includes(property.name.getText()) &&
-        unwrap(property.initializer).kind !== ts.SyntaxKind.FalseKeyword);
+      if (!ts.isObjectLiteralExpression(spread)) continue;
+      for (const property of spread.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        const key = ts.isStringLiteral(property.name) || ts.isIdentifier(property.name) ? property.name.text : undefined;
+        if (key && HIDING_ATTRIBUTES.includes(key)) state.set(key, staticBoolean(property.initializer));
+      }
+      continue;
     }
-    if (!HIDING_ATTRIBUTES.includes(attribute.name.getText())) return false;
+    const name = attribute.name.getText();
+    if (!HIDING_ATTRIBUTES.includes(name)) continue;
     const value = attribute.initializer;
-    return !(value && ts.isJsxExpression(value) && value.expression?.kind === ts.SyntaxKind.FalseKeyword);
-  });
+    state.set(name, value && ts.isJsxExpression(value) ? staticBoolean(value.expression) : value ? undefined : true);
+  }
+  return [...state.values()].some(value => value !== false);
 }
 
 /** Every element `expression` contains whose tag `isTag` accepts, however it is nested: in braces, attributes, or conditions. */
@@ -242,10 +262,10 @@ function frameArgument(checker: ts.TypeChecker, call: ts.CallExpression): ts.Exp
   return undefined;
 }
 
-/** Calls whose function arguments run later, not during the frame that makes the call. */
-const DEFERRING_CALLS = new Set([
-  "setTimeout", "setInterval", "requestAnimationFrame", "requestIdleCallback", "queueMicrotask",
-  "addEventListener", "then", "catch", "finally", "visibleLoop", "pausableLoop", "frameLoop",
+/** Array methods that run the function they are given there and then, once per item. */
+const ITERATORS = new Set([
+  "forEach", "map", "filter", "reduce", "reduceRight", "some", "every", "find", "findIndex",
+  "findLast", "findLastIndex", "flatMap", "sort", "toSorted",
 ]);
 
 function calledName(call: ts.CallExpression): string | undefined {
@@ -254,15 +274,16 @@ function calledName(call: ts.CallExpression): string | undefined {
 }
 
 /**
- * True when a function nested in a frame body runs during that frame: an inline callback such as a
- * forEach's. A named function runs only when called (calls are followed on their own), and a callback
- * handed to an observer, a timer, a listener, or a promise runs later.
+ * True when a function nested in a frame body runs during that frame: an inline callback handed to an
+ * array iterator such as forEach. A named function runs only when called (calls are followed on their
+ * own), and a callback handed to anything else (an observer, a timer, a listener, a queue) is a value
+ * that runs later, if at all.
  */
 function runsInline(fn: FunctionLike): boolean {
   if (!ts.isArrowFunction(fn) && !ts.isFunctionExpression(fn)) return false;
   const parent = fn.parent;
   if (ts.isNewExpression(parent)) return false;
-  if (ts.isCallExpression(parent) && parent.arguments.includes(fn)) return !DEFERRING_CALLS.has(calledName(parent) ?? "");
+  if (ts.isCallExpression(parent) && parent.arguments.includes(fn)) return ITERATORS.has(calledName(parent) ?? "");
   return false;
 }
 
@@ -309,7 +330,7 @@ function frameFunctions(source: ts.SourceFile, checker: ts.TypeChecker, text: st
       walkFrame(fn.body, node => {
         if (!ts.isCallExpression(node) || allowedNear(text, node.getStart(source), ALLOW, 1)) return;
         add(calleeFunctions(checker, node), next);
-        if (DEFERRING_CALLS.has(calledName(node) ?? "")) return;
+        if (!ITERATORS.has(calledName(node) ?? "")) return;
         for (const argument of node.arguments) {
           const value = unwrap(argument);
           if (ts.isIdentifier(value)) add(resolve(checker, value), next);
@@ -333,6 +354,13 @@ function isAssigned(node: ts.Node): boolean {
 /** True when a type node is a plain record this file defines: an object type, or a local interface or alias that resolves to one. */
 function isPlainType(checker: ts.TypeChecker, type: ts.TypeNode, depth = 0): boolean {
   if (ts.isTypeLiteralNode(type)) return true;
+  if (ts.isParenthesizedTypeNode(type)) return isPlainType(checker, type.type, depth);
+  if (ts.isUnionTypeNode(type)) {
+    const empty = (member: ts.TypeNode) =>
+      member.kind === ts.SyntaxKind.UndefinedKeyword || (ts.isLiteralTypeNode(member) && member.literal.kind === ts.SyntaxKind.NullKeyword);
+    const records = type.types.filter(member => !empty(member));
+    return records.length > 0 && records.every(member => isPlainType(checker, member, depth + 1));
+  }
   if (!ts.isTypeReferenceNode(type) || depth > 4) return false;
   return isPlainTypeName(checker, type.typeName, type.getSourceFile(), depth);
 }
@@ -376,7 +404,13 @@ function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0
   if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration) || ts.isParameter(declaration))) return false;
   if (declaration.initializer) {
     const init = unwrap(declaration.initializer);
-    if (ts.isCallExpression(init)) return false;
+    if (ts.isCallExpression(init)) {
+      const factories = calleeFunctions(checker, init);
+      return factories.length > 0 && factories.every(factory => {
+        const values = returnedExpressions(factory);
+        return values.length > 0 && values.every(value => !!value && isPlainData(checker, value, depth + 1));
+      });
+    }
     return isPlainData(checker, init, depth + 1);
   }
   return !!declaration.type && isPlainType(checker, declaration.type);
