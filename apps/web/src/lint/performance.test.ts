@@ -11,7 +11,7 @@ import {
   stripCssComments,
   transitionedProperties,
 } from "./source";
-import { frameBodies } from "./syntax";
+import { frameBodies, selfSchedulingTimeouts } from "./syntax";
 
 /**
  * Performance lint. Each rule guards a fix that took a transition from
@@ -212,6 +212,13 @@ describe("performance lint: Live components", () => {
           `${file}:${lineOf(text, match.index)} reaches for ${match[1]} itself. Run frames on visibleLoop from ` +
             "@/live/kit/visibleLoop (a frame can return milliseconds to wait), or say why a short, input-driven " +
             "animation needs its own with `perf-allow: <reason>`.",
+        );
+      }
+      for (const index of selfSchedulingTimeouts(file, text)) {
+        if (allowedNear(text, index)) continue;
+        violations.push(
+          `${file}:${lineOf(text, index)} loops on setTimeout, scheduling the function it runs in. Run it on visibleLoop, ` +
+            "whose frame can return the milliseconds to wait, or say why with `perf-allow: <reason>`.",
         );
       }
     }

@@ -99,7 +99,15 @@ function declarationsByName(source: ts.SourceFile): Map<string, FunctionLike[]> 
 /** The functions an expression handed to a loop refers to: an inline function, a name, `this.name`, or either with `.bind(…)`. */
 function callbackFunctions(expression: ts.Expression, byName: Map<string, FunctionLike[]>): FunctionLike[] {
   let target: ts.Expression = expression;
-  while (ts.isParenthesizedExpression(target) || ts.isAsExpression(target) || ts.isNonNullExpression(target)) target = target.expression;
+  while (
+    ts.isParenthesizedExpression(target) ||
+    ts.isAsExpression(target) ||
+    ts.isSatisfiesExpression(target) ||
+    ts.isTypeAssertionExpression(target) ||
+    ts.isNonNullExpression(target)
+  ) {
+    target = target.expression;
+  }
   if (ts.isCallExpression(target) && ts.isPropertyAccessExpression(target.expression) && target.expression.name.text === "bind") {
     target = target.expression.expression;
   }
@@ -170,4 +178,35 @@ export function frameBodies(file: string, text: string): { start: number; end: n
     frontier = next;
   }
   return [...seen].flatMap(fn => (fn.body ? [{ start: fn.body.getStart(source), end: fn.body.end }] : []));
+}
+
+/** Offsets of `setTimeout(name, …)` calls made inside the function `name` itself: a loop on timers rather than the kit. */
+export function selfSchedulingTimeouts(file: string, text: string): number[] {
+  const source = parse(file, text);
+  const found: number[] = [];
+  const visit = (node: ts.Node, enclosing: string[]) => {
+    let names = enclosing;
+    if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
+      names = [...enclosing, node.name.text];
+    } else if (
+      (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+    ) {
+      names = [...enclosing, node.name.text];
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const isTimeout =
+        (ts.isIdentifier(callee) && callee.text === "setTimeout") ||
+        (ts.isPropertyAccessExpression(callee) && callee.name.text === "setTimeout");
+      const first = node.arguments[0];
+      const target = first && (ts.isIdentifier(first) ? first.text : ts.isPropertyAccessExpression(first) ? first.name.text : undefined);
+      if (isTimeout && target && names.includes(target)) found.push(node.getStart(source));
+    }
+    ts.forEachChild(node, child => visit(child, names));
+  };
+  visit(source, []);
+  return found;
 }
