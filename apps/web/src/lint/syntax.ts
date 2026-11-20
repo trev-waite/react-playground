@@ -51,16 +51,46 @@ export function defaultFunction(source: ts.SourceFile): ts.FunctionDeclaration |
   );
 }
 
-/** True when `node` renders a JSX element named `tag` anywhere inside it. */
-export function rendersElement(node: ts.Node, tag: string): boolean {
+const PLAIN_JSX_PARENTS = new Set([
+  ts.SyntaxKind.JsxElement,
+  ts.SyntaxKind.JsxFragment,
+  ts.SyntaxKind.ParenthesizedExpression,
+  ts.SyntaxKind.ReturnStatement,
+  ts.SyntaxKind.Block,
+]);
+
+/**
+ * True when `fn` always renders a JSX element named `tag`: one inside the JSX it returns, wrapped only
+ * by other elements, never behind a condition, a call, or an expression in braces.
+ */
+export function rendersElement(fn: ts.FunctionLikeDeclaration, tag: string): boolean {
   let found = false;
+  const plainlyReturned = (element: ts.Node) => {
+    let node: ts.Node = ts.isJsxOpeningElement(element) ? element.parent : element;
+    for (let parent = node.parent; parent && parent !== fn; node = parent, parent = parent.parent) {
+      if (!PLAIN_JSX_PARENTS.has(parent.kind)) return false;
+    }
+    return node === fn.body;
+  };
   const visit = (child: ts.Node) => {
     if (found) return;
-    if ((ts.isJsxOpeningElement(child) || ts.isJsxSelfClosingElement(child)) && child.tagName.getText() === tag) found = true;
-    else ts.forEachChild(child, visit);
+    if ((ts.isJsxOpeningElement(child) || ts.isJsxSelfClosingElement(child)) && child.tagName.getText() === tag && plainlyReturned(child)) {
+      found = true;
+    } else ts.forEachChild(child, visit);
   };
-  visit(node);
+  if (fn.body) visit(fn.body);
   return found;
+}
+
+/** True when the module imports `name` as itself, unrenamed, from `module`. */
+export function importsAsItself(source: ts.SourceFile, name: string, module: string): boolean {
+  return source.statements.some(statement => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return false;
+    if (statement.moduleSpecifier.text !== module || statement.importClause?.isTypeOnly) return false;
+    const bindings = statement.importClause?.namedBindings;
+    return !!bindings && ts.isNamedImports(bindings) &&
+      bindings.elements.some(element => element.name.text === name && (!element.propertyName || element.propertyName.text === name));
+  });
 }
 
 /** Named types a module imports from `module`, type-only or not. */
@@ -75,30 +105,24 @@ export function importedNames(source: ts.SourceFile, module: string): string[] {
 
 type FunctionLike = ts.FunctionLikeDeclaration;
 
-/** Every function in the file that a call by `name` or `this.name` could reach. */
-function declarationsByName(source: ts.SourceFile): Map<string, FunctionLike[]> {
-  const byName = new Map<string, FunctionLike[]>();
-  const add = (name: string, fn: FunctionLike) => byName.set(name, [...(byName.get(name) ?? []), fn]);
-  const visit = (node: ts.Node) => {
-    if (ts.isFunctionDeclaration(node) && node.name) add(node.name.text, node);
-    else if (ts.isMethodDeclaration(node) && ts.isIdentifier(node.name)) add(node.name.text, node);
-    else if (
-      (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
-    ) {
-      add(node.name.text, node.initializer);
-    }
-    ts.forEachChild(node, visit);
+/** A one-file program, so names resolve through real scopes and imports without loading anything else. */
+function checkerFor(source: ts.SourceFile): ts.TypeChecker {
+  const host: ts.CompilerHost = {
+    getSourceFile: name => (name === source.fileName ? source : undefined),
+    writeFile: () => {},
+    getDefaultLibFileName: () => "lib.d.ts",
+    useCaseSensitiveFileNames: () => true,
+    getCanonicalFileName: name => name,
+    getCurrentDirectory: () => "",
+    getNewLine: () => "\n",
+    fileExists: name => name === source.fileName,
+    readFile: () => undefined,
   };
-  visit(source);
-  return byName;
+  return ts.createProgram([source.fileName], { noLib: true, noResolve: true, jsx: ts.JsxEmit.Preserve }, host).getTypeChecker();
 }
 
-/** The functions an expression handed to a loop refers to: an inline function, a name, `this.name`, or either with `.bind(…)`. */
-function callbackFunctions(expression: ts.Expression, byName: Map<string, FunctionLike[]>): FunctionLike[] {
-  let target: ts.Expression = expression;
+function unwrap(expression: ts.Expression): ts.Expression {
+  let target = expression;
   while (
     ts.isParenthesizedExpression(target) ||
     ts.isAsExpression(target) ||
@@ -108,34 +132,65 @@ function callbackFunctions(expression: ts.Expression, byName: Map<string, Functi
   ) {
     target = target.expression;
   }
-  if (ts.isCallExpression(target) && ts.isPropertyAccessExpression(target.expression) && target.expression.name.text === "bind") {
-    target = target.expression.expression;
-  }
-  if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) return [target];
-  if (ts.isIdentifier(target)) return byName.get(target.text) ?? [];
-  if (ts.isPropertyAccessExpression(target) && target.expression.kind === ts.SyntaxKind.ThisKeyword) return byName.get(target.name.text) ?? [];
-  return [];
+  return target;
 }
 
-/** The name a call reaches into this file by: `name(…)` or `this.name(…)`. */
-function calleeName(call: ts.CallExpression): string | undefined {
-  const callee = call.expression;
-  if (ts.isIdentifier(callee)) return callee.text;
-  if (ts.isPropertyAccessExpression(callee) && callee.expression.kind === ts.SyntaxKind.ThisKeyword) return callee.name.text;
+/** The function a declaration holds: a function or method itself, or a variable or field initialised with one. */
+function functionOf(declaration: ts.Declaration): FunctionLike | undefined {
+  if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) return declaration;
+  if ((ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration)) && declaration.initializer) {
+    const value = unwrap(declaration.initializer);
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value;
+  }
   return undefined;
 }
 
-const FRAME_SCHEDULERS: Record<string, number> = { requestAnimationFrame: 0, visibleLoop: 1 };
+/** The functions a name or `this.name` refers to, resolved by the checker. */
+function resolve(checker: ts.TypeChecker, node: ts.Node): FunctionLike[] {
+  const symbol = checker.getSymbolAtLocation(node);
+  return (symbol?.declarations ?? []).flatMap(declaration => functionOf(declaration) ?? []);
+}
+
+/** The functions an expression handed to a loop runs: an inline function, a name, `this.name`, or either with `.bind(…)`. */
+function callbackFunctions(checker: ts.TypeChecker, expression: ts.Expression): FunctionLike[] {
+  let target = unwrap(expression);
+  if (ts.isCallExpression(target) && ts.isPropertyAccessExpression(target.expression) && target.expression.name.text === "bind") {
+    target = unwrap(target.expression.expression);
+  }
+  if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) return [target];
+  if (ts.isIdentifier(target)) return resolve(checker, target);
+  if (ts.isPropertyAccessExpression(target) && target.expression.kind === ts.SyntaxKind.ThisKeyword) return resolve(checker, target.name);
+  return [];
+}
+
+/** Which argument of a call is a frame callback: `requestAnimationFrame(cb)` or the kit's `visibleLoop(target, cb)`, however it was imported. */
+function frameArgument(checker: ts.TypeChecker, call: ts.CallExpression): ts.Expression | undefined {
+  const callee = unwrap(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && ["window", "globalThis"].includes(callee.expression.text)) {
+    return callee.name.text === "requestAnimationFrame" ? call.arguments[0] : undefined;
+  }
+  if (!ts.isIdentifier(callee)) return undefined;
+  const symbol = checker.getSymbolAtLocation(callee);
+  const declaration = symbol?.declarations?.[0];
+  if (!declaration) return callee.text === "requestAnimationFrame" ? call.arguments[0] : undefined;
+  if (ts.isImportSpecifier(declaration)) {
+    const from = declaration.parent.parent.parent.moduleSpecifier;
+    const imported = (declaration.propertyName ?? declaration.name).text;
+    if (imported === "visibleLoop" && ts.isStringLiteral(from) && /(^|\/)kit\/visibleLoop$/.test(from.text)) return call.arguments[1];
+  }
+  return undefined;
+}
 
 /**
  * The function bodies that run every frame, as offsets into the file: the callback handed to
  * requestAnimationFrame or visibleLoop, in any form, and the functions and methods of this file it
- * calls, two calls deep. A call marked `perf-allow: <reason>` on its line or the one above (one that
- * runs only when something changed, or at most every so often) is not followed.
+ * calls by name or `this.`, two calls deep, each name resolved through its real scope. A call marked
+ * `perf-allow: <reason>` on its line or the one above (one that runs only when something changed, or
+ * at most every so often) is not followed.
  */
 export function frameBodies(file: string, text: string): { start: number; end: number }[] {
   const source = parse(file, text);
-  const byName = declarationsByName(source);
+  const checker = checkerFor(source);
   const seen = new Set<FunctionLike>();
   let frontier: FunctionLike[] = [];
   const visitCalls = (node: ts.Node, onCall: (call: ts.CallExpression) => void) => {
@@ -145,34 +200,26 @@ export function frameBodies(file: string, text: string): { start: number; end: n
     };
     visit(node);
   };
-  visitCalls(source, call => {
-    const callee = call.expression;
-    const name = ts.isIdentifier(callee)
-      ? callee.text
-      : ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && ["window", "globalThis"].includes(callee.expression.text)
-        ? callee.name.text
-        : undefined;
-    const index = name === undefined ? undefined : FRAME_SCHEDULERS[name];
-    const argument = index === undefined ? undefined : call.arguments[index];
-    if (!argument) return;
-    for (const fn of callbackFunctions(argument, byName)) {
+  const add = (fns: FunctionLike[], into: FunctionLike[]) => {
+    for (const fn of fns) {
       if (seen.has(fn)) continue;
       seen.add(fn);
-      frontier.push(fn);
+      into.push(fn);
     }
+  };
+  visitCalls(source, call => {
+    const argument = frameArgument(checker, call);
+    if (argument) add(callbackFunctions(checker, argument), frontier);
   });
   for (let hop = 0; hop < 2; hop++) {
     const next: FunctionLike[] = [];
     for (const fn of frontier) {
       if (!fn.body) continue;
       visitCalls(fn.body, call => {
-        const name = calleeName(call);
-        if (!name || allowedNear(text, call.getStart(source), ALLOW, 1)) return;
-        for (const callee of byName.get(name) ?? []) {
-          if (seen.has(callee)) continue;
-          seen.add(callee);
-          next.push(callee);
-        }
+        if (allowedNear(text, call.getStart(source), ALLOW, 1)) return;
+        const callee = unwrap(call.expression);
+        if (ts.isIdentifier(callee)) add(resolve(checker, callee), next);
+        else if (ts.isPropertyAccessExpression(callee) && callee.expression.kind === ts.SyntaxKind.ThisKeyword) add(resolve(checker, callee.name), next);
       });
     }
     frontier = next;
@@ -180,7 +227,20 @@ export function frameBodies(file: string, text: string): { start: number; end: n
   return [...seen].flatMap(fn => (fn.body ? [{ start: fn.body.getStart(source), end: fn.body.end }] : []));
 }
 
-/** Offsets of `setTimeout(name, …)` calls made inside the function `name` itself: a loop on timers rather than the kit. */
+/** The function a timeout runs: `name`, `this.name`, or an inline function that only calls one of those. */
+function scheduledName(callback: ts.Expression): string | undefined {
+  if (ts.isIdentifier(callback)) return callback.text;
+  if (ts.isPropertyAccessExpression(callback)) return callback.name.text;
+  if (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) {
+    const body = callback.body;
+    const only = ts.isBlock(body) ? (body.statements.length === 1 ? body.statements[0] : undefined) : body;
+    const expression = only && ts.isExpressionStatement(only) ? only.expression : only && ts.isExpression(only) ? only : undefined;
+    if (expression && ts.isCallExpression(expression)) return scheduledName(unwrap(expression.expression));
+  }
+  return undefined;
+}
+
+/** Offsets of `setTimeout(…)` calls that schedule the function they run in: a loop on timers rather than the kit. */
 export function selfSchedulingTimeouts(file: string, text: string): number[] {
   const source = parse(file, text);
   const found: number[] = [];
@@ -201,8 +261,8 @@ export function selfSchedulingTimeouts(file: string, text: string): number[] {
       const isTimeout =
         (ts.isIdentifier(callee) && callee.text === "setTimeout") ||
         (ts.isPropertyAccessExpression(callee) && callee.name.text === "setTimeout");
-      const first = node.arguments[0];
-      const target = first && (ts.isIdentifier(first) ? first.text : ts.isPropertyAccessExpression(first) ? first.name.text : undefined);
+      const first = node.arguments[0] && unwrap(node.arguments[0]);
+      const target = first && scheduledName(first);
       if (isTimeout && target && names.includes(target)) found.push(node.getStart(source));
     }
     ts.forEachChild(node, child => visit(child, names));

@@ -39,13 +39,15 @@ export type VisibleLoopOptions = {
 /**
  * The frame loop every animated Live component runs on. The deck keeps every card mounted, so a loop
  * runs only while its target is on screen: leaving it drops any queued frame or wait, and coming back
- * wakes it, unless it was put to sleep. A frame that has nothing left to move returns nothing, so a
- * still component costs nothing until something wakes it.
+ * wakes it, unless it was put to sleep. A report that only confirms the target is on screen starts a
+ * loop that has not run yet and leaves a running one to its frames' own requests. A frame that has
+ * nothing left to move returns nothing, so a still component costs nothing until something wakes it.
  */
 export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleLoopOptions = {}): VisibleLoop {
   let visible = options.initiallyVisible ?? true;
   let stopped = false;
   let slept = false;
+  let started = false;
   let queued = 0;
   let wait: ReturnType<typeof setTimeout> | undefined;
   let last = 0;
@@ -72,6 +74,7 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
     wait = undefined;
     if (stopped || slept || !visible || queued) return;
     if (!running) last = performance.now();
+    started = true;
     queued = requestAnimationFrame(run);
   }
 
@@ -89,8 +92,10 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
       visible = next;
       if (!visible) pause();
       options.onVisibleChange?.(visible);
+      if (visible) resume();
+    } else if (visible && !started) {
+      resume();
     }
-    if (visible) resume();
   });
   observer.observe(target);
 

@@ -219,6 +219,22 @@ describe("visibleLoop", () => {
     expect(frames.size).toBe(1);
   });
 
+  test("a first report that only confirms the target is on screen keeps what the first frame asked for", () => {
+    for (const answer of [undefined, 300]) {
+      frames = new Map();
+      timers = new Map();
+      const { loop, seen } = loopWith([answer, undefined]);
+      loop.wake();
+      runFrame(16);
+      report?.([{ isIntersecting: true }]);
+      expect(frames.size).toBe(0);
+      expect(timers.size).toBe(answer === undefined ? 0 : 1);
+      runFrame(32);
+      expect(seen).toHaveLength(1);
+      loop.stop();
+    }
+  });
+
   test("stop drops everything and ignores later wakes", () => {
     const { loop } = loopWith([true]);
     loop.wake();

@@ -14,7 +14,7 @@ A thin checklist. The detail lives in the skills and docs it links.
 - [ ] Straight in: write apps/web/src/live/<folder>/<Name>/<Name>.tsx and its preview.tsx (never `shells`)
 - [ ] As an idea: follow the `new-experiment` skill (and `gpu-idea` for shaders), then Make Live into apps/web/src/live/<folder>/<Name>/; after that, change the component in the idea and Update Live (below)
 - [ ] Fill the slot (below): preview.tsx exports `meta: CardMeta` (or `FamilyMemberMeta` in a family folder) and `default function <Name>Preview()`, which renders only <Name /> and takes no props; `meta` sets the card's size, description, reset, and `surface`
-- [ ] Animate on the kit (below): a frame loop runs on `visibleLoop` from `@/live/kit/visibleLoop` (GPU: `pausableLoop` from `@/gpu`), reads sizes in a `ResizeObserver`, never per frame, and lays out in the card's box, never the viewport
+- [ ] Animate on the kit (below): a canvas, SVG, or DOM loop runs on `visibleLoop` from `@/live/kit/visibleLoop`; a WebGPU loop runs on `pausableLoop` from `@/gpu`; either way it reads sizes in a `ResizeObserver`, never per frame, and lays out in the card's box, never the viewport
 - [ ] Write the `description` for a stranger: it is also the page's description, the text under a shared link, and the overview in the agent prompt, so say what it does and how it behaves
 - [ ] Pick a `size` and a place in live/order.ts where the grid still packs, and make it fit a phone page (below)
 - [ ] Grouping several components into one card? Add or update live/<folder>/family.ts

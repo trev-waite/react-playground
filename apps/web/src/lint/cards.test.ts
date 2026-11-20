@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { lineOf, report, SRC, sources } from "./source";
-import { defaultFunction, exportedConst, exportedNames, importedNames, parse, rendersElement } from "./syntax";
+import { defaultFunction, exportedConst, exportedNames, importedNames, importsAsItself, parse, rendersElement } from "./syntax";
 
 /**
  * The card contract. The deck opens, flies, fits, pages, resets, and publishes every Live
@@ -117,10 +117,10 @@ describe("card contract", () => {
           `${file} must \`export default function ${name}Preview()\`, taking no props: the deck mounts it bare, ` +
             "in the grid tile, in flight, and on its page, and remounts it to reset.",
         );
-      } else if (!rendersElement(preview, name)) {
+      } else if (!importsAsItself(syntax, name, `./${name}`) || !rendersElement(preview, name)) {
         violations.push(
-          `${file}: ${name}Preview() must render <${name} />, the component this card is for, so the card, ` +
-            "its code, and its download are the same thing.",
+          `${file}: ${name}Preview() must import { ${name} } from "./${name}" and always render <${name} /> in the JSX ` +
+            "it returns (wrappers are fine, a condition is not), so the card, its code, and its download are the same thing.",
         );
       }
     }
