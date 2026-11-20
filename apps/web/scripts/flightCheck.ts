@@ -34,8 +34,8 @@ let shiftInAll = 0;
 async function atRest(page: Page, layout: "pages" | "grid") {
   await page.waitForFunction(
     name => {
-      const cards = Array.from(document.querySelectorAll("article"));
-      const loaded = cards.every(card => card.querySelector('[class*="_fit_"] > :not([class*="_loading_"])') !== null);
+      const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
+      const loaded = cards.every(card => card.querySelector("[data-members]") !== null && card.querySelector("[data-preview-loading]") === null);
       return loaded && document.querySelector(`[data-layout="${name}"]:not([data-flying])`) !== null;
     },
     layout,
@@ -103,7 +103,7 @@ async function turnBackWhilePlacing(page: Page, title: string, where: string) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const hidden = await page.evaluate(() => ({
     placing: document.querySelector("[data-placing]") !== null,
-    cards: Array.from(document.querySelectorAll("article"))
+    cards: Array.from(document.querySelectorAll("article[data-deck-card]"))
       .filter(card => getComputedStyle(card).visibility !== "visible")
       .map(card => card.getAttribute("aria-label")),
   }));

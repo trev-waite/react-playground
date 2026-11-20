@@ -9,9 +9,9 @@ import { judgeIdle, previewChunks, sourceOf, type IdleRecord } from "./idle/judg
  * cold-idle regression check: it opens a still card's page, waits until every card's preview has
  * mounted, then records which code schedules animation frames, short timers, or intervals for a few
  * seconds. Anything recurring more than about once a second is a card working off screen, however
- * its loop is written. It does not see work started by interaction, work slower than once a second,
- * MessageChannel loops, or CSS animations; the lint and visibleLoop cover those paths, and a browser
- * trace is the tool for anything else. Run it after `bun run build`.
+ * its loop is written. It does not see work started by interaction or slower than once a second,
+ * which the lint and visibleLoop cover, nor MessageChannel loops or CSS animations, whose cost only a
+ * browser trace shows. Run it after `bun run build`.
  */
 
 const STILL_CARD = "/buttons/PrimaryButton";
@@ -69,10 +69,10 @@ try {
   await page.goto(new URL(STILL_CARD, url).href);
   await page.waitForFunction(
     still => {
-      const cards = Array.from(document.querySelectorAll("article"));
+      const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
       const mounted = (card: Element) =>
-        card.querySelector('[class*="_fit_"] [class*="_frame_"], [class*="_fit_"] [class*="_family_"]') !== null &&
-        card.querySelector('[class*="_loading_"]') === null;
+        card.querySelector("[data-members]") !== null &&
+        card.querySelector("[data-preview-loading]") === null;
       return location.pathname === still &&
         document.querySelector('[data-layout="pages"]:not([data-flying])') !== null &&
         cards.length > 1 && cards.every(mounted);
@@ -80,7 +80,7 @@ try {
     STILL_CARD,
     { timeout: WARM_TIMEOUT_MS, polling: 200 },
   );
-  mountedCards = await page.evaluate(() => document.querySelectorAll("article").length);
+  mountedCards = await page.evaluate(() => document.querySelectorAll("article[data-deck-card]").length);
   await page.waitForTimeout(SETTLE_MS);
   if (new URL(page.url()).pathname !== STILL_CARD) throw new Error(`The idle check left ${STILL_CARD} for ${page.url()}.`);
   records = await page.evaluate(async watch => {

@@ -204,11 +204,21 @@ function unwrap(expression: ts.Expression): ts.Expression {
 function functionOf(checker: ts.TypeChecker, declaration: ts.Declaration, depth = 0): FunctionLike[] {
   if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) return [declaration];
   if ((ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration)) && declaration.initializer) {
-    const value = unwrap(declaration.initializer);
+    const value = hookedFunction(unwrap(declaration.initializer));
     if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return [value];
     if (depth < 3 && (ts.isIdentifier(value) || isThisMember(value))) return resolve(checker, ts.isIdentifier(value) ? value : value.name, depth + 1);
   }
   return [];
+}
+
+/** The function React keeps for `useCallback(fn)` or returns from `useMemo(() => fn)`; anything else as it is. */
+function hookedFunction(value: ts.Expression): ts.Expression {
+  if (!ts.isCallExpression(value) || !value.arguments[0]) return value;
+  const name = calledName(value);
+  const first = unwrap(value.arguments[0]);
+  if (name === "useCallback") return first;
+  if (name === "useMemo" && (ts.isArrowFunction(first) || ts.isFunctionExpression(first)) && !ts.isBlock(first.body)) return unwrap(first.body);
+  return value;
 }
 
 function isThisMember(node: ts.Node): node is ts.PropertyAccessExpression {
@@ -235,6 +245,7 @@ function callbackFunctions(checker: ts.TypeChecker, expression: ts.Expression): 
   if (ts.isCallExpression(target) && ts.isPropertyAccessExpression(target.expression) && target.expression.name.text === "bind") {
     target = unwrap(target.expression.expression);
   }
+  target = hookedFunction(target);
   if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) return [target];
   if (ts.isIdentifier(target)) return resolve(checker, target);
   if (isThisMember(target)) return resolve(checker, target.name);
@@ -281,9 +292,16 @@ function calledName(call: ts.CallExpression): string | undefined {
  */
 function runsInline(fn: FunctionLike): boolean {
   if (!ts.isArrowFunction(fn) && !ts.isFunctionExpression(fn)) return false;
-  const parent = fn.parent;
+  let argument: ts.Node = fn;
+  while (
+    ts.isParenthesizedExpression(argument.parent) || ts.isAsExpression(argument.parent) ||
+    ts.isSatisfiesExpression(argument.parent) || ts.isNonNullExpression(argument.parent)
+  ) {
+    argument = argument.parent;
+  }
+  const parent = argument.parent;
   if (ts.isNewExpression(parent)) return false;
-  if (ts.isCallExpression(parent) && parent.arguments.includes(fn)) return ITERATORS.has(calledName(parent) ?? "");
+  if (ts.isCallExpression(parent) && parent.arguments.includes(argument as ts.Expression)) return ITERATORS.has(calledName(parent) ?? "");
   return false;
 }
 
@@ -392,6 +410,13 @@ function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0
   const target = unwrap(receiver);
   if (depth > 4) return false;
   if (ts.isObjectLiteralExpression(target)) return true;
+  if (ts.isConditionalExpression(target)) {
+    const branches = [target.whenTrue, target.whenFalse].map(unwrap);
+    const empty = (branch: ts.Expression) =>
+      branch.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(branch) && branch.text === "undefined");
+    const records = branches.filter(branch => !empty(branch));
+    return records.length > 0 && records.every(branch => isPlainData(checker, branch, depth + 1));
+  }
   if (ts.isPropertyAccessExpression(target) && target.name.text === "current" && target.expression.kind !== ts.SyntaxKind.ThisKeyword) {
     const ref = unwrap(target.expression);
     const name = ts.isIdentifier(ref) ? ref : undefined;

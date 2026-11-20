@@ -49,7 +49,7 @@ function expect(condition: boolean, failure: string) {
 async function state(page: Page) {
   return page.evaluate(() => {
     const scroller = document.querySelector("[data-layout]");
-    const card = Array.from(document.querySelectorAll("article")).find(article => {
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => {
       const box = article.getBoundingClientRect();
       return box.top < innerHeight / 2 && box.bottom > innerHeight / 2 && box.left < innerWidth / 2 && box.right > innerWidth / 2;
     });
@@ -157,7 +157,7 @@ async function checkKeyboardFocus(page: Page) {
     for (let step = 0; step < 12 && !code; step++) {
       await page.keyboard.press("Tab");
       const focused = await page.evaluate(() => ({
-        card: document.activeElement?.closest("article")?.getAttribute("aria-label"),
+        card: document.activeElement?.closest("article[data-deck-card]")?.getAttribute("aria-label"),
         label: document.activeElement?.getAttribute("aria-label") ?? null,
         code: document.activeElement?.getAttribute("aria-haspopup") === "dialog",
         path: location.pathname,
@@ -500,7 +500,7 @@ try {
     const frames: { layout: string | null; left: number; right: number }[] = [];
     Object.assign(window, { __frames: frames });
     const sample = () => {
-      const card = Array.from(document.querySelectorAll("article")).find(article => {
+      const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => {
         const box = article.getBoundingClientRect();
         return box.top < innerHeight / 2 && box.bottom > innerHeight / 2 && box.left < innerWidth / 2 && box.right > innerWidth / 2;
       });
@@ -551,7 +551,7 @@ try {
   await calm.evaluate(title => {
     const widths: number[] = [];
     Object.assign(window, { __widths: widths });
-    const card = Array.from(document.querySelectorAll("article")).find(article => article.getAttribute("aria-label") === title);
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => article.getAttribute("aria-label") === title);
     const sample = () => {
       if (card) widths.push(Math.round(card.getBoundingClientRect().width));
       requestAnimationFrame(sample);

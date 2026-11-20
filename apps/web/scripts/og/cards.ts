@@ -53,7 +53,7 @@ try {
     await page.goto(new URL(livePath(card.slug), url).href);
     await page.addStyleTag({ content: PAGE_ONLY });
     const article = page.getByRole("article", { name: card.title, exact: true });
-    await article.locator('[class*="_fit_"] > :not([class*="_loading_"])').first().waitFor();
+    await article.locator("[data-members]").first().waitFor();
     await page.waitForTimeout(SETTLE_MS);
     const shot = await article.screenshot();
 

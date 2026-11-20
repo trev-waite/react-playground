@@ -36,8 +36,8 @@ async function openPage(page: Page, title: string) {
   await page.waitForFunction(
     name => {
       const scroller = document.querySelector('[data-layout="pages"]:not([data-flying])');
-      const article = Array.from(document.querySelectorAll("article")).find(a => a.getAttribute("aria-label") === name);
-      return scroller !== null && article !== undefined && article.querySelector('[class*="_loading_"]') === null;
+      const article = Array.from(document.querySelectorAll("article[data-deck-card]")).find(a => a.getAttribute("aria-label") === name);
+      return scroller !== null && article !== undefined && article.querySelector("[data-preview-loading]") === null;
     },
     title,
     { timeout: SETTLE_TIMEOUT_MS },
@@ -267,13 +267,13 @@ try {
   const page = await context.newPage();
   await page.goto(url);
   const titles = await page
-    .getByRole("article")
+    .locator("article[data-deck-card]")
     .evaluateAll(cards => cards.map(card => card.getAttribute("aria-label") ?? ""));
   if (titles.length === 0) throw new Error("The deck rendered no cards.");
 
   for (const title of titles) {
     const card = await openPage(page, title);
-    const fit = card.locator('[class*="_fit_"]');
+    const fit = card.locator("[data-fit]");
     const transform = await fit.evaluate(element => (element as HTMLElement).style.transform);
     const scale = /scale\(([\d.]+)\)/.exec(transform)?.[1];
     if (scale && Number(scale) < MIN_SCALE) {

@@ -25,7 +25,7 @@ export function installFlightRecorder() {
   new PerformanceObserver(list => {
     for (const entry of list.getEntries() as Shift[]) {
       if (entry.hadRecentInput) continue;
-      const cards = entry.sources.map(({ node }) => (node instanceof Element ? node : (node?.parentElement ?? null))?.closest("article") ?? null);
+      const cards = entry.sources.map(({ node }) => (node instanceof Element ? node : (node?.parentElement ?? null))?.closest("article[data-deck-card]") ?? null);
       shifts.push({ at: entry.startTime, value: entry.value, cards });
     }
   }).observe({ type: "layout-shift", buffered: true });
@@ -34,8 +34,8 @@ export function installFlightRecorder() {
 
   const record = (title: string, detail?: PreviewDetail) => {
     current?.end();
-    const card = Array.from(document.querySelectorAll("article")).find(each => each.getAttribute("aria-label") === title);
-    const fit = card?.querySelector<HTMLElement>('[class*="_fit_"]');
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(each => each.getAttribute("aria-label") === title);
+    const fit = card?.querySelector<HTMLElement>("[data-fit]");
     const scroller = document.querySelector("[data-layout]");
     if (!card || !fit || !scroller) throw new Error(`No card called ${title} to record.`);
     const watched = Array.from(fit.querySelectorAll("button, input, canvas, svg, a, [role]")).slice(0, 8);
