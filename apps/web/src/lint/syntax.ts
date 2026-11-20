@@ -211,13 +211,16 @@ function functionOf(checker: ts.TypeChecker, declaration: ts.Declaration, depth 
   return [];
 }
 
-/** The function React keeps for `useCallback(fn)` or returns from `useMemo(() => fn)`; anything else as it is. */
+/** The function React keeps for `useCallback(fn)` or returns from `useMemo(() => fn)` (an expression or a block); anything else as it is. */
 function hookedFunction(value: ts.Expression): ts.Expression {
   if (!ts.isCallExpression(value) || !value.arguments[0]) return value;
   const name = calledName(value);
   const first = unwrap(value.arguments[0]);
   if (name === "useCallback") return first;
-  if (name === "useMemo" && (ts.isArrowFunction(first) || ts.isFunctionExpression(first)) && !ts.isBlock(first.body)) return unwrap(first.body);
+  if (name === "useMemo" && (ts.isArrowFunction(first) || ts.isFunctionExpression(first))) {
+    const returned = returnedExpressions(first).flatMap(expression => (expression ? [unwrap(expression)] : []));
+    if (returned.length === 1) return returned[0]!;
+  }
   return value;
 }
 
@@ -401,6 +404,11 @@ function isPlainRef(checker: ts.TypeChecker, call: ts.CallExpression): boolean {
   return !!first && ts.isObjectLiteralExpression(unwrap(first));
 }
 
+function isNullish(expression: ts.Expression): boolean {
+  const value = unwrap(expression);
+  return value.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(value) && value.text === "undefined");
+}
+
 /**
  * True when an expression is plain data this file holds, such as sizes a ResizeObserver cached, and
  * not a DOM node: an object literal, a plain `useRef(…)`'s `.current`, or a name bound to one of those.
@@ -411,10 +419,7 @@ function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0
   if (depth > 4) return false;
   if (ts.isObjectLiteralExpression(target)) return true;
   if (ts.isConditionalExpression(target)) {
-    const branches = [target.whenTrue, target.whenFalse].map(unwrap);
-    const empty = (branch: ts.Expression) =>
-      branch.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(branch) && branch.text === "undefined");
-    const records = branches.filter(branch => !empty(branch));
+    const records = [target.whenTrue, target.whenFalse].map(unwrap).filter(branch => !isNullish(branch));
     return records.length > 0 && records.every(branch => isPlainData(checker, branch, depth + 1));
   }
   if (ts.isPropertyAccessExpression(target) && target.name.text === "current" && target.expression.kind !== ts.SyntaxKind.ThisKeyword) {
@@ -433,7 +438,8 @@ function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0
       const factories = calleeFunctions(checker, init);
       return factories.length > 0 && factories.every(factory => {
         const values = returnedExpressions(factory);
-        return values.length > 0 && values.every(value => !!value && isPlainData(checker, value, depth + 1));
+        const records = values.filter((value): value is ts.Expression => !!value && !isNullish(value));
+        return records.length > 0 && records.every(value => isPlainData(checker, value, depth + 1));
       });
     }
     return isPlainData(checker, init, depth + 1);

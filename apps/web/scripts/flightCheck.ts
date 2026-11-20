@@ -3,6 +3,7 @@ import { chromium, type Page } from "playwright";
 import { preview } from "vite";
 import { judgeFlight } from "./flight/judge.ts";
 import { installFlightRecorder, type Flight, type FlightRecorder } from "./flight/recorder.ts";
+import { deckCard } from "./deckCards.ts";
 
 /**
  * Flies cards between the grid and their pages in the built app: a preview
@@ -35,7 +36,7 @@ async function atRest(page: Page, layout: "pages" | "grid") {
   await page.waitForFunction(
     name => {
       const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
-      const loaded = cards.every(card => card.querySelector("[data-members]") !== null && card.querySelector("[data-preview-loading]") === null);
+      const loaded = cards.every(card => card.querySelector("[data-deck-members]") !== null && card.querySelector("[data-deck-loading]") === null);
       return loaded && document.querySelector(`[data-layout="${name}"]:not([data-flying])`) !== null;
     },
     layout,
@@ -43,7 +44,7 @@ async function atRest(page: Page, layout: "pages" | "grid") {
   );
 }
 
-const tileOf = (page: Page, title: string) => page.getByRole("article", { name: title, exact: true }).getByRole("link");
+const tileOf = (page: Page, title: string) => deckCard(page, title).getByRole("link");
 
 /** Records `title`'s card through `action` until the deck rests in `layout`, and for a few frames after. */
 async function fly(page: Page, title: string, action: () => Promise<unknown>, layout: "pages" | "grid"): Promise<Flight> {

@@ -3,6 +3,7 @@ import { chromium, webkit, type Page } from "playwright";
 import { preview } from "vite";
 import { livePath, routeTitle, SITE_TITLE } from "../src/lib/liveRoutes.ts";
 import { readLiveCards } from "../vite/liveCards.ts";
+import { deckCard } from "./deckCards.ts";
 
 /**
  * Drives the built app in a browser to hold the routing to what a reader
@@ -83,7 +84,7 @@ async function settle(page: Page, done: (current: State) => boolean): Promise<St
   }
 }
 
-const tile = (page: Page, title: string) => page.getByRole("article", { name: title, exact: true }).getByRole("link");
+const tile = (page: Page, title: string) => deckCard(page, title).getByRole("link");
 
 /** The card is the one asked for and spans the viewport as a page does. */
 function isPageOf(current: State, title: string): boolean {
@@ -146,7 +147,7 @@ async function checkKeyboardFocus(page: Page) {
       await page.keyboard.press("Enter");
     }
     await settle(page, current => current.layout === "pages" && isPageOf(current, title));
-    const card = page.getByRole("article", { name: title, exact: true });
+    const card = deckCard(page, title);
     const scene = card.locator("[data-projecting], [data-still]");
     await scene.waitFor({ state: "attached" });
     const controls = await scene.locator('button[tabindex="0"]:visible').evaluateAll(buttons =>

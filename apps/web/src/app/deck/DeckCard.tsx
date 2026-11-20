@@ -281,8 +281,8 @@ function FitStage({ areaRef, fitRef, children }: { areaRef: RefObject<HTMLDivEle
 
   return (
     <div ref={areaRef} className={styles.area}>
-      <div ref={fitRef} className={styles.fit} data-fit>
-        <Suspense fallback={<div className={styles.loading} data-preview-loading aria-hidden="true" />}>
+      <div ref={fitRef} className={styles.fit} data-deck-fit>
+        <Suspense fallback={<div className={styles.loading} data-deck-loading aria-hidden="true" />}>
           {children}
           <Revealed onReveal={refit} />
         </Suspense>
@@ -305,13 +305,13 @@ const Members = memo(function Members({ members, familyWidth }: { members: LiveC
   if (members.length === 1 && members[0]) {
     return (
       // `.frame` must stretch: `useGpu` waits for a real canvas layout.
-      <div className={styles.frame} data-members>
+      <div className={styles.frame} data-deck-members>
         <Member member={members[0]} />
       </div>
     );
   }
   return (
-    <div className={styles.family} style={{ width: familyWidth }} data-members>
+    <div className={styles.family} style={{ width: familyWidth }} data-deck-members>
       {members.map(member => (
         <div key={member.slug} className={styles.member}>
           <Member member={member} />

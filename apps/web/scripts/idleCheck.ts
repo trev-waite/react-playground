@@ -71,8 +71,8 @@ try {
     still => {
       const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
       const mounted = (card: Element) =>
-        card.querySelector("[data-members]") !== null &&
-        card.querySelector("[data-preview-loading]") === null;
+        card.querySelector("[data-deck-members]") !== null &&
+        card.querySelector("[data-deck-loading]") === null;
       return location.pathname === still &&
         document.querySelector('[data-layout="pages"]:not([data-flying])') !== null &&
         cards.length > 1 && cards.every(mounted);

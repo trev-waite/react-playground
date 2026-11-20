@@ -6,6 +6,7 @@ import { livePath } from "../../src/lib/liveRoutes.ts";
 import { readLiveCards, type BuildCard } from "../../vite/liveCards.ts";
 import { cardImagePath } from "../../vite/routeHead.ts";
 import { ogComponentHtml } from "./card.ts";
+import { deckCard } from "../deckCards.ts";
 
 /**
  * Draws each card's link-preview image into public/og/, where the build finds
@@ -52,8 +53,8 @@ try {
   for (const card of cards) {
     await page.goto(new URL(livePath(card.slug), url).href);
     await page.addStyleTag({ content: PAGE_ONLY });
-    const article = page.getByRole("article", { name: card.title, exact: true });
-    await article.locator("[data-members]").first().waitFor();
+    const article = deckCard(page, card.title);
+    await article.locator("[data-deck-members]").first().waitFor();
     await page.waitForTimeout(SETTLE_MS);
     const shot = await article.screenshot();
 

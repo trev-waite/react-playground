@@ -45,7 +45,7 @@ async function load(browser: Browser, webGpu: boolean) {
   await page.waitForFunction(
     () => {
       const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
-      return cards.length > 0 && cards.every(card => card.querySelector("[data-members]") !== null && card.querySelector("[data-preview-loading]") === null);
+      return cards.length > 0 && cards.every(card => card.querySelector("[data-deck-members]") !== null && card.querySelector("[data-deck-loading]") === null);
     },
     null,
     { timeout: SETTLE_TIMEOUT_MS },

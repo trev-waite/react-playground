@@ -5,6 +5,7 @@ import { chromium, type Locator, type Page } from "playwright";
 import { preview } from "vite";
 import type { SourceFile } from "../src/lib/types.ts";
 import { FRONT_PITCH, FRONT_YAW, orbitRadiansPerPixel } from "../src/live/particles/GandalfHologram/orbit.ts";
+import { deckCard } from "./deckCards.ts";
 
 /**
  * Opens every card as a page on a phone-sized screen and fails when a preview
@@ -31,13 +32,13 @@ const failures: string[] = [];
 /** Opens a card from the grid and waits until its page has landed and its preview has loaded. */
 async function openPage(page: Page, title: string) {
   await page.goto(url!);
-  const card = page.getByRole("article", { name: title, exact: true });
+  const card = deckCard(page, title);
   await card.locator(":scope > a").click();
   await page.waitForFunction(
     name => {
       const scroller = document.querySelector('[data-layout="pages"]:not([data-flying])');
       const article = Array.from(document.querySelectorAll("article[data-deck-card]")).find(a => a.getAttribute("aria-label") === name);
-      return scroller !== null && article !== undefined && article.querySelector("[data-preview-loading]") === null;
+      return scroller !== null && article !== undefined && article.querySelector("[data-deck-loading]") === null;
     },
     title,
     { timeout: SETTLE_TIMEOUT_MS },
@@ -273,7 +274,7 @@ try {
 
   for (const title of titles) {
     const card = await openPage(page, title);
-    const fit = card.locator("[data-fit]");
+    const fit = card.locator("[data-deck-fit]");
     const transform = await fit.evaluate(element => (element as HTMLElement).style.transform);
     const scale = /scale\(([\d.]+)\)/.exec(transform)?.[1];
     if (scale && Number(scale) < MIN_SCALE) {
@@ -358,7 +359,7 @@ try {
       if (target < 43.9) failures.push(`Letterpress needs 44px press areas at 320×320. The smallest measured ${target.toFixed(1)}px.`);
     }
   }
-  const letterpress = page.getByRole("article", { name: "Letterpress" });
+  const letterpress = deckCard(page, "Letterpress");
   const scrubber = letterpress.getByRole("slider", { name: "Scroll to assemble" });
   await scrubber.focus();
   await page.keyboard.press("End");
