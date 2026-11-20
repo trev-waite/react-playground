@@ -66,12 +66,31 @@ function returnedExpressions(fn: ts.FunctionLikeDeclaration): (ts.Expression | u
 }
 
 /** True when `expression` is JSX that contains an element whose tag `isTag` accepts, wrapped only by other elements. */
+const HIDING_ATTRIBUTES = ["hidden", "inert"];
+
 function hidesChildren(element: ts.JsxOpeningLikeElement): boolean {
   return element.attributes.properties.some(attribute => {
-    if (!ts.isJsxAttribute(attribute) || !["hidden", "inert"].includes(attribute.name.getText())) return false;
+    if (ts.isJsxSpreadAttribute(attribute)) {
+      const spread = unwrap(attribute.expression);
+      return ts.isObjectLiteralExpression(spread) && spread.properties.some(property =>
+        ts.isPropertyAssignment(property) && HIDING_ATTRIBUTES.includes(property.name.getText()) &&
+        unwrap(property.initializer).kind !== ts.SyntaxKind.FalseKeyword);
+    }
+    if (!HIDING_ATTRIBUTES.includes(attribute.name.getText())) return false;
     const value = attribute.initializer;
     return !(value && ts.isJsxExpression(value) && value.expression?.kind === ts.SyntaxKind.FalseKeyword);
   });
+}
+
+/** Every element `expression` contains whose tag `isTag` accepts, however it is nested: in braces, attributes, or conditions. */
+function anyCount(expression: ts.Node, isTag: (tag: ts.JsxTagNameExpression) => boolean): number {
+  let count = 0;
+  const visit = (node: ts.Node) => {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && isTag(node.tagName)) count++;
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  return count;
 }
 
 /** How many elements whose tag `isTag` accepts `expression` renders plainly: wrapped only by other elements, none of them hidden or inert. */
@@ -105,7 +124,7 @@ export function rendersElement(source: ts.SourceFile, fn: ts.FunctionLikeDeclara
   };
   const returns = returnedExpressions(fn);
   const endsInReturn = !!fn.body && (!ts.isBlock(fn.body) || (fn.body.statements.length > 0 && ts.isReturnStatement(fn.body.statements[fn.body.statements.length - 1]!)));
-  return endsInReturn && returns.every(expression => !!expression && plainCount(expression, isTag) === 1);
+  return endsInReturn && returns.every(expression => !!expression && plainCount(expression, isTag) === 1 && anyCount(expression, isTag) === 1);
 }
 
 /** True when the module imports `name` as itself, unrenamed, from `module`. */
@@ -290,6 +309,12 @@ function frameFunctions(source: ts.SourceFile, checker: ts.TypeChecker, text: st
       walkFrame(fn.body, node => {
         if (!ts.isCallExpression(node) || allowedNear(text, node.getStart(source), ALLOW, 1)) return;
         add(calleeFunctions(checker, node), next);
+        if (DEFERRING_CALLS.has(calledName(node) ?? "")) return;
+        for (const argument of node.arguments) {
+          const value = unwrap(argument);
+          if (ts.isIdentifier(value)) add(resolve(checker, value), next);
+          else if (isThisMember(value)) add(resolve(checker, value.name), next);
+        }
       });
     }
     frontier = next;
@@ -309,51 +334,52 @@ function isAssigned(node: ts.Node): boolean {
 function isPlainType(checker: ts.TypeChecker, type: ts.TypeNode, depth = 0): boolean {
   if (ts.isTypeLiteralNode(type)) return true;
   if (!ts.isTypeReferenceNode(type) || depth > 4) return false;
-  const local = checker.getSymbolAtLocation(type.typeName)?.declarations?.[0];
-  if (!local || local.getSourceFile() !== type.getSourceFile()) return false;
+  return isPlainTypeName(checker, type.typeName, type.getSourceFile(), depth);
+}
+
+function isPlainTypeName(checker: ts.TypeChecker, name: ts.EntityName | ts.Expression, file: ts.SourceFile, depth: number): boolean {
+  const local = checker.getSymbolAtLocation(name)?.declarations?.[0];
+  if (!local || local.getSourceFile() !== file || depth > 4) return false;
   if (ts.isInterfaceDeclaration(local)) {
-    return (local.heritageClauses ?? []).every(clause => clause.types.every(base => {
-      const parent = checker.getSymbolAtLocation(base.expression)?.declarations?.[0];
-      return !!parent && ts.isInterfaceDeclaration(parent) && parent.getSourceFile() === type.getSourceFile();
-    }));
+    return (local.heritageClauses ?? []).every(clause => clause.types.every(base => isPlainTypeName(checker, base.expression, file, depth + 1)));
   }
   return ts.isTypeAliasDeclaration(local) && isPlainType(checker, local.type, depth + 1);
 }
 
-/** True when a value is plain data: an object literal, `useRef({ … })`, or something typed as a plain record. */
-function isPlainValue(checker: ts.TypeChecker, initializer: ts.Expression | undefined, type: ts.TypeNode | undefined): boolean {
-  if (type) return isPlainType(checker, type);
-  if (!initializer) return false;
-  const value = unwrap(initializer);
-  if (ts.isObjectLiteralExpression(value)) return true;
-  if (ts.isCallExpression(value) && calledName(value) === "useRef") {
-    const [first] = value.arguments;
-    const typeArgument = value.typeArguments?.[0];
-    return typeArgument ? isPlainType(checker, typeArgument) : !!first && ts.isObjectLiteralExpression(unwrap(first));
-  }
-  return false;
+/** True when `useRef(…)` holds a plain record: an object literal, or a value typed as one. */
+function isPlainRef(checker: ts.TypeChecker, call: ts.CallExpression): boolean {
+  if (calledName(call) !== "useRef") return false;
+  const typeArgument = call.typeArguments?.[0];
+  if (typeArgument) return isPlainType(checker, typeArgument);
+  const [first] = call.arguments;
+  return !!first && ts.isObjectLiteralExpression(unwrap(first));
 }
 
 /**
- * True when `receiver` is plain data this file defines, such as sizes a ResizeObserver cached, rather
- * than a DOM node: a variable, field, or parameter that holds an object literal or a `useRef` of one,
- * or is typed as a local record; or the `.current` of such a ref.
+ * True when an expression is plain data this file holds, such as sizes a ResizeObserver cached, and
+ * not a DOM node: an object literal, a plain `useRef(…)`'s `.current`, or a name bound to one of those.
+ * A value's initializer decides; a type is trusted only where there is no initializer to read.
  */
-function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression): boolean {
-  let target = unwrap(receiver);
-  let throughRef = false;
+function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0): boolean {
+  const target = unwrap(receiver);
+  if (depth > 4) return false;
+  if (ts.isObjectLiteralExpression(target)) return true;
   if (ts.isPropertyAccessExpression(target) && target.name.text === "current" && target.expression.kind !== ts.SyntaxKind.ThisKeyword) {
-    target = unwrap(target.expression);
-    throughRef = true;
+    const ref = unwrap(target.expression);
+    const name = ts.isIdentifier(ref) ? ref : undefined;
+    const declaration = name && checker.getSymbolAtLocation(name)?.declarations?.[0];
+    const init = declaration && ts.isVariableDeclaration(declaration) && declaration.initializer && unwrap(declaration.initializer);
+    return !!init && ts.isCallExpression(init) && isPlainRef(checker, init);
   }
   const name = ts.isIdentifier(target) ? target : isThisMember(target) ? target.name : undefined;
   const declaration = name && checker.getSymbolAtLocation(name)?.declarations?.[0];
   if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration) || ts.isParameter(declaration))) return false;
-  if (throughRef) {
-    const init = declaration.initializer && unwrap(declaration.initializer);
-    return !!init && ts.isCallExpression(init) && calledName(init) === "useRef" && isPlainValue(checker, init, undefined);
+  if (declaration.initializer) {
+    const init = unwrap(declaration.initializer);
+    if (ts.isCallExpression(init)) return false;
+    return isPlainData(checker, init, depth + 1);
   }
-  return isPlainValue(checker, declaration.initializer, declaration.type);
+  return !!declaration.type && isPlainType(checker, declaration.type);
 }
 
 /** True when a call updates React state: it is the setter slot of a `useState` or `useReducer` pair, whatever it is named. */
@@ -427,8 +453,17 @@ export function selfSchedulingTimeouts(file: string, text: string): number[] {
     }
     return false;
   };
+  const isTimeout = (call: ts.CallExpression) => {
+    if (calledName(call) === "setTimeout") return true;
+    const callee = unwrap(call.expression);
+    const declaration = ts.isIdentifier(callee) ? checker.getSymbolAtLocation(callee)?.declarations?.[0] : undefined;
+    if (!declaration || !ts.isVariableDeclaration(declaration) || !declaration.initializer) return false;
+    let value = unwrap(declaration.initializer);
+    if (ts.isCallExpression(value) && ts.isPropertyAccessExpression(value.expression) && value.expression.name.text === "bind") value = unwrap(value.expression.expression);
+    return (ts.isIdentifier(value) && value.text === "setTimeout") || (ts.isPropertyAccessExpression(value) && value.name.text === "setTimeout");
+  };
   const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && calledName(node) === "setTimeout" && node.arguments[0]) {
+    if (ts.isCallExpression(node) && isTimeout(node) && node.arguments[0]) {
       const callback = unwrap(node.arguments[0]);
       const start = ts.isArrowFunction(callback) || ts.isFunctionExpression(callback) ? [callback] : callbackFunctions(checker, callback);
       const inline = start.filter(fn => fn === callback);

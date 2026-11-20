@@ -17,6 +17,7 @@
     "check:phone": "bun scripts/phoneCheck.ts",
     "check:flights": "bun scripts/flightCheck.ts",
     "check:gpu": "bun scripts/gpuGateCheck.ts",
+    "check:idle": "bun scripts/idleCheck.ts",
     "check:routes": "bun scripts/browserRoutes.ts"
   },
   "dependencies": {
