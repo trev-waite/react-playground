@@ -53,7 +53,7 @@ try {
   for (const card of cards) {
     await page.goto(new URL(livePath(card.slug), url).href);
     await page.addStyleTag({ content: PAGE_ONLY });
-    const article = deckCard(page, { slug: card.slug });
+    const article = deckCard(page, card.slug);
     await article.locator("[data-deck-members]").first().waitFor();
     await page.waitForTimeout(SETTLE_MS);
     const shot = await article.screenshot();

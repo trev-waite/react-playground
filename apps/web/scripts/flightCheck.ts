@@ -15,10 +15,10 @@ const DESKTOP = { viewport: { width: 1280, height: 800 } };
 const SHORTER = { width: 1280, height: 560 };
 const PHONE = { viewport: { width: 400, height: 700 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 /** A canvas that resizes with its stage, so its second flight steps. */
-const STEPPED = "Moon Phase";
+const STEPPED = "dither/MoonPhase";
 const SETTLE_TIMEOUT_MS = 15_000;
-const CARDS = ["Controls", "Profile Button", "Menu Pill", "Moon Phase", "Letterpress"];
-const AFTER_RESIZE = ["Controls", "Spacing Tidy"];
+const CARDS = ["controls", "buttons/ProfileButton", "navigation/MenuPill", "dither/MoonPhase", "text/Letterpress"];
+const AFTER_RESIZE = ["controls", "tools/SpacingTidy"];
 const BACK = "Show all components";
 
 type InPage = { flightRecorder: FlightRecorder; turnedBack?: boolean };
@@ -44,11 +44,11 @@ async function atRest(page: Page, layout: "pages" | "grid") {
   );
 }
 
-const tileOf = (page: Page, title: string) => deckCard(page, title).getByRole("link");
+const tileOf = (page: Page, slug: string) => deckCard(page, slug).getByRole("link");
 
 /** Records `title`'s card through `action` until the deck rests in `layout`, and for a few frames after. */
 async function fly(page: Page, title: string, action: () => Promise<unknown>, layout: "pages" | "grid"): Promise<Flight> {
-  await page.evaluate(name => (window as unknown as InPage).flightRecorder.record(name, name === "Letterpress" ? {
+  await page.evaluate(name => (window as unknown as InPage).flightRecorder.record(name, name === "text/Letterpress" ? {
     stage: "[data-letterpress]",
     targets: ['[data-letter="0"] [data-glyph-art]', '[role="slider"]'],
   } : undefined), title);
@@ -67,7 +67,7 @@ async function roundTrip(page: Page, title: string, note = "") {
   const back = page.getByRole("button", { name: BACK });
   const closed = await fly(page, title, () => back.click(), "grid");
   failures.push(...judgeFlight(`Opening ${title}${note}`, opened), ...judgeFlight(`Closing ${title}${note}`, closed));
-  if (title === "Letterpress") {
+  if (title === "text/Letterpress") {
     for (const [direction, { frames }] of [["Opening", opened], ["Closing", closed]] as const) {
       let jump = 0;
       for (const [index, frame] of frames.entries()) {
@@ -128,7 +128,7 @@ try {
   });
   await atRest(page, "grid");
   for (const title of AFTER_RESIZE) await roundTrip(page, title, " after the window grew shorter in the grid");
-  await turnBackWhilePlacing(page, "Controls", "On a desktop");
+  await turnBackWhilePlacing(page, "controls", "On a desktop");
 
   const phone = await (await browser.newContext(PHONE)).newPage();
   await phone.addInitScript(installFlightRecorder);
@@ -136,22 +136,22 @@ try {
   await atRest(phone, "grid");
   await roundTrip(phone, STEPPED, " on a phone");
   await roundTrip(phone, STEPPED, " on a phone, in steps");
-  await roundTrip(phone, "Letterpress", " on a phone");
-  await roundTrip(phone, "Letterpress", " on a phone after its page has been measured");
-  await turnBackWhilePlacing(phone, "Controls", "On a phone");
+  await roundTrip(phone, "text/Letterpress", " on a phone");
+  await roundTrip(phone, "text/Letterpress", " on a phone after its page has been measured");
+  await turnBackWhilePlacing(phone, "controls", "On a phone");
 
   const landscape = await (await browser.newContext({ ...PHONE, viewport: { width: 667, height: 375 } })).newPage();
   await landscape.addInitScript(installFlightRecorder);
   await landscape.goto(url);
   await atRest(landscape, "grid");
-  await roundTrip(landscape, "Gandalf’s Hat", " on a landscape phone");
+  await roundTrip(landscape, "particles/GandalfHologram", " on a landscape phone");
 
   const shortLandscape = await (await browser.newContext({ ...PHONE, viewport: { width: 568, height: 320 } })).newPage();
   await shortLandscape.addInitScript(installFlightRecorder);
   await shortLandscape.goto(url);
   await atRest(shortLandscape, "grid");
-  await roundTrip(shortLandscape, "Profile Button", " on a short landscape phone");
-  await roundTrip(shortLandscape, "Profile Button", " on a short landscape phone, reopened");
+  await roundTrip(shortLandscape, "buttons/ProfileButton", " on a short landscape phone");
+  await roundTrip(shortLandscape, "buttons/ProfileButton", " on a short landscape phone, reopened");
 
   const compact = await (await browser.newContext({ ...PHONE, viewport: { width: 320, height: 280 } })).newPage();
   await compact.addInitScript(installFlightRecorder);
@@ -160,8 +160,8 @@ try {
   }, { once: true }));
   await compact.goto(url);
   await atRest(compact, "grid");
-  await roundTrip(compact, "Gandalf’s Hat", " at 200% text");
-  await roundTrip(compact, "Gandalf’s Hat", " at 200% text, in steps");
+  await roundTrip(compact, "particles/GandalfHologram", " at 200% text");
+  await roundTrip(compact, "particles/GandalfHologram", " at 200% text, in steps");
 } finally {
   await browser.close();
   await server.close();

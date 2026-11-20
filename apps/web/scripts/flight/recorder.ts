@@ -34,7 +34,7 @@ export function installFlightRecorder() {
 
   const record = (title: string, detail?: PreviewDetail) => {
     current?.end();
-    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(each => each.getAttribute("aria-label") === title);
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(each => each.getAttribute("data-deck-card") === title);
     const fit = card?.querySelector<HTMLElement>("[data-deck-fit]");
     const scroller = document.querySelector("[data-layout]");
     if (!card || !fit || !scroller) throw new Error(`No card called ${title} to record.`);

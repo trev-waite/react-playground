@@ -416,10 +416,8 @@ function plainLiteralOf(checker: ts.TypeChecker, expression: ts.Expression, dept
   if (ts.isIdentifier(target)) {
     const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
     if (declaration && ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent)) {
-      const holder = declaration.parent.parent;
-      const key = (declaration.propertyName ?? declaration.name).getText();
-      const from = ts.isVariableDeclaration(holder) && holder.initializer ? plainLiteralOf(checker, holder.initializer, depth + 1) : undefined;
-      return from ? propertyLiteral(checker, from, key, depth) : undefined;
+      const from = patternLiteral(checker, declaration.parent, depth + 1);
+      return from ? propertyLiteral(checker, from, bindingKey(declaration), depth) : undefined;
     }
     return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
       ? plainLiteralOf(checker, declaration.initializer, depth + 1)
@@ -475,10 +473,8 @@ function declaredTypeOf(checker: ts.TypeChecker, expression: ts.Expression, dept
   if (ts.isIdentifier(target)) {
     const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
     if (declaration && ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent)) {
-      const holder = declaration.parent.parent;
-      const from = ts.isVariableDeclaration(holder) && holder.initializer ? declaredTypeOf(checker, holder.initializer, depth + 1) : undefined;
-      const key = (declaration.propertyName ?? declaration.name).getText();
-      return from ? memberType(checker, from, key) : undefined;
+      const from = patternType(checker, declaration.parent, depth + 1);
+      return from ? memberType(checker, from, bindingKey(declaration)) : undefined;
     }
     if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isParameter(declaration) || ts.isPropertyDeclaration(declaration))) return undefined;
     if (!declaration.initializer) return declaration.type;
@@ -493,6 +489,41 @@ function declaredTypeOf(checker: ts.TypeChecker, expression: ts.Expression, dept
   }
   const holder = declaredTypeOf(checker, target.expression, depth + 1);
   return holder ? memberType(checker, holder, target.name.text) : undefined;
+}
+
+function bindingKey(element: ts.BindingElement): string {
+  return (element.propertyName ?? element.name).getText();
+}
+
+/** The object literal an object pattern takes apart: its declaration's value, or a property of an enclosing pattern's literal. */
+function patternLiteral(checker: ts.TypeChecker, pattern: ts.ObjectBindingPattern, depth: number): ts.ObjectLiteralExpression | undefined {
+  const parent = pattern.parent;
+  if (ts.isVariableDeclaration(parent)) return parent.initializer ? plainLiteralOf(checker, parent.initializer, depth) : undefined;
+  if (ts.isBindingElement(parent) && ts.isObjectBindingPattern(parent.parent)) {
+    const outer = patternLiteral(checker, parent.parent, depth + 1);
+    return outer ? propertyLiteral(checker, outer, bindingKey(parent), depth) : undefined;
+  }
+  return undefined;
+}
+
+/** The declared record type an object pattern takes apart, followed through enclosing patterns. */
+function patternType(checker: ts.TypeChecker, pattern: ts.ObjectBindingPattern, depth: number): ts.TypeNode | undefined {
+  const parent = pattern.parent;
+  if (ts.isVariableDeclaration(parent)) return parent.initializer ? declaredTypeOf(checker, parent.initializer, depth) : parent.type;
+  if (ts.isBindingElement(parent) && ts.isObjectBindingPattern(parent.parent)) {
+    const outer = patternType(checker, parent.parent, depth + 1);
+    return outer ? memberType(checker, outer, bindingKey(parent)) : undefined;
+  }
+  return undefined;
+}
+
+/** True when an object pattern takes apart plain data, at any depth of nesting. */
+function patternIsPlain(checker: ts.TypeChecker, pattern: ts.ObjectBindingPattern): boolean {
+  const parent = pattern.parent;
+  if (ts.isVariableDeclaration(parent) && parent.initializer && isPlainData(checker, parent.initializer)) return true;
+  if (patternLiteral(checker, pattern, 0)) return true;
+  const type = patternType(checker, pattern, 0);
+  return !!type && isPlainType(checker, type);
 }
 
 /** The declared type of `key` in a local record type. */
@@ -582,10 +613,7 @@ export function frameFindings(file: string, text: string): { reads: FrameFinding
         const callee = unwrap(node.expression);
         if (ts.isIdentifier(callee) && isStateSetter(checker, callee)) found(setters, node);
       } else if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
-        const name = (node.propertyName ?? node.name).getText(source);
-        const holder = node.parent.parent;
-        const from = ts.isVariableDeclaration(holder) ? holder.initializer : undefined;
-        if (LAYOUT_READS.test(name) && !(from && isPlainData(checker, from))) found(reads, node);
+        if (LAYOUT_READS.test(bindingKey(node)) && !patternIsPlain(checker, node.parent)) found(reads, node);
       }
     });
   }

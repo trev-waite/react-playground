@@ -5,7 +5,7 @@ import { chromium, type Locator, type Page } from "playwright";
 import { preview } from "vite";
 import type { SourceFile } from "../src/lib/types.ts";
 import { FRONT_PITCH, FRONT_YAW, orbitRadiansPerPixel } from "../src/live/particles/GandalfHologram/orbit.ts";
-import { deckCard, type CardKey } from "./deckCards.ts";
+import { deckCard } from "./deckCards.ts";
 
 /**
  * Opens every card as a page on a phone-sized screen and fails when a preview
@@ -30,18 +30,17 @@ const browser = await chromium.launch();
 const failures: string[] = [];
 
 /** Opens a card from the grid and waits until its page has landed and its preview has loaded. */
-async function openPage(page: Page, key: CardKey) {
+async function openPage(page: Page, slug: string) {
   await page.goto(url!);
-  const card = deckCard(page, key);
+  const card = deckCard(page, slug);
   await card.locator(":scope > a").click();
   await page.waitForFunction(
-    key => {
+    slug => {
       const scroller = document.querySelector('[data-layout="pages"]:not([data-flying])');
-      const article = Array.from(document.querySelectorAll("article[data-deck-card]")).find(a =>
-        typeof key === "string" ? a.getAttribute("aria-label") === key : a.getAttribute("data-deck-card") === key.slug);
+      const article = Array.from(document.querySelectorAll("article[data-deck-card]")).find(a => a.getAttribute("data-deck-card") === slug);
       return scroller !== null && article !== undefined && article.querySelector("[data-deck-loading]") === null;
     },
-    key,
+    slug,
     { timeout: SETTLE_TIMEOUT_MS },
   );
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -214,7 +213,7 @@ async function checkCompactHologram() {
   for (const [width, height] of sizes) {
     const viewport = { width, height };
     const context = await browser.newContext({ ...PHONE, viewport });
-    const card = await openPage(await context.newPage(), "Gandalf’s Hat");
+    const card = await openPage(await context.newPage(), "particles/GandalfHologram");
     const canvas = await checkHologramStage(card, width, height);
     if (canvas && width === 450 && height === 320) await checkTouchRelease(canvas);
     if (canvas && width === 568 && height === 320) {
@@ -231,7 +230,7 @@ async function checkLargeText() {
   try {
     for (const [width, height] of [[320, 280], [375, 375]] as const) {
       const page = await largeText.newPage({ ...PHONE, viewport: { width, height } });
-      const card = await openPage(page, "Gandalf’s Hat");
+      const card = await openPage(page, "particles/GandalfHologram");
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const rootFont = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
       if (rootFont !== "32px") failures.push(`The large-text check ran at ${rootFont} instead of 32px.`);
@@ -274,7 +273,7 @@ try {
   if (cards.length === 0) throw new Error("The deck rendered no cards.");
 
   for (const { slug, title } of cards) {
-    const card = await openPage(page, { slug });
+    const card = await openPage(page, slug);
     const fit = card.locator("[data-deck-fit]");
     const transform = await fit.evaluate(element => (element as HTMLElement).style.transform);
     const scale = /scale\(([\d.]+)\)/.exec(transform)?.[1];
@@ -284,7 +283,7 @@ try {
           "Give it a phone layout (a `@media (max-width: 48rem)` rule) so it fits unscaled.",
       );
     }
-    if (title === "Gandalf’s Hat") {
+    if (slug === "particles/GandalfHologram") {
       const stage = await fit.boundingBox();
       const portrait = await fit.locator("canvas").boundingBox();
       if (!stage || !portrait || portrait.x < stage.x - 1 || portrait.x + portrait.width > stage.x + stage.width + 1) {
@@ -294,7 +293,7 @@ try {
   }
 
   // A square holds an SVG, so the finger lands on a child of the draggable item.
-  const tidy = await openPage(page, "Spacing Tidy");
+  const tidy = await openPage(page, "tools/SpacingTidy");
   const square = tidy.getByRole("button", { name: "Square 1", exact: true });
   const box = await square.boundingBox();
   if (!box) throw new Error("Spacing Tidy has no Square 1 on its page.");
@@ -318,7 +317,7 @@ try {
   await page.addInitScript(() => { Math.random = () => 0; });
   for (const [width, height] of [[320, 320], [360, 360], [667, 375], [375, 375], [390, 390]] as const) {
     await page.setViewportSize({ width, height });
-    const scene = await openPage(page, "Letterpress");
+    const scene = await openPage(page, "text/Letterpress");
     const { hints, rail, play } = await scene.locator("[data-letterpress]").evaluate((stage: HTMLElement) => {
       const scale = stage.getBoundingClientRect().width / stage.offsetWidth;
       const hints = Array.from(stage.querySelectorAll<HTMLElement>("[data-compact-hint]"))
@@ -360,7 +359,7 @@ try {
       if (target < 43.9) failures.push(`Letterpress needs 44px press areas at 320×320. The smallest measured ${target.toFixed(1)}px.`);
     }
   }
-  const letterpress = deckCard(page, "Letterpress");
+  const letterpress = deckCard(page, "text/Letterpress");
   const scrubber = letterpress.getByRole("slider", { name: "Scroll to assemble" });
   await scrubber.focus();
   await page.keyboard.press("End");
@@ -374,7 +373,7 @@ try {
   await send("touchEnd");
 
   await page.setViewportSize(PHONE.viewport);
-  const tallCard = await openPage(page, "Letterpress");
+  const tallCard = await openPage(page, "text/Letterpress");
   const stage = tallCard.locator("[data-letterpress]");
   const rail = tallCard.getByRole("slider");
   const tee = tallCard.getByRole("button", { name: "Letter T", exact: true });
@@ -416,7 +415,7 @@ try {
   await send("touchEnd");
   await allLanded();
 
-  await openPage(page, "Letterpress");
+  await openPage(page, "text/Letterpress");
   const bounds = await stage.boundingBox();
   if (!bounds) throw new Error("Letterpress should show a stage.");
   const swipeFrom = { x: bounds.x + bounds.width * 0.24, y: bounds.y + bounds.height * 0.88 };
@@ -452,7 +451,7 @@ try {
       await playbackProgress() <= beforeManualProgress) {
     failures.push("A phone swipe during playback should advance from the current Letterpress frame.");
   }
-  await openPage(page, "Letterpress");
+  await openPage(page, "text/Letterpress");
   const deckStart = await scrollTop();
   await swipe(575);
   const duringSecond = await swipe(275, true);
@@ -462,16 +461,21 @@ try {
   }
   const order = await page.locator("article[data-deck-card]").evaluateAll(cards => cards.map(card => card.getAttribute("data-deck-card")));
   const next = order[order.indexOf("text/Letterpress") + 1];
-  if (!next) throw new Error("The swipe check needs a card after Letterpress in the deck.");
   const duringFresh = await swipe(525);
-  if (duringFresh === deckStart) failures.push("The first fresh swipe after a split touch release should move to the next card.");
-  else await page.waitForURL(url => url.pathname === `/${next}`, { timeout: SETTLE_TIMEOUT_MS });
+  if (!next) {
+    await page.waitForTimeout(600);
+    if (new URL(page.url()).pathname !== "/text/Letterpress") failures.push("A swipe past the last card should leave the deck on Letterpress.");
+  } else if (duringFresh === deckStart) {
+    failures.push("The first fresh swipe after a split touch release should move to the next card.");
+  } else {
+    await page.waitForURL(url => url.pathname === `/${next}`, { timeout: SETTLE_TIMEOUT_MS });
+  }
 
   await checkPortableHologram(page);
   await checkCompactHologram();
   await checkLargeText();
   await page.clock.install();
-  await openPage(page, "Letterpress");
+  await openPage(page, "text/Letterpress");
   await page.clock.pauseAt(Date.now() + 1000);
   await rail.press("End");
   await page.clock.runFor(1000);
