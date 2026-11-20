@@ -16,7 +16,7 @@ const PHONE = { viewport: { width: 400, height: 700 }, deviceScaleFactor: 2, isM
 /** A canvas that resizes with its stage, so its second flight steps. */
 const STEPPED = "Moon Phase";
 const SETTLE_TIMEOUT_MS = 15_000;
-const CARDS = ["Controls", "Profile Button", "Menu Pill", "Moon Phase"];
+const CARDS = ["Controls", "Profile Button", "Menu Pill", "Moon Phase", "Letterpress"];
 const AFTER_RESIZE = ["Controls", "Spacing Tidy"];
 const BACK = "Show all components";
 
@@ -47,7 +47,10 @@ const tileOf = (page: Page, title: string) => page.getByRole("article", { name: 
 
 /** Records `title`'s card through `action` until the deck rests in `layout`, and for a few frames after. */
 async function fly(page: Page, title: string, action: () => Promise<unknown>, layout: "pages" | "grid"): Promise<Flight> {
-  await page.evaluate(name => (window as unknown as InPage).flightRecorder.record(name), title);
+  await page.evaluate(name => (window as unknown as InPage).flightRecorder.record(name, name === "Letterpress" ? {
+    stage: "[data-letterpress]",
+    targets: ['[data-letter="0"] [data-glyph-art]', '[role="slider"]'],
+  } : undefined), title);
   await action();
   // Off the deck, so the page that lands is not hovered: a control that grows under the pointer is not a jump.
   await page.mouse.move(1, 1);
@@ -63,6 +66,19 @@ async function roundTrip(page: Page, title: string, note = "") {
   const back = page.getByRole("button", { name: BACK });
   const closed = await fly(page, title, () => back.click(), "grid");
   failures.push(...judgeFlight(`Opening ${title}${note}`, opened), ...judgeFlight(`Closing ${title}${note}`, closed));
+  if (title === "Letterpress") {
+    for (const [direction, { frames }] of [["Opening", opened], ["Closing", closed]] as const) {
+      let jump = 0;
+      for (const [index, frame] of frames.entries()) {
+        const previous = frames[index - 1];
+        if (!previous?.detail || !frame.detail || frame.moved > 3) continue;
+        const elapsed = frame.at - previous.at;
+        const frameShare = frame.flying && previous.flying ? Math.min(1, (1000 / 60) / elapsed) : 1;
+        jump = Math.max(jump, ...frame.detail.map((value, coordinate) => Math.abs(value - previous.detail![coordinate]!) * frameShare));
+      }
+      if (jump > 4) failures.push(`${direction} ${title}${note}: the glyph or scrubber jumped ${jump.toFixed(1)}px as the card came to rest.`);
+    }
+  }
   shiftInAll += opened.shiftInAll + closed.shiftInAll;
 }
 
@@ -119,6 +135,8 @@ try {
   await atRest(phone, "grid");
   await roundTrip(phone, STEPPED, " on a phone");
   await roundTrip(phone, STEPPED, " on a phone, in steps");
+  await roundTrip(phone, "Letterpress", " on a phone");
+  await roundTrip(phone, "Letterpress", " on a phone after its page has been measured");
   await turnBackWhilePlacing(phone, "Controls", "On a phone");
 } finally {
   await browser.close();
@@ -130,5 +148,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `${CARDS.length + AFTER_RESIZE.length} cards on a desktop and one on a phone fly to their pages and back without a jump, a late layout, or a layout shift for the cards around them, and a flight turned back as it lands leaves nothing hidden. In all, with the flying cards' own motion, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
+  `${CARDS.length + AFTER_RESIZE.length} cards on a desktop and two on a phone fly to their pages and back without a jump, a late layout, or a layout shift for the cards around them, and a flight turned back as it lands leaves nothing hidden. In all, with the flying cards' own motion, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
 );
