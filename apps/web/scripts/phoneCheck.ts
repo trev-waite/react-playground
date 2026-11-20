@@ -180,6 +180,30 @@ async function checkHologramStage(card: Locator, width: number, height: number) 
   return live ? canvas : null;
 }
 
+async function checkPaintedBuffer(canvas: Locator, previousHeight = 0) {
+  const measured = await canvas.evaluate((element, previousHeight) => new Promise<{
+    width: number; height: number; buffer: number[]; expected: number[]; matches: boolean;
+  }>(resolve => {
+    const canvas = element as HTMLCanvasElement;
+    const start = performance.now();
+    const sample = () => {
+      const { width, height } = canvas.getBoundingClientRect();
+      const dpr = Math.min(devicePixelRatio || 1, 1.5, 800 / Math.max(width, height));
+      const expected = [Math.round(width * dpr), Math.round(height * dpr)];
+      const buffer = [canvas.width, canvas.height];
+      const matches = height > previousHeight && buffer.every((side, index) => Math.abs(side - expected[index]!) <= 1);
+      if (matches || performance.now() - start > 2000) resolve({ width, height, buffer, expected, matches });
+      else requestAnimationFrame(sample);
+    };
+    sample();
+  }), previousHeight);
+  if (!measured.matches) {
+    const displayed = `${Math.round(measured.width)}×${Math.round(measured.height)}`;
+    failures.push(`The hat’s ${displayed} display has a ${measured.buffer.join("×")} drawing buffer, expected ${measured.expected.join("×")}.`);
+  }
+  return measured.height;
+}
+
 async function checkCompactHologram() {
   const sizes = [
     [320, 280], [320, 310], [375, 320], [375, 321], [375, 374], [375, 375], [375, 376],
@@ -191,6 +215,11 @@ async function checkCompactHologram() {
     const card = await openPage(await context.newPage(), "Gandalf’s Hat");
     const canvas = await checkHologramStage(card, width, height);
     if (canvas && width === 450 && height === 320) await checkTouchRelease(canvas);
+    if (canvas && width === 568 && height === 320) {
+      const heightBefore = await checkPaintedBuffer(canvas);
+      await canvas.page().setViewportSize({ width: 667, height: 375 });
+      await checkPaintedBuffer(canvas, heightBefore + 5);
+    }
     await context.close();
   }
 }

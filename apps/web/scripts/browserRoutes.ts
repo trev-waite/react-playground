@@ -168,6 +168,23 @@ async function checkKeyboardFocus(page: Page) {
     }
     expect(code && JSON.stringify(reached) === JSON.stringify(controls),
       `Tab from ${entry} should reach the hat and Code without leaving the page. Reached ${JSON.stringify(reached)}, Code ${code}.`);
+    const hat = scene.getByRole("button", { name: "Drop the dots" });
+    if (await hat.count() === 0) continue;
+    await hat.click();
+    const focus = await hat.evaluate(button => ({
+      active: document.activeElement === button, visible: button.matches(":focus-visible"),
+    }));
+    expect(focus.active && !focus.visible, `Clicking the hat from ${entry} should focus it without a focus outline.`);
+    if (!focus.active) continue;
+    await page.keyboard.press("ArrowUp");
+    const turned = await page.waitForFunction(() => {
+      const gl = document.activeElement?.querySelector("canvas")?.getContext("webgl2");
+      const program = gl?.getParameter(gl.CURRENT_PROGRAM) as WebGLProgram | null;
+      if (!gl || !program) return false;
+      const pitch = gl.getUniformLocation(program, "uPitch");
+      return pitch !== null && (gl.getUniform(program, pitch) as Float32Array)[1]! < 0;
+    }, undefined, { timeout: 2000 }).then(() => true, () => false);
+    expect(turned && new URL(page.url()).pathname === path, `ArrowUp after clicking from ${entry} should tilt the hat without paging.`);
   }
 }
 
