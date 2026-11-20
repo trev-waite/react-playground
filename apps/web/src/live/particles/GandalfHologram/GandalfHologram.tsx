@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 import { advanceOrbit, decayOrbit, dragAxis, FRONT_PITCH, FRONT_YAW, orbitRadiansPerPixel, releaseSpeed, sampleFlick, TURN_STEP, type Flick, type PointerSample } from "./orbit";
 import { DROP_SECONDS, makeProjection, SETTLED_SECONDS } from "./projection";
 import styles from "./GandalfHologram.module.css";
@@ -53,24 +54,15 @@ function startHologram(
   const pitch: Rotation = { angle: FRONT_PITCH, goal: FRONT_PITCH, velocity: 0 };
   const rotations = [yaw, pitch];
   let drag: Drag | null = null;
-  let frame = 0;
-  let previous = 0;
   let time = 0;
   let painted = false;
   let dropAt: number | null = null;
   let dropTimer: number | undefined;
-  let visible = false;
   let dirty = true;
   let width = 0;
   let height = 0;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reducedMotion = reduced.matches;
-
-  function stop() {
-    cancelAnimationFrame(frame);
-    frame = 0;
-    previous = 0;
-  }
 
   function draw(at = performance.now()) {
     if (!projection || !width || !height) return;
@@ -89,17 +81,16 @@ function startHologram(
     }
   }
 
-  function wake() {
-    if (!frame && projection && width && height && visible && !document.hidden &&
-      (dirty || !reducedMotion)) {
-      frame = requestAnimationFrame(tick);
-    }
+  function moving() {
+    return !!projection && !!width && !!height && !document.hidden && (dirty || !reducedMotion);
   }
 
-  function tick(at: number) {
-    frame = 0;
-    const delta = previous ? Math.min((at - previous) / 1000, 0.04) : 1 / 60;
-    previous = at;
+  function wake() {
+    if (moving()) loop.wake();
+  }
+
+  function tick(at: number, elapsed: number): FrameRequest {
+    const delta = Math.min(elapsed / 1000, 0.04);
     if (!reducedMotion) time += delta;
     for (const rotation of rotations) {
       if (rotation.velocity) {
@@ -114,12 +105,13 @@ function startHologram(
       }
     }
     draw(at);
-    wake();
-    if (!frame) previous = 0;
+    return moving();
   }
 
+  const loop = visibleLoop(viewport, tick, { onVisibleChange: visible => visible && measure() });
+
   function measure() {
-    if (!projection || !width || !height || !visible || document.hidden) return;
+    if (!projection || !width || !height || !loop.visible || document.hidden) return;
     const { width: displayWidth, height: displayHeight } = canvas.getBoundingClientRect();
     if (!displayWidth || !displayHeight) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5, 800 / Math.max(displayWidth, displayHeight));
@@ -302,7 +294,7 @@ function startHologram(
 
   function contextLost(event: Event) {
     event.preventDefault();
-    stop();
+    loop.sleep();
     projection = null;
     cancelDrag();
     viewport.tabIndex = -1;
@@ -320,7 +312,7 @@ function startHologram(
   }
 
   function changeVisibility() {
-    if (document.hidden) stop();
+    if (document.hidden) loop.sleep();
     else measure();
   }
 
@@ -330,13 +322,7 @@ function startHologram(
     height = entry.contentRect.height;
     measure();
   });
-  const intersection = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? false;
-    if (visible) measure();
-    else stop();
-  });
   resize.observe(canvas);
-  intersection.observe(viewport);
   canvas.addEventListener("webglcontextlost", contextLost);
   canvas.addEventListener("webglcontextrestored", contextRestored);
   viewport.addEventListener("pointerdown", down);
@@ -352,10 +338,9 @@ function startHologram(
 
   return {
     dispose() {
-      stop();
+      loop.stop();
       window.clearTimeout(dropTimer);
       resize.disconnect();
-      intersection.disconnect();
       canvas.removeEventListener("webglcontextlost", contextLost);
       canvas.removeEventListener("webglcontextrestored", contextRestored);
       viewport.removeEventListener("pointerdown", down);

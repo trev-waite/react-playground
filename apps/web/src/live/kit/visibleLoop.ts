@@ -26,8 +26,9 @@ export type VisibleLoopOptions = {
 /**
  * The frame loop every animated Live component runs on. The deck keeps every card mounted, so a loop
  * runs only while its target is on screen: leaving it drops any queued frame or wait, and coming back
- * wakes it. A frame that has nothing left to move returns nothing, so a still component costs nothing
- * until something wakes it.
+ * wakes it. Until the browser first reports where the target is, it counts as on screen, so a component
+ * can draw its first frame as it mounts. A frame that has nothing left to move returns nothing, so a
+ * still component costs nothing until something wakes it.
  */
 export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleLoopOptions = {}): VisibleLoop {
   let visible = true;
