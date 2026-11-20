@@ -170,6 +170,22 @@ try {
     if (await tallCard.locator("[data-placed]").count() > 0) failures.push("A two-finger gesture should leave the letter in its original slot.");
     await allLanded();
   }
+  const dragStart = await teeCenter();
+  const dragPause = { x: dragStart.x + 72, y: dragStart.y };
+  const dragEnd = { x: dragStart.x + 96, y: dragStart.y };
+  await send("touchStart", dragStart);
+  await send("touchMove", dragPause);
+  await tee.and(tallLifted).waitFor({ timeout: SETTLE_TIMEOUT_MS });
+  await page.waitForTimeout(260);
+  await send("touchMove", dragEnd);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const heldCenter = await teeCenter();
+  const contactError = Math.hypot(heldCenter.x - dragEnd.x, heldCenter.y - dragEnd.y);
+  if (contactError > 12) {
+    failures.push(`A horizontal Letterpress drag drifted ${contactError.toFixed(1)}px from the finger after the hold timer expired.`);
+  }
+  await send("touchEnd");
+  await allLanded();
   const teeStart = await teeCenter();
   await send("touchStart", teeStart);
   await tallCard.locator("[data-lifted]").waitFor({ timeout: SETTLE_TIMEOUT_MS });

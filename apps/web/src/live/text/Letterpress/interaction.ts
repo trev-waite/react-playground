@@ -465,7 +465,7 @@ export function connectLetterpress(stage: HTMLDivElement, scrollport: HTMLDivEle
     };
     window.addEventListener("touchstart", onAdditionalTouch, { ...options, passive: true, capture: true });
     hold = window.setTimeout(() => {
-      if (press) pick(press.index, press.id, press.point);
+      if (press && !grab) pick(press.index, press.id, press.point);
     }, TOUCH_HOLD_MS);
   }, options);
 
@@ -500,6 +500,7 @@ export function connectLetterpress(stage: HTMLDivElement, scrollport: HTMLDivEle
         clearPress();
         return;
       }
+      window.clearTimeout(hold);
       pick(press.index, press.id, press.point);
       move(eventPoint(touch));
     }
