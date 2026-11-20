@@ -415,6 +415,12 @@ function plainLiteralOf(checker: ts.TypeChecker, expression: ts.Expression, dept
   if (ts.isObjectLiteralExpression(target)) return target;
   if (ts.isIdentifier(target)) {
     const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
+    if (declaration && ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent)) {
+      const holder = declaration.parent.parent;
+      const key = (declaration.propertyName ?? declaration.name).getText();
+      const from = ts.isVariableDeclaration(holder) && holder.initializer ? plainLiteralOf(checker, holder.initializer, depth + 1) : undefined;
+      return from ? propertyLiteral(checker, from, key, depth) : undefined;
+    }
     return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
       ? plainLiteralOf(checker, declaration.initializer, depth + 1)
       : undefined;
@@ -428,10 +434,61 @@ function plainLiteralOf(checker: ts.TypeChecker, expression: ts.Expression, dept
     }
   }
   const holder = plainLiteralOf(checker, target.expression, depth + 1);
-  const property = holder?.properties.find(
-    (each): each is ts.PropertyAssignment => ts.isPropertyAssignment(each) && each.name.getText() === target.name.text,
+  return holder ? propertyLiteral(checker, holder, target.name.text, depth) : undefined;
+}
+
+/** The object literal held by `key` in `holder`, written out or as a shorthand for a name. */
+function propertyLiteral(checker: ts.TypeChecker, holder: ts.ObjectLiteralExpression, key: string, depth: number) {
+  for (const property of holder.properties) {
+    if (ts.isPropertyAssignment(property) && property.name.getText() === key) return plainLiteralOf(checker, property.initializer, depth + 1);
+    if (ts.isShorthandPropertyAssignment(property) && property.name.text === key) {
+      const value = checker.getShorthandAssignmentValueSymbol(property)?.declarations?.[0];
+      return value && ts.isVariableDeclaration(value) && value.initializer ? plainLiteralOf(checker, value.initializer, depth + 1) : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** The members a local record type declares, through aliases, parentheses, and nullable unions. */
+function recordMembers(checker: ts.TypeChecker, type: ts.TypeNode, depth = 0): ts.NodeArray<ts.TypeElement> | undefined {
+  if (depth > 4) return undefined;
+  if (ts.isTypeLiteralNode(type)) return type.members;
+  if (ts.isParenthesizedTypeNode(type)) return recordMembers(checker, type.type, depth + 1);
+  if (ts.isUnionTypeNode(type)) {
+    const records = type.types.filter(member => member.kind !== ts.SyntaxKind.UndefinedKeyword && !(ts.isLiteralTypeNode(member) && member.literal.kind === ts.SyntaxKind.NullKeyword));
+    return records.length === 1 ? recordMembers(checker, records[0]!, depth + 1) : undefined;
+  }
+  if (!ts.isTypeReferenceNode(type)) return undefined;
+  const local = checker.getSymbolAtLocation(type.typeName)?.declarations?.[0];
+  if (!local || local.getSourceFile() !== type.getSourceFile()) return undefined;
+  if (ts.isInterfaceDeclaration(local)) return local.members;
+  return ts.isTypeAliasDeclaration(local) ? recordMembers(checker, local.type, depth + 1) : undefined;
+}
+
+/**
+ * The declared type of a path where there is no initializer to read: a ref's `.current` through its
+ * `useRef<T>` type, a property of a local record type, or a name declared with a type and no value.
+ */
+function declaredTypeOf(checker: ts.TypeChecker, expression: ts.Expression, depth = 0): ts.TypeNode | undefined {
+  const target = unwrap(expression);
+  if (depth > 6) return undefined;
+  if (ts.isIdentifier(target)) {
+    const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
+    if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isParameter(declaration) || ts.isPropertyDeclaration(declaration))) return undefined;
+    return declaration.initializer ? undefined : declaration.type;
+  }
+  if (!ts.isPropertyAccessExpression(target)) return undefined;
+  if (target.name.text === "current" && ts.isIdentifier(unwrap(target.expression))) {
+    const declaration = checker.getSymbolAtLocation(unwrap(target.expression))?.declarations?.[0];
+    const init = declaration && ts.isVariableDeclaration(declaration) && declaration.initializer && unwrap(declaration.initializer);
+    if (init && ts.isCallExpression(init) && calledName(init) === "useRef") return init.typeArguments?.[0];
+  }
+  const holder = declaredTypeOf(checker, target.expression, depth + 1);
+  const members = holder && recordMembers(checker, holder);
+  const member = members?.find(
+    (each): each is ts.PropertySignature => ts.isPropertySignature(each) && each.name.getText() === target.name.text,
   );
-  return property ? plainLiteralOf(checker, property.initializer, depth + 1) : undefined;
+  return member?.type;
 }
 
 function isNullish(expression: ts.Expression): boolean {
@@ -452,8 +509,9 @@ function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression, depth = 0
     const records = [target.whenTrue, target.whenFalse].map(unwrap).filter(branch => !isNullish(branch));
     return records.length > 0 && records.every(branch => isPlainData(checker, branch, depth + 1));
   }
-  const literal = plainLiteralOf(checker, target);
-  if (literal) return true;
+  if (plainLiteralOf(checker, target)) return true;
+  const declared = declaredTypeOf(checker, target);
+  if (declared) return isPlainType(checker, declared);
   if (ts.isPropertyAccessExpression(target) && target.name.text === "current" && target.expression.kind !== ts.SyntaxKind.ThisKeyword) {
     const ref = unwrap(target.expression);
     const name = ts.isIdentifier(ref) ? ref : undefined;

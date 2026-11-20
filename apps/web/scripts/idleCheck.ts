@@ -80,6 +80,11 @@ try {
     STILL_CARD,
     { timeout: WARM_TIMEOUT_MS, polling: 200 },
   );
+  const failed = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("article[data-deck-card]"))
+      .filter(card => card.querySelector("[data-deck-error]") !== null)
+      .map(card => card.getAttribute("data-deck-card") ?? "a card"));
+  if (failed.length > 0) throw new Error(`These cards failed to load, so the idle check cannot watch them: ${failed.join(", ")}.`);
   mountedCards = await page.evaluate(() => document.querySelectorAll("article[data-deck-card]").length);
   await page.waitForTimeout(SETTLE_MS);
   if (new URL(page.url()).pathname !== STILL_CARD) throw new Error(`The idle check left ${STILL_CARD} for ${page.url()}.`);

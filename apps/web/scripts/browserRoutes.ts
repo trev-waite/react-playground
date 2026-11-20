@@ -62,7 +62,7 @@ async function state(page: Page) {
       flying: scroller?.hasAttribute("data-flying") ?? false,
       gliding: scroller?.hasAttribute("data-gliding") ?? false,
       entries: history.length,
-      card: { label: card?.getAttribute("aria-label") ?? null, left: box?.left ?? Infinity, right: box?.right ?? 0, viewport: innerWidth },
+      card: { label: card?.getAttribute("aria-label") ?? null, slug: card?.getAttribute("data-deck-card") ?? null, left: box?.left ?? Infinity, right: box?.right ?? 0, viewport: innerWidth },
     };
   });
 }
@@ -87,9 +87,9 @@ async function settle(page: Page, done: (current: State) => boolean): Promise<St
 const tile = (page: Page, key: CardKey) => deckCard(page, key).getByRole("link");
 
 /** The card is the one asked for and spans the viewport as a page does. */
-function isPageOf(current: State, title: string): boolean {
+function isPageOf(current: State, key: CardKey): boolean {
   const { card } = current;
-  return card.label === title && card.left <= PAGE_EDGE && card.right >= card.viewport - PAGE_EDGE;
+  return (typeof key === "string" ? card.label === key : card.slug === key.slug) && card.left <= PAGE_EDGE && card.right >= card.viewport - PAGE_EDGE;
 }
 
 const tabs = await browser.newBrowserCDPSession();
@@ -444,15 +444,15 @@ try {
   expect((await tile(page, { slug: second.slug }).getAttribute("href")) === livePath(second.slug), `the ${second.title} tile should link to ${livePath(second.slug)}`);
 
   await tile(page, { slug: second.slug }).click();
-  const opened = await settle(page, current => current.layout === "pages" && isPageOf(current, second.title));
+  const opened = await settle(page, current => current.layout === "pages" && isPageOf(current, { slug: second.slug }));
   expect(
     opened.path === livePath(second.slug) && opened.layout === "pages" && !opened.flying && opened.title === routeTitle(second) && opened.entries === grid.entries + 1,
     `a tile click should open ${livePath(second.slug)} as a new history entry: ${JSON.stringify(opened)}`,
   );
-  expect(isPageOf(opened, second.title), `a tile click should fill the page with ${second.title}`);
+  expect(isPageOf(opened, { slug: second.slug }), `a tile click should fill the page with ${second.title}`);
 
   await page.keyboard.press("ArrowUp");
-  const paged = await settle(page, current => isPageOf(current, first.title));
+  const paged = await settle(page, current => isPageOf(current, { slug: first.slug }));
   expect(
     paged.path === livePath(first.slug) && paged.title === routeTitle(first) && paged.entries === opened.entries,
     `paging should move the URL without adding history: ${JSON.stringify(paged)}`,
@@ -463,9 +463,9 @@ try {
   expect(back.path === "/" && back.layout === "grid" && back.title === SITE_TITLE, `Back should return to the grid: ${JSON.stringify(back)}`);
 
   await page.goForward();
-  const forward = await settle(page, current => current.layout === "pages" && isPageOf(current, first.title));
+  const forward = await settle(page, current => current.layout === "pages" && isPageOf(current, { slug: first.slug }));
   expect(forward.path === paged.path && forward.layout === "pages", `Forward should reopen the page: ${JSON.stringify(forward)}`);
-  expect(isPageOf(forward, first.title), `Forward should fill the page with ${first.title}`);
+  expect(isPageOf(forward, { slug: first.slug }), `Forward should fill the page with ${first.title}`);
 
   await page.goto(`${origin}/`);
   await settle(page, current => current.layout === "grid");
@@ -477,9 +477,9 @@ try {
   for (const card of cards) {
     for (const slug of new Set([card.slug, ...card.members.map(member => member.slug)])) {
       await page.goto(`${origin}${livePath(slug)}`);
-      const direct = await settle(page, current => current.layout === "pages" && isPageOf(current, card.title));
+      const direct = await settle(page, current => current.layout === "pages" && isPageOf(current, { slug: card.slug }));
       expect(direct.title === routeTitle(card), `${livePath(slug)} should be titled for ${card.title}: ${JSON.stringify(direct)}`);
-      expect(isPageOf(direct, card.title), `${livePath(slug)} should fill the page with ${card.title}`);
+      expect(isPageOf(direct, { slug: card.slug }), `${livePath(slug)} should fill the page with ${card.title}`);
       if (slug === LETTERPRESS) await checkLetterpressRouting(page);
     }
   }
@@ -516,9 +516,9 @@ try {
     requestAnimationFrame(sample);
   });
   expect(await clickMidFlight(flight, "Next component"), "the check should page on while the camera is still flying");
-  const landed = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.title));
+  const landed = await settle(flight, current => current.layout === "pages" && isPageOf(current, { slug: second.slug }));
   expect(landed.path === livePath(second.slug) && landed.layout === "pages" && !landed.flying, `paging mid-flight should land on ${livePath(second.slug)}: ${JSON.stringify(landed)}`);
-  expect(isPageOf(landed, second.title), `paging mid-flight should fill the page with ${second.title}`);
+  expect(isPageOf(landed, { slug: second.slug }), `paging mid-flight should fill the page with ${second.title}`);
   const frames: { layout: string | null; left: number; right: number }[] = await flight.evaluate(
     () => (window as unknown as { __frames: never[] }).__frames,
   );
@@ -538,9 +538,9 @@ try {
   await startFlight(flight, { slug: second.slug });
   expect((await state(flight)).layout === "flight", "the check should resize while the camera is still flying");
   await flight.setViewportSize({ width: 1100, height: 700 });
-  const resized = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.title));
+  const resized = await settle(flight, current => current.layout === "pages" && isPageOf(current, { slug: second.slug }));
   expect(resized.layout === "pages" && !resized.flying, `a resize mid-flight should still land the page: ${JSON.stringify(resized)}`);
-  expect(isPageOf(resized, second.title), `a resize mid-flight should fill the new viewport with ${second.title}`);
+  expect(isPageOf(resized, { slug: second.slug }), `a resize mid-flight should fill the new viewport with ${second.title}`);
   await flights.close();
 
   // Reduced motion: the same places, and the card is only ever a tile or a page, never a size in between.
@@ -549,20 +549,20 @@ try {
   calm.on("pageerror", error => failures.push(`page error: ${error.message}`));
   await calm.goto(`${origin}/`);
   await settle(calm, current => current.layout === "grid");
-  await calm.evaluate(title => {
+  await calm.evaluate(slug => {
     const widths: number[] = [];
     Object.assign(window, { __widths: widths });
-    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => article.getAttribute("aria-label") === title);
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => article.getAttribute("data-deck-card") === slug);
     const sample = () => {
       if (card) widths.push(Math.round(card.getBoundingClientRect().width));
       requestAnimationFrame(sample);
     };
     sample();
-  }, second.title);
-  await tile(calm, second.title).click();
-  const calmOpened = await settle(calm, current => current.layout === "pages" && isPageOf(current, second.title));
+  }, second.slug);
+  await tile(calm, { slug: second.slug }).click();
+  const calmOpened = await settle(calm, current => current.layout === "pages" && isPageOf(current, { slug: second.slug }));
   expect(calmOpened.path === livePath(second.slug) && calmOpened.layout === "pages" && !calmOpened.flying, `with reduced motion a tile should still open its page: ${JSON.stringify(calmOpened)}`);
-  expect(isPageOf(calmOpened, second.title), `with reduced motion the page should be filled with ${second.title}`);
+  expect(isPageOf(calmOpened, { slug: second.slug }), `with reduced motion the page should be filled with ${second.title}`);
   await calm.goBack();
   const calmBack = await settle(calm, current => current.layout === "grid");
   expect(calmBack.path === "/" && calmBack.layout === "grid" && !calmBack.flying, `with reduced motion Back should return to the grid: ${JSON.stringify(calmBack)}`);
