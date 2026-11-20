@@ -58,7 +58,7 @@ describe("standards lint: Live components", () => {
     for (const [folder, folderFiles] of folders) {
       if (folder === KIT) continue;
       const moving = folderFiles.find(({ text }) =>
-        /\btransition\s*:|\banimation\s*:|requestAnimationFrame\(|\bvisibleLoop\b[^;]*from\s*["'][^"']*kit\/visibleLoop["']|\.animate\(/.test(stripCssComments(text)),
+        /\btransition\s*:|\banimation\s*:|requestAnimationFrame\(|\b(?:visibleLoop|pausableLoop)\b[^;]*from\s*["'](?:[^"']*kit\/visibleLoop|@\/gpu)["']|\.animate\(/.test(stripCssComments(text)),
       );
       if (!moving) continue;
       if (folderFiles.some(({ text }) => /prefers-reduced-motion|useReducedMotion/.test(text))) continue;

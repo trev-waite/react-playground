@@ -92,7 +92,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   const cycles = lines.words.map(word => phases(word.letters.length).total);
   let wordIndex = 0;
   let elapsed = 0;
-  let stillShown = false;
+  let nextStillAt = 0;
   let lastDropX: number | null = null;
   /** The drop's stretch rides a spring toward the stretch its speed asks for, so it wobbles like jelly when it starts and stops. */
   let stretch = 0;
@@ -179,11 +179,12 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     }
   }
 
-  function tick(_now: number, delta: number): FrameRequest {
+  function tick(now: number, delta: number): FrameRequest {
     if (reducedMotion.matches) {
-      if (stillShown) wordIndex = (wordIndex + 1) % lines.words.length;
+      if (now < nextStillAt) return nextStillAt - now;
+      wordIndex = (wordIndex + 1) % lines.words.length;
       still();
-      stillShown = true;
+      nextStillAt = now + STILL_MS;
       return STILL_MS;
     }
     const dt = Math.min(48, delta);
@@ -203,8 +204,12 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   function wake() {
     loop.sleep();
     if (!loop.visible) return;
-    stillShown = false;
-    if (!reducedMotion.matches) show(wordIndex);
+    if (reducedMotion.matches) {
+      still();
+      nextStillAt = performance.now() + STILL_MS;
+    } else {
+      show(wordIndex);
+    }
     loop.wake();
   }
 

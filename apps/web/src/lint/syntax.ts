@@ -80,8 +80,8 @@ function plainlyContains(expression: ts.Expression, isTag: (tag: ts.JsxTagNameEx
 }
 
 /**
- * True when `fn` always renders `name` imported from `module`: every value it returns is JSX holding
- * that element, wrapped only by other elements, never behind a condition, a call, or braces, and the
+ * True when `fn` always renders `name` imported from `module`: it ends in a return, so no path falls
+ * through to nothing, and every value it returns is JSX holding that element, wrapped only by other elements, never behind a condition, a call, or braces, and the
  * tag resolves to the import itself rather than anything that shadows it.
  */
 export function rendersElement(source: ts.SourceFile, fn: ts.FunctionLikeDeclaration, name: string, module: string): boolean {
@@ -94,7 +94,8 @@ export function rendersElement(source: ts.SourceFile, fn: ts.FunctionLikeDeclara
     return ts.isStringLiteral(from) && from.text === module && (declaration.propertyName ?? declaration.name).text === name;
   };
   const returns = returnedExpressions(fn);
-  return returns.length > 0 && returns.every(expression => !!expression && plainlyContains(expression, isTag));
+  const endsInReturn = !!fn.body && (!ts.isBlock(fn.body) || (fn.body.statements.length > 0 && ts.isReturnStatement(fn.body.statements[fn.body.statements.length - 1]!)));
+  return endsInReturn && returns.every(expression => !!expression && plainlyContains(expression, isTag));
 }
 
 /** True when the module imports `name` as itself, unrenamed, from `module`. */
@@ -291,22 +292,32 @@ function isAssigned(node: ts.Node): boolean {
     parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
 }
 
-/** True when a setter is React state: a `useState`/`useReducer` pair, or one handed in as a parameter or prop. */
-function isStateSetter(checker: ts.TypeChecker, callee: ts.Identifier): boolean {
-  if (!/^set[A-Z]/.test(callee.text) || callee.text === "setTimeout" || callee.text === "setInterval") return false;
-  const declaration = checker.getSymbolAtLocation(callee)?.declarations?.[0];
-  if (!declaration) return false;
-  if (ts.isParameter(declaration)) return true;
-  if (!ts.isBindingElement(declaration)) return false;
-  let pattern: ts.Node = declaration.parent;
-  while (ts.isBindingElement(pattern.parent) || ts.isObjectBindingPattern(pattern.parent) || ts.isArrayBindingPattern(pattern.parent)) pattern = pattern.parent;
-  const holder = pattern.parent;
-  if (ts.isParameter(holder)) return true;
-  if (ts.isVariableDeclaration(holder) && holder.initializer) {
-    const init = unwrap(holder.initializer);
-    return ts.isCallExpression(init) && /^use(?:State|Reducer)$/.test(calledName(init) ?? "");
+/** True when `receiver` is plain data this file defines (an object literal or a local type), such as cached measurements, not a DOM node. */
+function isPlainData(checker: ts.TypeChecker, receiver: ts.Expression): boolean {
+  const target = unwrap(receiver);
+  const name = ts.isIdentifier(target) ? target : isThisMember(target) ? target.name : undefined;
+  const declaration = name && checker.getSymbolAtLocation(name)?.declarations?.[0];
+  if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration) || ts.isParameter(declaration))) return false;
+  if (declaration.initializer && ts.isObjectLiteralExpression(unwrap(declaration.initializer))) return true;
+  const type = declaration.type;
+  if (!type) return false;
+  if (ts.isTypeLiteralNode(type)) return true;
+  if (ts.isTypeReferenceNode(type)) {
+    const local = checker.getSymbolAtLocation(type.typeName)?.declarations?.[0];
+    return !!local && (ts.isInterfaceDeclaration(local) || ts.isTypeAliasDeclaration(local)) && local.getSourceFile() === receiver.getSourceFile();
   }
   return false;
+}
+
+/** True when a call updates React state: it is the setter slot of a `useState` or `useReducer` pair, whatever it is named. */
+function isStateSetter(checker: ts.TypeChecker, callee: ts.Identifier): boolean {
+  const declaration = checker.getSymbolAtLocation(callee)?.declarations?.[0];
+  if (!declaration || !ts.isBindingElement(declaration) || !ts.isArrayBindingPattern(declaration.parent)) return false;
+  if (declaration.parent.elements.indexOf(declaration) !== 1) return false;
+  const holder = declaration.parent.parent;
+  if (!ts.isVariableDeclaration(holder) || !holder.initializer) return false;
+  const init = unwrap(holder.initializer);
+  return ts.isCallExpression(init) && /^use(?:State|Reducer)$/.test(calledName(init) ?? "");
 }
 
 export type FrameFinding = { index: number; code: string; fnStart: number };
@@ -323,7 +334,7 @@ export function frameFindings(file: string, text: string): { reads: FrameFinding
     const found = (into: FrameFinding[], node: ts.Node) => into.push({ index: node.getStart(source), code: node.getText(source), fnStart });
     walkFrame(fn.body, node => {
       if (ts.isPropertyAccessExpression(node)) {
-        if (LAYOUT_READS.test(node.name.text) && !isAssigned(node)) found(reads, node);
+        if (LAYOUT_READS.test(node.name.text) && !isAssigned(node) && !isPlainData(checker, node.expression)) found(reads, node);
         else if (node.name.text === "font" && isAssigned(node)) found(reads, node.parent);
       } else if (ts.isCallExpression(node)) {
         const name = calledName(node);
@@ -332,34 +343,55 @@ export function frameFindings(file: string, text: string): { reads: FrameFinding
         if (ts.isIdentifier(callee) && isStateSetter(checker, callee)) found(setters, node);
       } else if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
         const name = (node.propertyName ?? node.name).getText(source);
-        if (LAYOUT_READS.test(name)) found(reads, node);
+        const holder = node.parent.parent;
+        const from = ts.isVariableDeclaration(holder) ? holder.initializer : undefined;
+        if (LAYOUT_READS.test(name) && !(from && isPlainData(checker, from))) found(reads, node);
       }
     });
   }
   return { reads, setters };
 }
 
-/** Offsets of timeouts that schedule the function they run in, by name or from a callback that calls it: a loop on timers rather than the kit. */
+/**
+ * Offsets of timeouts that come back round to themselves: the callback, or a function of this file
+ * it calls (by name or `this.`, three calls deep), schedules the same timeout again. Work handed to a
+ * listener, an observer, or a promise along the way waits for something else, so it is not followed.
+ */
 export function selfSchedulingTimeouts(file: string, text: string): number[] {
   const source = parse(file, text);
   const checker = checkerFor(source);
   const found: number[] = [];
+  const reaches = (start: FunctionLike[], timeout: ts.CallExpression) => {
+    const seen = new Set<FunctionLike>();
+    let frontier = start;
+    for (let hop = 0; hop < 4 && frontier.length > 0; hop++) {
+      const next: FunctionLike[] = [];
+      for (const fn of frontier) {
+        if (seen.has(fn) || !fn.body) continue;
+        seen.add(fn);
+        let hit = false;
+        walkFrame(fn.body, node => {
+          if (node === timeout) hit = true;
+          else if (ts.isCallExpression(node)) next.push(...calleeFunctions(checker, node));
+        });
+        if (hit) return true;
+      }
+      frontier = next;
+    }
+    return false;
+  };
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node) && calledName(node) === "setTimeout" && node.arguments[0]) {
       const callback = unwrap(node.arguments[0]);
-      const targets = ts.isArrowFunction(callback) || ts.isFunctionExpression(callback) ? [] : callbackFunctions(checker, callback);
-      if (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) {
-        const collect = (child: ts.Node) => {
-          if (ts.isCallExpression(child)) targets.push(...calleeFunctions(checker, child));
-          ts.forEachChild(child, collect);
-        };
-        collect(callback.body);
-      }
-      const insideTarget = targets.some(target => {
-        for (let parent: ts.Node | undefined = node.parent; parent; parent = parent.parent) if (parent === target) return true;
-        return false;
+      const start = ts.isArrowFunction(callback) || ts.isFunctionExpression(callback) ? [callback] : callbackFunctions(checker, callback);
+      const inline = start.filter(fn => fn === callback);
+      const named = start.filter(fn => fn !== callback);
+      const fromInline = inline.flatMap(fn => {
+        const callees: FunctionLike[] = [];
+        if (fn.body) walkFrame(fn.body, child => ts.isCallExpression(child) && callees.push(...calleeFunctions(checker, child)));
+        return callees;
       });
-      if (insideTarget) found.push(node.getStart(source));
+      if (reaches([...named, ...fromInline], node)) found.push(node.getStart(source));
     }
     ts.forEachChild(node, visit);
   };

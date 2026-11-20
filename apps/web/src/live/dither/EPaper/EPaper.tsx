@@ -159,7 +159,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
   let pageIndex = 0;
   let quickTurns = 0;
   let on = false;
-  let timer = 0;
+  let nextTurnAt: number | null = null;
 
   const slider = (name: keyof typeof SLIDERS) => settings.current.sliders[name] ?? SLIDERS[name];
 
@@ -177,13 +177,16 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
 
   function tick(now: number): FrameRequest {
     const progress = duration > 0 ? (now - startedAt) / duration : 1;
-    if (progress >= 1) {
-      pigment = goal;
+    if (progress < 1) {
+      pigment = from.map((level, i) => refreshLevel(kind, level, goal[i]!, progress));
       paint();
-      return false;
+      return true;
     }
-    pigment = from.map((level, i) => refreshLevel(kind, level, goal[i]!, progress));
+    pigment = goal;
     paint();
+    if (nextTurnAt === null) return false;
+    if (now < nextTurnAt) return nextTurnAt - now;
+    turn();
     return true;
   }
 
@@ -201,8 +204,8 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
   }
 
   function schedule() {
-    window.clearTimeout(timer);
-    if (on && loop.visible && !reducedMotion.matches) timer = window.setTimeout(turn, AUTO_TURN_MS);
+    nextTurnAt = on && !reducedMotion.matches ? performance.now() + AUTO_TURN_MS : null;
+    loop.wake();
   }
 
   function turn() {
@@ -241,7 +244,6 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     turn,
     stop() {
       loop.stop();
-      window.clearTimeout(timer);
       reducedMotion.removeEventListener("change", onMotionChange);
     },
   };
