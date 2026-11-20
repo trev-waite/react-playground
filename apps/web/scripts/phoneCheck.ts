@@ -145,6 +145,7 @@ try {
   await send("touchEnd");
 
   await page.setViewportSize(PHONE.viewport);
+  await page.clock.install();
   const tallCard = await openPage(page, "Letterpress");
   const stage = tallCard.locator("[data-letterpress]");
   const rail = tallCard.getByRole("slider");
@@ -188,17 +189,23 @@ try {
   await allLanded();
   const teeStart = await teeCenter();
   await send("touchStart", teeStart);
-  await tallCard.locator("[data-lifted]").waitFor({ timeout: SETTLE_TIMEOUT_MS });
+  await tee.and(tallLifted).waitFor({ timeout: SETTLE_TIMEOUT_MS });
   await send("touchMove", { x: teeStart.x + 120, y: teeStart.y + 60 });
-  await send("touchEnd");
-  const contact = await teeCenter();
-  await send("touchStart", contact);
-  await tee.and(tallCard.locator("[data-lifted]")).waitFor({ timeout: SETTLE_TIMEOUT_MS });
-  const regrabbed = await teeCenter();
-  if (Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
-    failures.push("A touch re-grab should lift the returning letter under the original contact.");
+  await page.clock.pauseAt(Date.now() + 1000);
+  try {
+    await send("touchEnd");
+    await page.clock.runFor(32);
+    const contact = await teeCenter();
+    await send("touchStart", contact);
+    await page.clock.runFor(200);
+    const regrabbed = await teeCenter();
+    if (!await tee.and(tallLifted).count() || Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
+      failures.push("A touch re-grab should lift the returning letter under the original contact.");
+    }
+    await send("touchEnd");
+  } finally {
+    await page.clock.resume();
   }
-  await send("touchEnd");
 
   await openPage(page, "Letterpress");
   const bounds = await stage.boundingBox();
