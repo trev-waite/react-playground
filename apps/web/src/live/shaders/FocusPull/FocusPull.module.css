@@ -1,0 +1,113 @@
+.stage {
+  overflow: hidden;
+}
+
+.holder {
+  position: absolute;
+  inset: 0;
+  touch-action: pan-y;
+}
+
+.credit {
+  position: absolute;
+  top: 16px;
+  left: 24px;
+  pointer-events: none;
+}
+
+.holder:focus-visible {
+  outline: 2px solid var(--stage-accent);
+  outline-offset: -4px;
+  border-radius: 8px;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  perspective: 900px;
+  perspective-origin: 50% 20%;
+}
+
+.holder[data-gpu] .fallback {
+  visibility: hidden;
+}
+
+.page {
+  font-size: clamp(1rem, 3.2cqw, 1.625rem);
+  line-height: 1.32;
+  transform: rotateX(48deg);
+  transform-origin: 50% 100%;
+}
+
+.line,
+.gap {
+  position: relative;
+  margin: 0;
+}
+
+.gap {
+  height: 0.66em;
+}
+
+.line {
+  white-space: nowrap;
+  transition: filter 240ms var(--stage-fade-ease);
+}
+
+.line::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -1.25em;
+  width: 0.75em;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--stage-accent);
+  opacity: 0;
+  transition: opacity 240ms var(--stage-fade-ease);
+}
+
+.line[data-level="0"]::before {
+  opacity: 1;
+}
+
+.line[data-level="1"] {
+  filter: blur(0.6px);
+}
+
+.line[data-level="2"] {
+  filter: blur(1.2px);
+}
+
+.line[data-level="3"] {
+  filter: blur(2px);
+}
+
+.line[data-level="4"] {
+  filter: blur(3px);
+}
+
+.line[data-level="5"] {
+  filter: blur(4.2px);
+}
+
+.line[data-level="6"] {
+  filter: blur(5.5px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line,
+  .line::before {
+    transition: none;
+  }
+}

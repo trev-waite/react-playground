@@ -24,4 +24,9 @@ export const cardOrder: readonly string[] = [
   "svgs/BlobPet",
   "text/ParticleText",
   "inputs/StretchSlider",
+  "text/QuoteLens",
+  "text/WordClock",
+  "shaders/FocusPull",
+  "text/FoundPoem",
+  "shaders/RakingLight",
 ];
