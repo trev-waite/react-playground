@@ -347,7 +347,7 @@ export function FocusPull() {
       </div>
       <p className={stageStyles.srOnly}>{POEM.filter(Boolean).join(" ")}</p>
       <p className={`${stageStyles.support} ${styles.credit}`} data-reveal>
-        Robert Frost, “Nothing Gold Can Stay”
+        Gandalf, <cite>The Fellowship of the Ring</cite>
       </p>
     </Stage>
   );

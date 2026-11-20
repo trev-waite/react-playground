@@ -1,15 +1,16 @@
 import { DISPLAY_FONT } from "@/live/shared/Stage/tone";
 
-/** Robert Frost, “Nothing Gold Can Stay” (1923), which is in the public domain. An empty line is a stanza break. */
+/** Gandalf to Frodo in The Fellowship of the Ring. An empty line is a stanza break. */
 export const POEM: readonly string[] = [
-  "Nature’s first green is gold,",
-  "Her hardest hue to hold.",
-  "Her early leaf’s a flower;",
-  "But only so an hour.",
-  "Then leaf subsides to leaf.",
-  "So Eden sank to grief,",
-  "So dawn goes down to day.",
-  "Nothing gold can stay.",
+  "So do I, and so do all",
+  "who live to see such times.",
+  "But that is not",
+  "for them to decide.",
+  "",
+  "All we have to decide",
+  "is what to do",
+  "with the time",
+  "that is given us.",
 ];
 
 /** Line height and margins as shares of the type size. */

@@ -1,21 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { cascadeDelays, glide, play, positionIn, type Move, type Playback } from "@/live/shared/Stage/choreography";
+import { cascadeDelays, glide, MOTION, play, positionIn, type Move, type Playback } from "@/live/shared/Stage/choreography";
 import { Stage } from "@/live/shared/Stage/Stage";
 import stageStyles from "@/live/shared/Stage/Stage.module.css";
 import { keptPoem, moveFocus, toggle } from "./poem";
 import styles from "./FoundPoem.module.css";
 
-/** Gandalf's answer to Frodo in The Fellowship of the Ring. */
 const PASSAGE =
-  "So do I, and so do all who live to see such times. But that is not for them to decide. All we have to decide is what to do with the time that is given us.";
-const SOURCE = "Gandalf, The Fellowship of the Ring";
+  "Today is the very first day of the rest of my life. This is the beginning of a new day. I have been given this day to use as I will. I can waste it … or use it for good, but what I do today is important, because I am exchanging a day of my life for it. When tomorrow comes, this day will be gone forever, leaving in its place something I have traded for it. I want it to be gain and not loss; good and not evil; success and not failure; in order that I shall not regret the price I have paid for it. I will try just for today, for you will never fail until you stop trying.";
+const SOURCE = "Author unknown";
 
-/** A poem already marked when the card opens, so there is something to erase: “all who live decide what to do with the time given us.” */
-const SUGGESTED = [6, 7, 8, 25, 27, 28, 29, 30, 31, 32, 35, 36];
+/** A poem already marked when the card opens, so there is something to erase: “Today I am exchanging a day of my life I shall not regret the price.” */
+const SUGGESTED = [0, 49, 50, 51, 52, 53, 54, 55, 56, 98, 99, 100, 101, 102, 103];
 
 /** The erased words are well on their way out before the kept ones start to gather. */
 const GATHER_DELAY_MS = 280;
 const GATHER_STAGGER_MS = 24;
+/** Once gathered, the poem comes forward to this size, or as near as the passage's space allows. */
+const POEM_GROW = 1.35;
 
 type Mode = "passage" | "poem";
 
@@ -36,6 +37,15 @@ function gatherMoves(root: Element, origins: Map<string | undefined, { x: number
     const at = positionIn(root, element);
     return [{ element, dx: origin.x - at.x, dy: origin.y - at.y }];
   });
+}
+
+/** Sets how far the gathered poem grows, and how long it waits for the words to land first. */
+function growPoem(sheet: HTMLElement, poem: HTMLElement | null, afterMs: number) {
+  const frame = poem?.parentElement;
+  if (!poem || !frame) return;
+  const grow = Math.max(1, Math.min(POEM_GROW, frame.clientHeight / Math.max(1, poem.offsetHeight)));
+  sheet.style.setProperty("--poem-grow", String(grow));
+  sheet.style.setProperty("--poem-grow-after", `${afterMs}ms`);
 }
 
 export function FoundPoem({ passage = PASSAGE, source = SOURCE, suggested = SUGGESTED }: { passage?: string; source?: string; suggested?: readonly number[] }) {
@@ -63,6 +73,7 @@ export function FoundPoem({ passage = PASSAGE, source = SOURCE, suggested = SUGG
     const origins = drawnAt(root, gathering ? keptInPassage : poemWords);
     for (const playback of running.current) playback.cancel();
     const moves = gatherMoves(root, origins, gathering ? poemWords : keptInPassage);
+    if (gathering) growPoem(root, poemRef.current, GATHER_DELAY_MS + Math.max(0, moves.length - 1) * GATHER_STAGGER_MS + MOTION.turnMs);
     running.current = gathering
       ? [play(erased, "recede", { staggerMs: 12 }), glide(moves, { delayMs: GATHER_DELAY_MS, staggerMs: GATHER_STAGGER_MS })]
       : [glide(moves, { staggerMs: GATHER_STAGGER_MS }), play(erased, "rise", { delayMs: 160, staggerMs: 12 })];
