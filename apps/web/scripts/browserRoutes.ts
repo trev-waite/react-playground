@@ -135,6 +135,58 @@ function clickMidFlight(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
+async function checkKeyboardFocus(page: Page) {
+  const title = "Gandalf’s Hat";
+  const path = livePath("particles/GandalfHologram");
+  for (const entry of [path, "/"]) {
+    await page.goto(`${origin}${entry}`);
+    if (entry === "/") {
+      await tile(page, title).focus();
+      await page.keyboard.press("Enter");
+    }
+    await settle(page, current => current.layout === "pages" && isPageOf(current, title));
+    const card = page.getByRole("article", { name: title, exact: true });
+    const scene = card.locator("[data-projecting], [data-still]");
+    await scene.waitFor({ state: "attached" });
+    const controls = await scene.locator('button[tabindex="0"]:visible').evaluateAll(buttons =>
+      buttons.map(button => button.getAttribute("aria-label")),
+    );
+    const reached: (string | null)[] = [];
+    let code = false;
+    for (let step = 0; step < 12 && !code; step++) {
+      await page.keyboard.press("Tab");
+      const focused = await page.evaluate(() => ({
+        card: document.activeElement?.closest("article")?.getAttribute("aria-label"),
+        label: document.activeElement?.getAttribute("aria-label") ?? null,
+        code: document.activeElement?.getAttribute("aria-haspopup") === "dialog",
+        path: location.pathname,
+      }));
+      if ((focused.card && focused.card !== title) || focused.path !== path) break;
+      if (focused.card === title && !focused.code) reached.push(focused.label);
+      code = focused.card === title && focused.code;
+    }
+    expect(code && JSON.stringify(reached) === JSON.stringify(controls),
+      `Tab from ${entry} should reach the hat and Code without leaving the page. Reached ${JSON.stringify(reached)}, Code ${code}.`);
+    const hat = scene.getByRole("button", { name: "Drop the dots" });
+    if (await hat.count() === 0) continue;
+    await hat.click();
+    const focus = await hat.evaluate(button => ({
+      active: document.activeElement === button, visible: button.matches(":focus-visible"),
+    }));
+    expect(focus.active && !focus.visible, `Clicking the hat from ${entry} should focus it without a focus outline.`);
+    if (!focus.active) continue;
+    await page.keyboard.press("ArrowUp");
+    const turned = await page.waitForFunction(() => {
+      const gl = document.activeElement?.querySelector("canvas")?.getContext("webgl2");
+      const program = gl?.getParameter(gl.CURRENT_PROGRAM) as WebGLProgram | null;
+      if (!gl || !program) return false;
+      const pitch = gl.getUniformLocation(program, "uPitch");
+      return pitch !== null && (gl.getUniform(program, pitch) as Float32Array)[1]! < 0;
+    }, undefined, { timeout: 2000 }).then(() => true, () => false);
+    expect(turned && new URL(page.url()).pathname === path, `ArrowUp after clicking from ${entry} should tilt the hat without paging.`);
+  }
+}
+
 try {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
@@ -184,6 +236,7 @@ try {
       expect(isPageOf(direct, card.title), `${livePath(slug)} should fill the page with ${card.title}`);
     }
   }
+  await checkKeyboardFocus(page);
   await context.close();
 
   // The camera interrupted mid-flight, on a clock stopped before the page loads.
