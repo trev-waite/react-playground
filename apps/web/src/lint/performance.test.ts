@@ -181,8 +181,13 @@ describe("performance lint: code", () => {
   test("frame loops never set React state", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
+      const ownFunctions = new Set(
+        [...text.matchAll(/\bfunction\s+(set[A-Z]\w*)\s*\(|\b(?:const|let)\s+(set[A-Z]\w*)\s*=\s*(?:\([^)]*\)|\w+)\s*=>/g)].map(
+          match => match[1] ?? match[2]!,
+        ),
+      );
       for (const { body, start } of frameCallbacks(text)) {
-        const setter = /(?<![.\w])set(?!Timeout\b|Interval\b)[A-Z]\w*\(/.exec(body);
+        const setter = [...body.matchAll(/(?<![.\w])(set(?!Timeout\b|Interval\b)[A-Z]\w*)\(/g)].find(call => !ownFunctions.has(call[1]!));
         if (!setter || allowedNear(text, start) || allowedNear(text, start + setter.index)) continue;
         violations.push(
           `${file}:${lineOf(text, start + setter.index)} calls ${setter[0]}) every frame, re-rendering React 60 times a second. ` +
