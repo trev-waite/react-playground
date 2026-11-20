@@ -29,11 +29,11 @@ export function lineOf(text: string, index: number): number {
   return text.slice(0, index).split("\n").length;
 }
 
-/** True when `marker` sits on the line at `index` or one of the two above it. */
-export function allowedNear(text: string, index: number, marker = ALLOW): boolean {
+/** True when `marker` sits on the line at `index` or one of the `above` lines before it. */
+export function allowedNear(text: string, index: number, marker = ALLOW, above = 2): boolean {
   const lines = text.split("\n");
   const line = lineOf(text, index) - 1;
-  return lines.slice(Math.max(0, line - 2), line + 1).some(l => l.includes(marker));
+  return lines.slice(Math.max(0, line - above), line + 1).some(l => l.includes(marker));
 }
 
 export function stripCssComments(text: string): string {

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"bounce":75,"wobble":45,"tempo":30};
 
@@ -798,8 +799,6 @@ function animateBlob({
   let formedAt = 0;
   let blinkAt = 2;
   let poke = pokeRef.current;
-  let last = performance.now();
-  let raf = 0;
 
   const morphTo = (next: number) => {
     index = next;
@@ -815,9 +814,8 @@ function animateBlob({
     if (!reduce) squash.velocity += 1 + 2.4 * bounce;
   };
 
-  const tick = (ms: number) => {
-    const dt = Math.min(1 / 30, (ms - last) / 1000);
-    last = ms;
+  const tick = (_ms: number, delta: number) => {
+    const dt = Math.min(1 / 30, delta / 1000);
     now += dt;
     const { bounce, wobble, tempo, playing } = settings.current;
 
@@ -923,22 +921,15 @@ function animateBlob({
       shadow.setAttribute("opacity", (0.13 * (1 - 0.6 * lift)).toFixed(3));
     }
 
-    raf = requestAnimationFrame(tick);
+    return true;
   };
 
-  const observer = new IntersectionObserver(([entry]) => {
-    cancelAnimationFrame(raf);
-    if (entry?.isIntersecting) {
-      last = performance.now();
-      raf = requestAnimationFrame(tick);
-    }
-  });
-  if (svgRef.current) observer.observe(svgRef.current);
-  else raf = requestAnimationFrame(tick);
+  const svg = svgRef.current;
+  if (!svg) return stopPrebuild;
+  const loop = visibleLoop(svg, tick);
   return () => {
     stopPrebuild();
-    observer.disconnect();
-    cancelAnimationFrame(raf);
+    loop.stop();
   };
 }
 

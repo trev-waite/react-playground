@@ -39,28 +39,60 @@ function lastCompound(selector: string): string {
   return selector.slice(start);
 }
 
-/** Bodies of the functions handed to requestAnimationFrame, by name or inline. */
-function frameCallbacks(text: string): { body: string; index: number }[] {
-  const callbacks: { body: string; index: number }[] = [];
-  const names = new Set(
-    [...text.matchAll(/requestAnimationFrame\(\s*([A-Za-z_$][\w$]*)\s*\)/g)].map(call => call[1]!),
-  );
-  for (const name of names) {
-    const declaration = new RegExp(
-      `(?:const|let)\\s+${name}\\s*=\\s*(?:\\([^)]*\\)|\\w+)\\s*=>\\s*\\{|function\\s+${name}\\s*\\(`,
-    ).exec(text);
-    if (!declaration) continue;
-    const open = text.indexOf("{", declaration.index + declaration[0].length - 1);
-    let depth = 0;
-    for (let i = open; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}" && --depth === 0) {
-        callbacks.push({ body: text.slice(open, i + 1), index: declaration.index });
-        break;
-      }
-    }
+const IDENTIFIER = "[A-Za-z_$][\\w$]*";
+const PARAMS_AND_TYPE = "(?:\\([^)]*\\)|\\w+)(?:\\s*:\\s*[\\w<>|\\s]+?)?\\s*=>\\s*\\{";
+
+/** The `{ … }` block that opens at or after `from`. */
+function blockFrom(text: string, from: number): { body: string; start: number } | null {
+  const open = text.indexOf("{", from);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return { body: text.slice(open, i + 1), start: open };
   }
-  return callbacks;
+  return null;
+}
+
+/** The body of the function or arrow named `name` in `text`, declared as a function, a const, or a class field. */
+function functionBody(text: string, name: string): { body: string; start: number } | null {
+  const declaration = new RegExp(
+    `(?:(?:const|let)\\s+|(?:private|public|protected|readonly)\\s+(?:readonly\\s+)?)${name}\\s*=\\s*${PARAMS_AND_TYPE}|function\\s+${name}\\s*\\(`,
+  ).exec(text);
+  return declaration ? blockFrom(text, declaration.index + declaration[0].length - 1) : null;
+}
+
+/**
+ * The code that runs every frame, comments blanked: functions handed to requestAnimationFrame or
+ * visibleLoop, by name or inline, and the local functions they call, one call deep. A call marked
+ * `perf-allow: <reason>` (one that runs only when something changed, or at most every so often) is
+ * not followed.
+ */
+function frameCallbacks(source: string): { body: string; start: number }[] {
+  const text = blankComments(source);
+  const named = [
+    ...text.matchAll(new RegExp(`requestAnimationFrame\\(\\s*(?:this\\.)?(${IDENTIFIER})\\s*\\)`, "g")),
+    ...text.matchAll(new RegExp(`visibleLoop\\([^,()]+,\\s*(?:this\\.)?(${IDENTIFIER})\\s*[,)]`, "g")),
+  ].map(match => match[1]!);
+  const callbacks = [...new Set(named)].flatMap(name => functionBody(text, name) ?? []);
+  for (const match of text.matchAll(new RegExp(`visibleLoop\\([^,()]+,\\s*${PARAMS_AND_TYPE}`, "g"))) {
+    const block = blockFrom(text, match.index! + match[0].length - 1);
+    if (block) callbacks.push(block);
+  }
+  const callees = new Set(
+    callbacks.flatMap(({ body, start }) =>
+      [...body.matchAll(new RegExp(`(?<![.\\w$])(${IDENTIFIER})\\(`, "g"))]
+        .filter(call => !allowedNear(source, start + call.index, ALLOW, 1))
+        .map(call => call[1]!),
+    ),
+  );
+  const calledBodies = [...callees].flatMap(name => functionBody(text, name) ?? []);
+  return [...new Map([...callbacks, ...calledBodies].map(block => [block.start, block])).values()];
+}
+
+/** `// …` and `/* … *\/` comments blanked to spaces, so offsets still line up. */
+function blankComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, comment => comment.replace(/[^\n]/g, " "));
 }
 
 describe("performance lint: CSS", () => {
@@ -148,14 +180,30 @@ describe("performance lint: code", () => {
 
   test("frame loops never set React state", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.{ts,tsx}")) {
-      for (const { body, index } of frameCallbacks(text)) {
-        if (body.includes(ALLOW) || allowedNear(text, index)) continue;
-        const setter = /(?<![.\w])set[A-Z]\w*\(/.exec(body);
-        if (setter) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
+      for (const { body, start } of frameCallbacks(text)) {
+        const setter = /(?<![.\w])set(?!Timeout\b|Interval\b)[A-Z]\w*\(/.exec(body);
+        if (!setter || allowedNear(text, start) || allowedNear(text, start + setter.index)) continue;
+        violations.push(
+          `${file}:${lineOf(text, start + setter.index)} calls ${setter[0]}) every frame, re-rendering React 60 times a second. ` +
+            "Write to a motion value, a ref, or the DOM instead.",
+        );
+      }
+    }
+    report(violations);
+  });
+
+  test("frame loops read no layout and set no font, which would restyle the page after the deck moves a card", async () => {
+    const violations: string[] = [];
+    const read = /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
+      for (const { body, start } of frameCallbacks(text)) {
+        for (const match of body.matchAll(read)) {
+          const index = start + match.index;
+          if (allowedNear(text, index)) continue;
           violations.push(
-            `${file}:${lineOf(text, index)} calls ${setter[0]}) every frame, re-rendering React 60 times a second. ` +
-              "Write to a motion value or the DOM instead.",
+            `${file}:${lineOf(text, index)} runs \`${match[0]}\` every frame. Read sizes in a ResizeObserver callback and keep them, ` +
+              "and set the font when the canvas resizes; or add `perf-allow: <reason>`.",
           );
         }
       }
@@ -193,15 +241,15 @@ describe("performance lint: code", () => {
 });
 
 describe("performance lint: Live components", () => {
-  test("frame loops pause while off screen, since the deck keeps every card mounted", async () => {
+  test("frame loops run on visibleLoop, which sleeps while the card is off screen, since the deck keeps every card mounted", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx}")) {
-      const loop = /requestAnimationFrame\(|\bframeLoop\(/.exec(text);
-      if (!loop || allowedNear(text, loop.index)) continue;
-      if (!/IntersectionObserver|pausableLoop/.test(text)) {
+      if (file.startsWith("live/kit/")) continue;
+      for (const match of blankComments(text).matchAll(/requestAnimationFrame\(/g)) {
+        if (allowedNear(text, match.index)) continue;
         violations.push(
-          `${file}:${lineOf(text, loop.index)} animates without pausing off screen. ` +
-            "Gate the loop on an IntersectionObserver.",
+          `${file}:${lineOf(text, match.index)} runs requestAnimationFrame itself. Run frames on visibleLoop from ` +
+            "@/live/kit/visibleLoop, or say why a short, input-driven animation needs its own with `perf-allow: <reason>`.",
         );
       }
     }

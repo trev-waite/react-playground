@@ -14,6 +14,7 @@ import {
   type Particle,
 } from "./particleMath";
 import { ParticleSim } from "./particleSim";
+import { visibleLoop, type FrameRequest, type VisibleLoop } from "@/live/kit/visibleLoop";
 
 export type ParticleFieldElements = {
   root: HTMLElement;
@@ -68,10 +69,8 @@ function hash01(value: number): number {
  */
 export class ParticleField {
   private readonly ctx: CanvasRenderingContext2D;
-  private frame: number | null = null;
-  private lastFrameTime = 0;
+  private readonly loop: VisibleLoop;
   private timeMs = 0;
-  private visible = true;
   private dissolving = false;
   private disposed = false;
 
@@ -102,10 +101,6 @@ export class ParticleField {
   private pointerId: number | null = null;
 
   private readonly resizeObserver = new ResizeObserver(() => this.refresh());
-  private readonly intersectionObserver = new IntersectionObserver(([entry]) => {
-    this.visible = entry?.isIntersecting ?? true;
-    if (this.visible) this.animate();
-  });
 
   constructor(
     private readonly elements: ParticleFieldElements,
@@ -114,6 +109,7 @@ export class ParticleField {
     const ctx = elements.canvas.getContext("2d");
     if (!ctx) throw new Error("ParticleText needs a 2d canvas context");
     this.ctx = ctx;
+    this.loop = visibleLoop(elements.root, this.tick, { onVisibleChange: visible => visible || this.rest() });
 
     const text = elements.text;
     text.addEventListener("pointerenter", this.onPointerEnter);
@@ -124,16 +120,14 @@ export class ParticleField {
     text.addEventListener("pointercancel", this.onPointerEnd);
     elements.root.addEventListener("transitionend", this.onInkChange);
     this.resizeObserver.observe(elements.root);
-    this.intersectionObserver.observe(elements.root);
     void document.fonts?.ready.then(() => this.refresh());
     this.refresh();
   }
 
   dispose() {
     this.disposed = true;
-    this.stop();
+    this.loop.stop();
     this.resizeObserver.disconnect();
-    this.intersectionObserver.disconnect();
     const text = this.elements.text;
     text.removeEventListener("pointerenter", this.onPointerEnter);
     text.removeEventListener("pointerdown", this.onPointerDown);
@@ -251,27 +245,18 @@ export class ParticleField {
   }
 
   private animate() {
-    if (this.frame !== null || this.disposed || !this.visible) return;
-    this.lastFrameTime = performance.now();
-    const tick = (time: number) => {
-      this.frame = null;
-      if (this.disposed) return;
-      const dt = Math.min(48, Math.max(0, time - this.lastFrameTime));
-      this.lastFrameTime = time;
-      if (this.visible && this.render(dt)) {
-        this.frame = requestAnimationFrame(tick);
-        return;
-      }
-      this.setDissolving(false);
-      this.clear();
-    };
-    this.frame = requestAnimationFrame(tick);
+    this.loop.wake();
   }
 
-  private stop() {
-    if (this.frame === null) return;
-    cancelAnimationFrame(this.frame);
-    this.frame = null;
+  private readonly tick = (_time: number, delta: number): FrameRequest => {
+    if (this.render(Math.min(48, delta))) return true;
+    this.rest();
+    return false;
+  };
+
+  private rest() {
+    this.setDissolving(false);
+    this.clear();
   }
 
   private render(dtMs: number): boolean {

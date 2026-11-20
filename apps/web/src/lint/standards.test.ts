@@ -10,6 +10,8 @@ import { allowedNear, cssRules, declarations, lineOf, report, sources, stripCssC
 
 const OWNED_DIRS = ["app", "studio", "experimental", "live", "lib", "gpu", "lint"];
 const STYLED_DIRS = ["app", "studio", "experimental", "live"];
+/** Shared parts Live components build on; each component decides what its own motion does. */
+const KIT = "live/kit";
 
 const LIVE_IMPORTS = [
   /^\.\.?\//,
@@ -54,8 +56,9 @@ describe("standards lint: Live components", () => {
     }
     const violations: string[] = [];
     for (const [folder, folderFiles] of folders) {
+      if (folder === KIT) continue;
       const moving = folderFiles.find(({ text }) =>
-        /\btransition\s*:|\banimation\s*:|requestAnimationFrame\(|\.animate\(/.test(stripCssComments(text)),
+        /\btransition\s*:|\banimation\s*:|requestAnimationFrame\(|visibleLoop\(|\.animate\(/.test(stripCssComments(text)),
       );
       if (!moving) continue;
       if (folderFiles.some(({ text }) => /prefers-reduced-motion|useReducedMotion/.test(text))) continue;
@@ -63,6 +66,21 @@ describe("standards lint: Live components", () => {
         `${folder} animates (${moving.file}) but never checks prefers-reduced-motion. ` +
           "Turn transitions off in a `@media (prefers-reduced-motion: reduce)` block, or skip the effect in code.",
       );
+    }
+    report(violations);
+  });
+  test("Live components lay out in their card's box, never the viewport", async () => {
+    const violations: string[] = [];
+    const viewport = /(?<![\w-])\d*\.?\d+(?:[dsl]?v[wh]|vmin|vmax)\b|\bposition\s*:\s*["']?fixed\b/g;
+    for (const { file, text } of await sources(["live"], "**/*.{ts,tsx,css}")) {
+      const comments = file.endsWith(".css") ? /\/\*[\s\S]*?\*\//g : /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+      const code = text.replace(comments, comment => comment.replace(/[^\n]/g, " "));
+      for (const match of code.matchAll(viewport)) {
+        violations.push(
+          `${file}:${lineOf(code, match.index)} uses "${match[0]}". A card lays its preview out in the card's box, ` +
+            "as a grid tile, in flight, and as a page: size from it with %, or cqw/cqh under `container-type: size`.",
+        );
+      }
     }
     report(violations);
   });

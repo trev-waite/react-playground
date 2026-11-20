@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useGpu } from "@/gpu";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 import { createGooRenderer, type GooRenderer } from "./gpuGoo";
 import {
   BASELINE,
@@ -91,10 +92,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   const cycles = lines.words.map(word => phases(word.letters.length).total);
   let wordIndex = 0;
   let elapsed = 0;
-  let previous = 0;
-  let frame = 0;
   let timer = 0;
-  let visible = true;
   let lastDropX: number | null = null;
   /** The drop's stretch rides a spring toward the stretch its speed asks for, so it wobbles like jelly when it starts and stops. */
   let stretch = 0;
@@ -181,19 +179,15 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     }
   }
 
-  function tick(now: number) {
-    frame = 0;
-    const dt = Math.min(48, now - previous);
-    previous = now;
+  function tick(_now: number, delta: number): FrameRequest {
+    if (reducedMotion.matches) return false;
+    const dt = Math.min(48, delta);
     advance(dt);
     play(wordIndex, elapsed, dt);
-    if (visible) frame = requestAnimationFrame(tick);
+    return true;
   }
 
-  function resume() {
-    previous = performance.now();
-    frame = requestAnimationFrame(tick);
-  }
+  const loop = visibleLoop(svg, tick, { onVisibleChange: visible => (visible ? wake() : window.clearTimeout(timer)) });
 
   function still() {
     window.clearTimeout(timer);
@@ -207,37 +201,24 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   }
 
   function wake() {
-    cancelAnimationFrame(frame);
-    frame = 0;
+    loop.sleep();
     window.clearTimeout(timer);
-    if (!visible) return;
+    if (!loop.visible) return;
     if (reducedMotion.matches) {
       still();
       return;
     }
     show(wordIndex);
-    resume();
+    loop.wake();
   }
 
-  const observer = new IntersectionObserver(([entry]) => {
-    const was = visible;
-    visible = entry?.isIntersecting ?? true;
-    if (visible && !was) wake();
-    if (!visible) {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      window.clearTimeout(timer);
-    }
-  });
-  observer.observe(svg);
   reducedMotion.addEventListener("change", wake);
   play(0, 0, 0);
   wake();
 
   return () => {
-    cancelAnimationFrame(frame);
+    loop.stop();
     window.clearTimeout(timer);
-    observer.disconnect();
     reducedMotion.removeEventListener("change", wake);
   };
 }

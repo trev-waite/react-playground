@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"flipSpeed":55,"sweep":77,"hold":84};
 
@@ -119,9 +120,6 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
   let messageIndex = -1;
   let nextMessageAt = 0;
   let wasOn = false;
-  let visible = true;
-  let frame = 0;
-  let timer = 0;
   let pitch = 1;
   let dpr = 1;
   /** The canvas's CSS size, read on resize; reading it per frame would force a layout. */
@@ -185,8 +183,7 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
     return busy;
   }
 
-  function tick(now: number) {
-    frame = 0;
+  function tick(now: number): FrameRequest {
     const on = settings.current.progress >= 0.5;
     if (on !== wasOn) {
       wasOn = on;
@@ -212,15 +209,12 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
     }
 
     const busy = draw(now);
-    if (!visible) return;
-    if (busy || pending) frame = requestAnimationFrame(tick);
-    else if (on && !reducedMotion.matches) timer = window.setTimeout(wake, Math.max(0, nextMessageAt - now));
+    if (busy || pending) return true;
+    return on && !reducedMotion.matches ? nextMessageAt - now : false;
   }
 
-  function wake() {
-    window.clearTimeout(timer);
-    if (!frame && visible) frame = requestAnimationFrame(tick);
-  }
+  const loop = visibleLoop(canvas, tick);
+  const wake = loop.wake;
 
   function onPointerMove(event: PointerEvent) {
     const rect = canvas.getBoundingClientRect();
@@ -246,13 +240,7 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
     draw(performance.now());
     wake();
   });
-  const intersectionObserver = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    if (visible) wake();
-    else window.clearTimeout(timer);
-  });
   resizeObserver.observe(canvas);
-  intersectionObserver.observe(canvas);
   canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerdown", onPointerMove);
   reducedMotion.addEventListener("change", wake);
@@ -262,10 +250,8 @@ function startBoard(canvas: HTMLCanvasElement, settings: RefObject<Settings>): B
   return {
     wake,
     stop() {
-      cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
+      loop.stop();
       resizeObserver.disconnect();
-      intersectionObserver.disconnect();
       canvas.removeEventListener("pointermove", onPointerMove);
       canvas.removeEventListener("pointerdown", onPointerMove);
       reducedMotion.removeEventListener("change", wake);

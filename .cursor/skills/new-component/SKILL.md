@@ -13,7 +13,8 @@ A thin checklist. The detail lives in the skills and docs it links.
 - [ ] Pick a route (below): straight into Live, or an idea in Experimental first
 - [ ] Straight in: write apps/web/src/live/<folder>/<Name>/<Name>.tsx and its preview.tsx (never `shells`)
 - [ ] As an idea: follow the `new-experiment` skill (and `gpu-idea` for shaders), then Make Live into apps/web/src/live/<folder>/<Name>/; after that, change the component in the idea and Update Live (below)
-- [ ] preview.tsx renders only <Name />; its `meta` sets the card's size, description, reset, and `surface` (below)
+- [ ] Fill the slot (below): preview.tsx exports `meta: CardMeta` (or `FamilyMemberMeta` in a family folder) and `default function <Name>Preview()`, which renders only <Name /> and takes no props; `meta` sets the card's size, description, reset, and `surface`
+- [ ] Animate on the kit (below): a frame loop runs on `visibleLoop` from `@/live/kit/visibleLoop` (GPU: `pausableLoop` from `@/gpu`), reads sizes in a `ResizeObserver`, never per frame, and lays out in the card's box, never the viewport
 - [ ] Write the `description` for a stranger: it is also the page's description, the text under a shared link, and the overview in the agent prompt, so say what it does and how it behaves
 - [ ] Pick a `size` and a place in live/order.ts where the grid still packs, and make it fit a phone page (below)
 - [ ] Grouping several components into one card? Add or update live/<folder>/family.ts
@@ -26,6 +27,44 @@ A thin checklist. The detail lives in the skills and docs it links.
 ```
 
 Card `meta` and `family.ts`: [Using the playground](../../../docs/USING_THE_PLAYGROUND.md).
+
+## The slot it fills
+
+The deck does the rest: it discovers the folder, lays out the card from `meta` before the component loads, warms it, flies it between tile and page, fits it, pages to it, remounts it for `reset`, and publishes its code. A component brings only itself and must leave that machinery alone. `bun run test` holds it to the slot (`src/lint/cards.test.ts`) and the house rules (`standards.test.ts`, `performance.test.ts`), and names the file and line of anything that does not fit:
+
+```tsx
+// live/<folder>/<Name>/preview.tsx
+import { Name } from "./Name";
+import type { CardMeta } from "@/lib/types";
+
+export const meta: CardMeta = {
+  description: "What it does and how it behaves, for a stranger.",
+  size: "wide",
+  surface: {
+    light: { swatch: "paper", content: ["#171c25"] },
+    dark: { swatch: "orange", content: ["#171c25"] },
+  },
+};
+
+export default function NamePreview() {
+  return <Name />;
+}
+```
+
+Anything that moves on its own runs on the kit's loop, which sleeps while the card is off screen. The deck keeps every card mounted, so a loop of its own would run for every card at once:
+
+```ts
+import { visibleLoop } from "@/live/kit/visibleLoop";
+
+const loop = visibleLoop(canvas, (now, delta) => {
+  step(delta);
+  draw(now);
+  return stillMoving;
+});
+// loop.wake() after input or a resize; loop.stop() on unmount
+```
+
+A frame returns `true` for another frame, milliseconds to wait (an idle tick), or nothing to sleep until `wake()`. Shared parts like this live in `live/kit/`, which the one-file download inlines; `kit` holds no cards.
 
 ## Straight into Live, or an idea first
 
