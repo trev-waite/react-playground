@@ -474,8 +474,16 @@ function declaredTypeOf(checker: ts.TypeChecker, expression: ts.Expression, dept
   if (depth > 6) return undefined;
   if (ts.isIdentifier(target)) {
     const declaration = checker.getSymbolAtLocation(target)?.declarations?.[0];
+    if (declaration && ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent)) {
+      const holder = declaration.parent.parent;
+      const from = ts.isVariableDeclaration(holder) && holder.initializer ? declaredTypeOf(checker, holder.initializer, depth + 1) : undefined;
+      const key = (declaration.propertyName ?? declaration.name).getText();
+      return from ? memberType(checker, from, key) : undefined;
+    }
     if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isParameter(declaration) || ts.isPropertyDeclaration(declaration))) return undefined;
-    return declaration.initializer ? undefined : declaration.type;
+    if (!declaration.initializer) return declaration.type;
+    const value = unwrap(declaration.initializer);
+    return ts.isPropertyAccessExpression(value) || ts.isIdentifier(value) ? declaredTypeOf(checker, value, depth + 1) : undefined;
   }
   if (!ts.isPropertyAccessExpression(target)) return undefined;
   if (target.name.text === "current" && ts.isIdentifier(unwrap(target.expression))) {
@@ -484,9 +492,13 @@ function declaredTypeOf(checker: ts.TypeChecker, expression: ts.Expression, dept
     if (init && ts.isCallExpression(init) && calledName(init) === "useRef") return init.typeArguments?.[0];
   }
   const holder = declaredTypeOf(checker, target.expression, depth + 1);
-  const members = holder && recordMembers(checker, holder);
-  const member = members?.find(
-    (each): each is ts.PropertySignature => ts.isPropertySignature(each) && each.name.getText() === target.name.text,
+  return holder ? memberType(checker, holder, target.name.text) : undefined;
+}
+
+/** The declared type of `key` in a local record type. */
+function memberType(checker: ts.TypeChecker, holder: ts.TypeNode, key: string): ts.TypeNode | undefined {
+  const member = recordMembers(checker, holder)?.find(
+    (each): each is ts.PropertySignature => ts.isPropertySignature(each) && each.name.getText() === key,
   );
   return member?.type;
 }

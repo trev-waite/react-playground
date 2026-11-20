@@ -460,9 +460,12 @@ try {
   if (Math.abs(duringSecond - deckStart) > 1 || Math.abs(await scrollTop() - deckStart) > 1) {
     failures.push("A touch swipe should stay on Letterpress until the title lands.");
   }
+  const order = await page.locator("article[data-deck-card]").evaluateAll(cards => cards.map(card => card.getAttribute("data-deck-card")));
+  const next = order[order.indexOf("text/Letterpress") + 1];
+  if (!next) throw new Error("The swipe check needs a card after Letterpress in the deck.");
   const duringFresh = await swipe(525);
   if (duringFresh === deckStart) failures.push("The first fresh swipe after a split touch release should move to the next card.");
-  else await page.waitForURL("**/inputs/StretchSlider", { timeout: SETTLE_TIMEOUT_MS });
+  else await page.waitForURL(url => url.pathname === `/${next}`, { timeout: SETTLE_TIMEOUT_MS });
 
   await checkPortableHologram(page);
   await checkCompactHologram();
