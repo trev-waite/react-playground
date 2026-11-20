@@ -26,4 +26,9 @@ export const cardOrder: readonly string[] = [
   "text/ParticleText",
   "text/Letterpress",
   "inputs/StretchSlider",
+  "text/QuoteLens",
+  "text/WordClock",
+  "shaders/FocusPull",
+  "text/FoundPoem",
+  "shaders/RakingLight",
 ];
