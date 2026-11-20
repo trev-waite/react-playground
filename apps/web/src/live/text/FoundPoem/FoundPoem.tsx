@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { cascadeDelays, glide, MOTION, play, positionIn, type Move, type Playback } from "@/live/shared/Stage/choreography";
-import { Stage } from "@/live/shared/Stage/Stage";
-import stageStyles from "@/live/shared/Stage/Stage.module.css";
+import { cascadeDelays, glide, MOTION, play, positionIn, type Move, type Playback } from "@/live/kit/Stage/choreography";
+import { Stage } from "@/live/kit/Stage/Stage";
+import stageStyles from "@/live/kit/Stage/Stage.module.css";
 import { keptPoem, moveFocus, toggle } from "./poem";
 import styles from "./FoundPoem.module.css";
 

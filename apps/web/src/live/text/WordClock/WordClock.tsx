@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { glide, play, type Move, type Playback } from "@/live/shared/Stage/choreography";
-import { Stage } from "@/live/shared/Stage/Stage";
-import stageStyles from "@/live/shared/Stage/Stage.module.css";
+import { glide, play, type Move, type Playback } from "@/live/kit/Stage/choreography";
+import { Stage } from "@/live/kit/Stage/Stage";
+import stageStyles from "@/live/kit/Stage/Stage.module.css";
 import { changeWords, dayPart, splitWords, timeSentence, type Word } from "./timeWords";
 import styles from "./WordClock.module.css";
 
@@ -62,6 +62,7 @@ function settle(previous: Clock | null, minute: number, second: number, offset: 
 function everyMinute(tick: () => void): () => void {
   let timer: ReturnType<typeof setTimeout>;
   const schedule = () => {
+    // perf-allow: one update a minute, on the wall clock's minute, so the time is right whenever the card is seen.
     timer = setTimeout(() => {
       tick();
       schedule();
@@ -162,6 +163,7 @@ function useHold(step: () => void) {
       const repeat = () => {
         step();
         wait = Math.max(HOLD_FASTEST_MS, wait * 0.85);
+        // perf-allow: repeats only while a finger or mouse holds the button.
         timer.current = setTimeout(repeat, wait);
       };
       timer.current = setTimeout(repeat, HOLD_DELAY_MS);

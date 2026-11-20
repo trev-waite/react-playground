@@ -1,7 +1,8 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { cascadeDelays, play, prefersReducedMotion } from "@/live/shared/Stage/choreography";
-import { Stage, Words } from "@/live/shared/Stage/Stage";
-import stageStyles from "@/live/shared/Stage/Stage.module.css";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
+import { cascadeDelays, play, prefersReducedMotion } from "@/live/kit/Stage/choreography";
+import { Stage, Words } from "@/live/kit/Stage/Stage";
+import stageStyles from "@/live/kit/Stage/Stage.module.css";
 import { approach, clampCenter, cloneTransform, driftAt, follow, type Point, type Size } from "./lens";
 import styles from "./QuoteLens.module.css";
 
@@ -48,8 +49,6 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   let scale = MAGNIFY;
   let drifting = !reduced;
   let shown = false;
-  let visible = true;
-  let frame = 0;
   let last = 0;
   let driftFrom = 0;
   let touchedAt = 0;
@@ -69,8 +68,8 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     clone.style.transform = cloneTransform(current, radius, scale);
   };
 
-  const tick = (now: number) => {
-    frame = 0;
+  const tick = (now: number): FrameRequest => {
+    if (!shown) return false;
     const seconds = last ? Math.min(0.05, (now - last) / 1000) : 0;
     last = now;
     if (drifting) target = driftAt((now - driftFrom) / 1000, size);
@@ -79,17 +78,25 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     scale = reduced ? strength : approach(scale, strength, seconds, ZOOM_RATE);
     draw();
     const settled = Math.hypot(current.x - target.x, current.y - target.y) < 0.1 && Math.abs(scale - strength) < 0.001;
-    if (!settled || drifting) wake();
-    else last = 0;
+    if (!settled || drifting) return true;
+    last = 0;
+    return false;
   };
 
+  const loop = visibleLoop(page, tick, {
+    onVisibleChange: visible => {
+      if (!visible) last = 0;
+    },
+  });
+
   const wake = () => {
-    if (!frame && visible && shown) frame = requestAnimationFrame(tick);
+    if (shown) loop.wake();
   };
 
   const rest = () => {
     clearTimeout(idleTimer);
     if (reduced) return;
+    // perf-allow: re-arms only while someone holds, hovers over, or focuses the lens.
     idleTimer = setTimeout(() => {
       if (grab || mouseInside || lens.matches(":focus-visible")) return rest();
       drifting = true;
@@ -242,17 +249,6 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   resize.observe(page);
   resize.observe(lens);
 
-  const observer = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    if (visible) wake();
-    else if (frame) {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      last = 0;
-    }
-  });
-  observer.observe(page);
-
   const surface = page.parentElement!;
   surface.addEventListener("pointermove", onHover);
   surface.addEventListener("pointerenter", onMouseEnter);
@@ -280,11 +276,10 @@ function startLens({ page, lens, clone }: LensParts): Lens {
       wake();
     },
     stop: () => {
-      cancelAnimationFrame(frame);
+      loop.stop();
       clearTimeout(idleTimer);
       clearTimeout(settleTimer);
       resize.disconnect();
-      observer.disconnect();
       surface.removeEventListener("pointermove", onHover);
       surface.removeEventListener("pointerenter", onMouseEnter);
       surface.removeEventListener("pointerleave", onMouseLeave);

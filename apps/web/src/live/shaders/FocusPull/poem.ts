@@ -1,4 +1,4 @@
-import { DISPLAY_FONT } from "@/live/shared/Stage/tone";
+import { DISPLAY_FONT } from "@/live/kit/Stage/tone";
 
 /** Gandalf to Frodo in The Fellowship of the Ring. An empty line is a stanza break. */
 export const POEM: readonly string[] = [

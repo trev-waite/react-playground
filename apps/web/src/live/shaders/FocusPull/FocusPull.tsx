@@ -1,10 +1,11 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { effect, sampler } from "vgpu";
 import { createBlurChain, pausableLoop, useGpu, type GpuSession } from "@/gpu";
-import { MOTION, play, prefersReducedMotion } from "@/live/shared/Stage/choreography";
-import { Stage } from "@/live/shared/Stage/Stage";
-import stageStyles from "@/live/shared/Stage/Stage.module.css";
-import { followPointer, watchTone, type PointerPlace } from "@/live/shared/Stage/tone";
+import { MOTION, play, prefersReducedMotion } from "@/live/kit/Stage/choreography";
+import { Stage } from "@/live/kit/Stage/Stage";
+import { visibleLoop } from "@/live/kit/visibleLoop";
+import stageStyles from "@/live/kit/Stage/Stage.module.css";
+import { followPointer, watchTone, type PointerPlace } from "@/live/kit/Stage/tone";
 import { blurLevel, CAMERA, fitPage, idleFocus, MAX_BLUR_LEVEL, pageRowAt, ROWS_PER_LEVEL, type Page } from "./focus";
 import { POEM, rasterPoem } from "./poem";
 import styles from "./FocusPull.module.css";
@@ -246,26 +247,18 @@ function runFallbackRack(page: HTMLElement, rack: Rack): () => void {
     }
     return best;
   });
-  let frame = 0;
-  let visible = true;
   const draw = (now: number) => {
-    frame = 0;
     const { focus, presence, depth } = rack.sample(now);
     lines.forEach((line, index) => {
       const level = String(Math.round(blurLevel(((rows[index] ?? 0) - focus) * depth, presence) * 2));
       if (line.dataset.level !== level) line.dataset.level = level;
     });
-    if (visible) frame = requestAnimationFrame(draw);
+    return true;
   };
-  const observer = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    if (visible && !frame) frame = requestAnimationFrame(draw);
-  });
-  observer.observe(page);
-  frame = requestAnimationFrame(draw);
+  const loop = visibleLoop(page, draw);
+  loop.wake();
   return () => {
-    cancelAnimationFrame(frame);
-    observer.disconnect();
+    loop.stop();
     resize.disconnect();
   };
 }

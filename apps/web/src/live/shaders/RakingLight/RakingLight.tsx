@@ -1,9 +1,10 @@
 import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
 import { effect, sampler, type Frame } from "vgpu";
 import { createBlurChain, createTextMask, maskFits, pausableLoop, useGpu, viewportMaskSize, WGSL_HASH, WGSL_NOISE, type GpuSession } from "@/gpu";
-import { Stage } from "@/live/shared/Stage/Stage";
-import stageStyles from "@/live/shared/Stage/Stage.module.css";
-import { DISPLAY_FONT, watchTone } from "@/live/shared/Stage/tone";
+import { Stage } from "@/live/kit/Stage/Stage";
+import { visibleLoop } from "@/live/kit/visibleLoop";
+import stageStyles from "@/live/kit/Stage/Stage.module.css";
+import { DISPLAY_FONT, watchTone } from "@/live/kit/Stage/tone";
 import { createLamp, type Lamp } from "./lamp";
 import styles from "./RakingLight.module.css";
 
@@ -149,27 +150,19 @@ function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTM
 
 /** Without WebGPU, the same lamp moves a pool of light and the word's shadows in CSS. */
 function runFallbackLamp(stage: HTMLElement, lamp: Lamp): () => void {
-  let frame = 0;
-  let visible = true;
   const draw = (now: number) => {
-    frame = 0;
     const { place, presence } = lamp.sample(now);
     stage.style.setProperty("--lamp-x", `${(place.x * 100).toFixed(2)}%`);
     stage.style.setProperty("--lamp-y", `${(place.y * 100).toFixed(2)}%`);
     stage.style.setProperty("--shadow-x", `${((0.5 - place.x) * 6).toFixed(2)}px`);
     stage.style.setProperty("--shadow-y", `${((0.5 - place.y) * 6).toFixed(2)}px`);
     stage.style.setProperty("--presence", presence.toFixed(3));
-    if (visible) frame = requestAnimationFrame(draw);
+    return true;
   };
-  const observer = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    if (visible && !frame) frame = requestAnimationFrame(draw);
-  });
-  observer.observe(stage);
-  frame = requestAnimationFrame(draw);
+  const loop = visibleLoop(stage, draw);
+  loop.wake();
   return () => {
-    cancelAnimationFrame(frame);
-    observer.disconnect();
+    loop.stop();
   };
 }
 

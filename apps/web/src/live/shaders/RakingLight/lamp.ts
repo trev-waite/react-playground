@@ -1,5 +1,5 @@
-import { MOTION, prefersReducedMotion } from "@/live/shared/Stage/choreography";
-import { followPointer, type PointerPlace } from "@/live/shared/Stage/tone";
+import { MOTION, prefersReducedMotion } from "@/live/kit/Stage/choreography";
+import { followPointer, type PointerPlace } from "@/live/kit/Stage/tone";
 
 /** How quickly the lamp catches the hand, per second. */
 const FOLLOW_RATE = 6;
