@@ -71,11 +71,13 @@ describe("standards lint: Live components", () => {
   });
   test("Live components lay out in their card's box, never the viewport", async () => {
     const violations: string[] = [];
-    const viewport = /(?<![\w-])\d*\.?\d+(?:[dsl]?v[wh]|vmin|vmax)\b|\bposition\s*:\s*["']?fixed\b/g;
+    const viewport =
+      /(?<![\w-])\d*\.?\d+[dsl]?v(?:w|h|i|b|min|max)\b|\bposition\s*[:=]\s*["']?fixed\b|setProperty\(\s*["']position["']\s*,\s*["']fixed/g;
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx,css}")) {
       const comments = file.endsWith(".css") ? /\/\*[\s\S]*?\*\//g : /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
       const code = text.replace(comments, comment => comment.replace(/[^\n]/g, " "));
       for (const match of code.matchAll(viewport)) {
+        if (allowedNear(text, match.index, "lint-allow:")) continue;
         violations.push(
           `${file}:${lineOf(code, match.index)} uses "${match[0]}". A card lays its preview out in the card's box, ` +
             "as a grid tile, in flight, and as a page: size from it with %, or cqw/cqh under `container-type: size`.",

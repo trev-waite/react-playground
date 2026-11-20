@@ -17,6 +17,7 @@ export type {
 export {
   SHELLS_FOLDER,
   EXPERIMENTAL_FOLDER,
+  KIT_FOLDER,
   RESERVED_LIVE_FOLDERS,
   normalizeFolder,
   toComponentName,

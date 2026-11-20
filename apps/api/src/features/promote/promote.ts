@@ -25,12 +25,27 @@ export function buildComponentModule(
 /**
  * A new card starts on paper on the light site and blue on the dark one, set
  * for a near-black component. Its swatches are then picked against the
- * component's real colors (the new-component skill).
+ * component's real colors (the new-component skill). In a family folder the
+ * family's card owns the surface, so a member declares only its title.
  */
 export function buildPreviewModule(
   componentName: string,
   title: string,
+  family = false,
 ): string {
+  if (family) {
+    return `import type { FamilyMemberMeta } from "@/lib/types";
+import { ${componentName} } from "./${componentName}";
+
+export const meta: FamilyMemberMeta = {
+  title: ${JSON.stringify(title)},
+};
+
+export default function ${componentName}Preview() {
+  return <${componentName} />;
+}
+`;
+  }
   return `import type { CardMeta } from "@/lib/types";
 import { ${componentName} } from "./${componentName}";
 
@@ -48,7 +63,7 @@ export default function ${componentName}Preview() {
 `;
 }
 
-export function buildLiveArtifact(document: IdeaProject, slug: string): {
+export function buildLiveArtifact(document: IdeaProject, slug: string, family = false): {
   component: string;
   preview: string;
 } {
@@ -58,6 +73,6 @@ export function buildLiveArtifact(document: IdeaProject, slug: string): {
       document.draft.portableSourceTemplate,
       slug,
     ),
-    preview: buildPreviewModule(document.componentName, document.name),
+    preview: buildPreviewModule(document.componentName, document.name, family),
   };
 }

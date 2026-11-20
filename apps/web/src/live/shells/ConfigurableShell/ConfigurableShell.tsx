@@ -80,6 +80,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
     const el = document.createElement("textarea");
     el.value = text;
     el.setAttribute("readonly", "");
+    // lint-allow: an off-screen helper for the copy fallback, removed in the same call.
     el.style.position = "fixed";
     el.style.left = "-9999px";
     document.body.append(el);

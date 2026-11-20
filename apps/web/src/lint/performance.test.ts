@@ -206,10 +206,10 @@ describe("performance lint: Live components", () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx}")) {
       if (file.startsWith("live/kit/")) continue;
-      for (const match of blankComments(text).matchAll(/\b(requestAnimationFrame|setInterval)\(/g)) {
+      for (const match of blankComments(text).matchAll(/\b(requestAnimationFrame|setInterval)\b/g)) {
         if (allowedNear(text, match.index)) continue;
         violations.push(
-          `${file}:${lineOf(text, match.index)} runs ${match[1]} itself. Run frames on visibleLoop from ` +
+          `${file}:${lineOf(text, match.index)} reaches for ${match[1]} itself. Run frames on visibleLoop from ` +
             "@/live/kit/visibleLoop (a frame can return milliseconds to wait), or say why a short, input-driven " +
             "animation needs its own with `perf-allow: <reason>`.",
         );

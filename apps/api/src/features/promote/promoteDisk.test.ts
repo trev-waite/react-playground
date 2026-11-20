@@ -147,5 +147,19 @@ describe("publishIdeaToDisk", () => {
     expect(
       publishIdeaToDisk(playground, idea, "shells"),
     ).rejects.toMatchObject({ code: "invalid_request" });
+    expect(
+      publishIdeaToDisk(playground, idea, "kit"),
+    ).rejects.toMatchObject({ code: "invalid_request" });
+  });
+
+  test("a component published into a family folder is a member of the family's card", async () => {
+    const playground = await root();
+    await mkdir(path.join(playground, "controls"), { recursive: true });
+    await writeFile(path.join(playground, "controls", "family.ts"), "export const meta = {};\n");
+    await publishIdeaToDisk(playground, idea, "controls");
+    const preview = await readFile(path.join(playground, "controls", "MorphBlob", "preview.tsx"), "utf8");
+    expect(preview).toContain("export const meta: FamilyMemberMeta = {");
+    expect(preview).not.toContain("surface");
+    expect(preview).toContain("return <MorphBlob />;");
   });
 });
