@@ -145,7 +145,6 @@ try {
   await send("touchEnd");
 
   await page.setViewportSize(PHONE.viewport);
-  await page.clock.install();
   const tallCard = await openPage(page, "Letterpress");
   const stage = tallCard.locator("[data-letterpress]");
   const rail = tallCard.getByRole("slider");
@@ -187,25 +186,6 @@ try {
   }
   await send("touchEnd");
   await allLanded();
-  const teeStart = await teeCenter();
-  await send("touchStart", teeStart);
-  await tee.and(tallLifted).waitFor({ timeout: SETTLE_TIMEOUT_MS });
-  await send("touchMove", { x: teeStart.x + 120, y: teeStart.y + 60 });
-  await page.clock.pauseAt(Date.now() + 1000);
-  try {
-    await send("touchEnd");
-    await page.clock.runFor(32);
-    const contact = await teeCenter();
-    await send("touchStart", contact);
-    await page.clock.runFor(200);
-    const regrabbed = await teeCenter();
-    if (!await tee.and(tallLifted).count() || Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
-      failures.push("A touch re-grab should lift the returning letter under the original contact.");
-    }
-    await send("touchEnd");
-  } finally {
-    await page.clock.resume();
-  }
 
   await openPage(page, "Letterpress");
   const bounds = await stage.boundingBox();
@@ -254,6 +234,29 @@ try {
   const duringFresh = await swipe(525);
   if (duringFresh === deckStart) failures.push("The first fresh swipe after a split touch release should move to the next card.");
   else await page.waitForURL("**/inputs/StretchSlider", { timeout: SETTLE_TIMEOUT_MS });
+
+  await page.clock.install();
+  await openPage(page, "Letterpress");
+  await page.clock.pauseAt(Date.now() + 1000);
+  await rail.press("End");
+  await page.clock.runFor(1000);
+  if (await tee.getAttribute("data-home") === null) throw new Error("The re-grab check needs the assembled Letterpress title.");
+  const teeStart = await teeCenter();
+  await send("touchStart", teeStart);
+  await page.clock.runFor(200);
+  if (!await tee.and(tallLifted).count()) throw new Error("The re-grab check should start by lifting T from its slot.");
+  await send("touchMove", { x: teeStart.x + 120, y: teeStart.y + 60 });
+  await page.clock.runFor(16);
+  await send("touchEnd");
+  await page.clock.runFor(32);
+  const contact = await teeCenter();
+  await send("touchStart", contact);
+  await page.clock.runFor(200);
+  const regrabbed = await teeCenter();
+  if (!await tee.and(tallLifted).count() || Math.hypot(regrabbed.x - contact.x, regrabbed.y - contact.y) > 18) {
+    failures.push("A touch re-grab should lift the returning letter under the original contact.");
+  }
+  await send("touchEnd");
 } finally {
   await browser.close();
   await server.close();
