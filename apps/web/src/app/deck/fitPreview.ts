@@ -1,6 +1,6 @@
 import { frame } from "../motion/frameLoop";
 import type { MotionValue } from "../motion/motionValue";
-import { FOOTER_FADE_FROM, type Size } from "./deckLayout";
+import type { Size } from "./deckLayout";
 
 /** Previews lay out in at least this square, then scale down to fit a small tile. */
 export const PREVIEW_MIN_SIZE = 320;
@@ -21,9 +21,9 @@ export function familyLayoutWidth(tileArea: Size, pageAreaWidth: number): number
 /** The size a preview lays out at, and the scale that draws that layout in its area. */
 export type FitLayout = Size & { scale: number };
 
-/** Pages use their available space so interactive controls retain their size. */
-export function restLayout(area: Size, end?: End): FitLayout {
-  const scale = end === "page" ? 1 : previewScale(area.width, area.height);
+/** A preview at rest: laid out at the area, or at least `PREVIEW_MIN_SIZE`, and scaled down to fit. */
+export function restLayout(area: Size): FitLayout {
+  const scale = previewScale(area.width, area.height);
   return { width: area.width / scale, height: area.height / scale, scale };
 }
 
@@ -135,8 +135,8 @@ function near(a: Size, b: Size, within = 0.5): boolean {
 const HAIR = 0.05;
 
 /** A landing layout a hair off the measured rest layout stays, rather than be laid out again. */
-function settledLayout(fit: Fit, area: Size, end?: End): FitLayout {
-  const rest = restLayout(area, end);
+function settledLayout(fit: Fit, area: Size): FitLayout {
+  const rest = restLayout(area);
   return near(rest, fit.layout, HAIR) ? { width: fit.layout.width, height: fit.layout.height, scale: rest.scale } : rest;
 }
 
@@ -162,20 +162,12 @@ type Progress = number | End | undefined;
  * here it goes in while the card still moves enough to carry it.
  */
 const LANDS_ON_PAGE_FROM = 0.98;
-const LANDS_ON_COMPACT_PAGE_FROM = 0.75;
 
 function progressOf(fit: Fit): Progress {
-  const { flight } = fit;
-  if (!flight) return undefined;
-  const at = flight.progress.get();
-  if (at <= 0) return "tile";
-  if (at >= LANDS_ON_PAGE_FROM) return "page";
-  if (at >= LANDS_ON_COMPACT_PAGE_FROM && flight.ends().page.height <= PREVIEW_MIN_SIZE) return "page";
-  if (at >= FOOTER_FADE_FROM) {
-    const pad = padAt(fit, flight, "page", { width: fit.width, height: fit.height });
-    if (inset(flight.ends().page, pad).height < PREVIEW_MIN_SIZE) return "page";
-  }
-  return at;
+  const at = fit.flight?.progress.get();
+  if (at === undefined) return undefined;
+  // Sprung past an end, or all but on its page, the morph has landed there.
+  return at <= 0 ? "tile" : at >= LANDS_ON_PAGE_FROM ? "page" : at;
 }
 
 function moving(fit: Fit): boolean {
@@ -184,7 +176,7 @@ function moving(fit: Fit): boolean {
 }
 
 function restAt(flight: FitFlight, rest: Rest, end: End): FitLayout {
-  return spilled(restLayout(inset(flight.ends()[end], rest.pad), end), rest.spill);
+  return spilled(restLayout(inset(flight.ends()[end], rest.pad)), rest.spill);
 }
 
 /**
@@ -210,7 +202,7 @@ const UNDER_A_LINE = 8;
 function landingLayout(fit: Fit, flight: FitFlight, end: End, area: Size): FitLayout {
   const pad = padAt(fit, flight, end, area);
   const rest = fit.rest[end];
-  const landing = rest && near(rest.pad, pad, UNDER_A_LINE) ? restAt(flight, rest, end) : restLayout(inset(flight.ends()[end], pad), end);
+  const landing = rest && near(rest.pad, pad, UNDER_A_LINE) ? restAt(flight, rest, end) : restLayout(inset(flight.ends()[end], pad));
   return near(landing, fit.layout) ? fit.layout : landing;
 }
 
@@ -222,10 +214,9 @@ function layoutFor(fit: Fit, progress: Progress): FitLayout {
   const arrived = landing !== null && landing !== fit.landing;
   fit.landing = landing;
   if (flight && landing) return heldLayout(arrived ? landingLayout(fit, flight, landing, area) : fit.layout, area);
-  if (!flight || typeof progress !== "number") return settledLayout(fit, area, typeof progress === "string" ? progress : undefined);
-  if (!rest.tile || !rest.page) {
-    return flightLayout(area, restLayout(area, "tile"), restLayout(area, "page"), progress);
-  }
+  if (!flight || typeof progress !== "number") return settledLayout(fit, area);
+  // Nothing to blend toward until the preview has rested at both ends.
+  if (!rest.tile || !rest.page) return restLayout(area);
   const tile = restAt(flight, rest.tile, "tile");
   const page = restAt(flight, rest.page, "page");
   return flightLayout(area, tile, page, fit.stepped ? stopAt(flightStops(tile, page), progress) : progress);

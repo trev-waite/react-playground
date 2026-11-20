@@ -120,7 +120,12 @@ export function DeckCard({
       data-raised={raised || undefined}
       data-current={current || undefined}
       aria-label={card.title}
-      style={{ ...cardStyle, "--card-background": surface.background, "--page-height": px(page.height) } as CSSProperties}
+      style={{
+        ...cardStyle,
+        "--card-background": surface.background,
+        "--page-width": px(page.width),
+        "--page-height": px(page.height),
+      } as CSSProperties}
     >
       <div ref={previewRef} className={styles.preview} style={previewStyle} inert={!pageInteractive}>
         <FitStage areaRef={areaRef} fitRef={fitRef}>

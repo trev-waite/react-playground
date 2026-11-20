@@ -13,6 +13,7 @@ type Drag = {
   startY: number;
   horizontal: AxisDrag;
   vertical: AxisDrag;
+  radiansPerPixel: number;
   moved: boolean;
   onHat: boolean;
   axis: ReturnType<typeof dragAxis>;
@@ -62,7 +63,6 @@ function startHologram(
   let dirty = true;
   let width = 0;
   let height = 0;
-  let radiansPerPixel = 0.01;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   let reducedMotion = reduced.matches;
 
@@ -120,36 +120,38 @@ function startHologram(
 
   function measure() {
     if (!projection || !width || !height || !visible || document.hidden) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5, 800 / Math.max(width, height));
-    const pixelWidth = Math.max(1, Math.round(width * dpr));
-    const pixelHeight = Math.max(1, Math.round(height * dpr));
+    const { width: displayWidth, height: displayHeight } = canvas.getBoundingClientRect();
+    if (!displayWidth || !displayHeight) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5, 800 / Math.max(displayWidth, displayHeight));
+    const pixelWidth = Math.max(1, Math.round(displayWidth * dpr));
+    const pixelHeight = Math.max(1, Math.round(displayHeight * dpr));
     if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
       canvas.width = pixelWidth;
       canvas.height = pixelHeight;
     }
-    radiansPerPixel = orbitRadiansPerPixel(width, height);
     projection.resize(pixelWidth, pixelHeight, dpr);
     draw();
     wake();
   }
 
-  function hitsHat(x: number, y: number) {
+  function hitsHat(x: number, y: number, box = viewport.getBoundingClientRect()) {
     if (!projection) return false;
-    const box = viewport.getBoundingClientRect();
     return projection.hits((x - box.left) / box.width - 0.5, 0.5 - (y - box.top) / box.height, yaw.angle, pitch.angle);
   }
 
   function down(event: PointerEvent) {
     if (!projection || drag || !event.isPrimary || event.button !== 0) return;
     const touch = event.pointerType === "touch";
+    const box = viewport.getBoundingClientRect();
     drag = {
       id: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       horizontal: startAxis(event.clientX, event.timeStamp),
       vertical: startAxis(event.clientY, event.timeStamp),
+      radiansPerPixel: orbitRadiansPerPixel(box.width, box.height),
       moved: false,
-      onHat: touch && hitsHat(event.clientX, event.clientY),
+      onHat: touch && hitsHat(event.clientX, event.clientY, box),
       axis: touch ? null : "orbit",
     };
     for (const rotation of rotations) {
@@ -169,6 +171,7 @@ function startHologram(
     position: number,
     at: number,
     orbit: boolean,
+    radiansPerPixel: number,
     coalesced: PointerSample | undefined,
   ) {
     const sample = { x: position, at };
@@ -191,9 +194,9 @@ function startHologram(
     drag.moved ||= passedSlop(event, drag);
     const coalesced = event.getCoalescedEvents?.().at(-2);
     const orbit = drag.axis === "orbit";
-    const turned = applyDrag(drag.horizontal, yaw, event.clientX, event.timeStamp, orbit,
+    const turned = applyDrag(drag.horizontal, yaw, event.clientX, event.timeStamp, orbit, drag.radiansPerPixel,
       coalesced && { x: coalesced.clientX, at: coalesced.timeStamp });
-    const tilted = applyDrag(drag.vertical, pitch, event.clientY, event.timeStamp, orbit,
+    const tilted = applyDrag(drag.vertical, pitch, event.clientY, event.timeStamp, orbit, drag.radiansPerPixel,
       coalesced && { x: coalesced.clientY, at: coalesced.timeStamp });
     if (!turned && !tilted) return;
     viewport.dataset.dragging = "";

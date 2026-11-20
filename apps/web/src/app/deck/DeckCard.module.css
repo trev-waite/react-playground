@@ -147,7 +147,7 @@
   align-items: center;
   gap: var(--space-2);
   width: max-content;
-  max-width: min(560px, calc(100% - var(--space-6)));
+  max-width: min(560px, calc(var(--page-width) - var(--space-6)));
   min-height: 60px;
   max-height: max(62px, calc(var(--page-height) - var(--preview-top) - var(--footer-inset) - var(--footer-gap) - var(--safe-top) - var(--safe-bottom) - var(--preview-min-height)));
   padding: clamp(3px, (100svh - 280px) / 8 + 3px, var(--space-1)) var(--space-1);
@@ -315,7 +315,7 @@
 /* Phones give the caption the width: the footer spans the card and the buttons keep only their icons. */
 @media (max-width: 719px) {
   .footer {
-    width: calc(100% - var(--space-4));
+    width: calc(var(--page-width) - var(--space-4));
     max-width: none;
   }
 

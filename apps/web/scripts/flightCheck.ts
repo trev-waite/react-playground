@@ -127,6 +127,13 @@ try {
   await atRest(landscape, "grid");
   await roundTrip(landscape, "Gandalf’s Hat", " on a landscape phone");
 
+  const shortLandscape = await (await browser.newContext({ ...PHONE, viewport: { width: 568, height: 320 } })).newPage();
+  await shortLandscape.addInitScript(installFlightRecorder);
+  await shortLandscape.goto(url);
+  await atRest(shortLandscape, "grid");
+  await roundTrip(shortLandscape, "Profile Button", " on a short landscape phone");
+  await roundTrip(shortLandscape, "Profile Button", " on a short landscape phone, reopened");
+
   const compact = await (await browser.newContext({ ...PHONE, viewport: { width: 320, height: 280 } })).newPage();
   await compact.addInitScript(installFlightRecorder);
   await compact.addInitScript(() => document.addEventListener("DOMContentLoaded", () => {
@@ -146,5 +153,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `${CARDS.length + AFTER_RESIZE.length} cards on a desktop and two on phones, including at 200% text, fly to their pages and back without a jump, a late layout, or a layout shift for the cards around them, and a flight turned back as it lands leaves nothing hidden. In all, with the flying cards' own motion, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
+  `Desktop, portrait phone, short landscape, and 200% text flights land without a jump, a late layout, or a layout shift for nearby cards. Reversing during landing leaves nothing hidden. Across all flights, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
 );
