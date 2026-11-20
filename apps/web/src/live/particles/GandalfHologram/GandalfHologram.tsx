@@ -4,6 +4,8 @@ import { DROP_SECONDS, makeProjection, SETTLED_SECONDS } from "./projection";
 import styles from "./GandalfHologram.module.css";
 import still from "./still.module.css";
 
+const PAINT_SIZE_SETTLE_MS = 50;
+
 type Rotation = { angle: number; goal: number; velocity: number };
 type AxisDrag = { previous: PointerSample; applied: number; flick: Flick };
 
@@ -59,6 +61,8 @@ function startHologram(
   let painted = false;
   let dropAt: number | null = null;
   let dropTimer: number | undefined;
+  let sizeTimer: number | undefined;
+  let drawingRatio = 0;
   let visible = false;
   let dirty = true;
   let width = 0;
@@ -125,10 +129,16 @@ function startHologram(
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5, 800 / Math.max(displayWidth, displayHeight));
     const pixelWidth = Math.max(1, Math.round(displayWidth * dpr));
     const pixelHeight = Math.max(1, Math.round(displayHeight * dpr));
-    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    const resized = canvas.width !== pixelWidth || canvas.height !== pixelHeight;
+    if (!resized && drawingRatio === dpr && painted) {
+      wake();
+      return;
+    }
+    if (resized) {
       canvas.width = pixelWidth;
       canvas.height = pixelHeight;
     }
+    drawingRatio = dpr;
     projection.resize(pixelWidth, pixelHeight, dpr);
     draw();
     wake();
@@ -159,10 +169,7 @@ function startHologram(
       rotation.velocity = 0;
     }
     viewport.setPointerCapture(event.pointerId);
-    if (!touch) {
-      event.preventDefault();
-      viewport.dataset.dragging = "";
-    }
+    if (!touch) viewport.dataset.dragging = "";
   }
 
   function applyDrag(
@@ -324,6 +331,12 @@ function startHologram(
     else measure();
   }
 
+  function measureAfterSettling() {
+    if (!visible || document.hidden) return;
+    window.clearTimeout(sizeTimer);
+    sizeTimer = window.setTimeout(measure, PAINT_SIZE_SETTLE_MS);
+  }
+
   const resize = new ResizeObserver(([entry]) => {
     if (!entry) return;
     width = entry.contentRect.width;
@@ -335,6 +348,10 @@ function startHologram(
     if (visible) measure();
     else stop();
   });
+  const placement = new MutationObserver(measureAfterSettling);
+  for (let parent = canvas.parentElement; parent; parent = parent.parentElement) {
+    placement.observe(parent, { attributes: true, attributeFilter: ["class", "style"] });
+  }
   resize.observe(canvas);
   intersection.observe(viewport);
   canvas.addEventListener("webglcontextlost", contextLost);
@@ -349,13 +366,16 @@ function startHologram(
   viewport.addEventListener("click", activate);
   reduced.addEventListener("change", changeMotion);
   document.addEventListener("visibilitychange", changeVisibility);
+  window.addEventListener("resize", measureAfterSettling);
 
   return {
     dispose() {
       stop();
       window.clearTimeout(dropTimer);
+      window.clearTimeout(sizeTimer);
       resize.disconnect();
       intersection.disconnect();
+      placement.disconnect();
       canvas.removeEventListener("webglcontextlost", contextLost);
       canvas.removeEventListener("webglcontextrestored", contextRestored);
       viewport.removeEventListener("pointerdown", down);
@@ -368,6 +388,7 @@ function startHologram(
       viewport.removeEventListener("click", activate);
       reduced.removeEventListener("change", changeMotion);
       document.removeEventListener("visibilitychange", changeVisibility);
+      window.removeEventListener("resize", measureAfterSettling);
       cancelDrag();
       projection?.dispose();
       delete root.dataset.projecting;
