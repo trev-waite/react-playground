@@ -235,7 +235,9 @@ async function checkLargeText() {
       const rootFont = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
       if (rootFont !== "32px") failures.push(`The large-text check ran at ${rootFont} instead of 32px.`);
       await checkHologramStage(card, width, height);
-      const caption = card.getByRole("region", { name: "Gandalf’s Hat" });
+      const title = (await card.getAttribute("aria-label")) ?? "";
+      const caption = card.getByRole("region", { name: title, exact: true });
+      if (await caption.count() !== 1) failures.push(`At ${width}×${height} the hat's page should show one caption named for its card, ${title}.`);
       const thumb = card.locator("[data-caption-scroll] > span");
       const thumbBefore = await thumb.count() ? await thumb.boundingBox() : null;
       const route = page.url();
@@ -363,7 +365,7 @@ try {
   const scrubber = letterpress.getByRole("slider", { name: "Scroll to assemble" });
   await scrubber.focus();
   await page.keyboard.press("End");
-  await page.waitForFunction(() => !document.querySelector("[data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
+  await page.waitForFunction(() => !document.querySelector("article[data-deck-card='text/Letterpress'] [data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
   const letter = await letterpress.getByRole("button", { name: "Letter k", exact: true }).boundingBox();
   if (!letter) throw new Error("Letterpress should show the letter k.");
   await send("touchStart", { x: letter.x + letter.width / 2 - 6, y: letter.y + letter.height / 2 });
@@ -377,7 +379,7 @@ try {
   const stage = tallCard.locator("[data-letterpress]");
   const rail = tallCard.getByRole("slider");
   const tee = tallCard.getByRole("button", { name: "Letter T", exact: true });
-  const allLanded = () => page.waitForFunction(() => !document.querySelector("[data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
+  const allLanded = () => page.waitForFunction(() => !document.querySelector("article[data-deck-card='text/Letterpress'] [data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
   const teeCenter = async () => {
     const box = await tee.boundingBox();
     if (!box) throw new Error("Letterpress should show the letter T.");
@@ -443,7 +445,7 @@ try {
   await send("touchStart", { x: playBox.x + playBox.width / 2, y: playBox.y + playBox.height / 2 });
   await send("touchEnd");
   const playbackProgress = async () => Number(await rail.getAttribute("aria-valuenow"));
-  await page.waitForFunction(() => Number(document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 35);
+  await page.waitForFunction(() => Number(document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 35);
   const beforeManualProgress = await playbackProgress();
   const beforeManualSwipe = await scrollTop();
   const duringManualSwipe = await swipe(90);

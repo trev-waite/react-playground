@@ -477,7 +477,7 @@ function declaredTypeOf(checker: ts.TypeChecker, expression: ts.Expression, dept
       return from ? memberType(checker, from, bindingKey(declaration)) : undefined;
     }
     if (!declaration || !(ts.isVariableDeclaration(declaration) || ts.isParameter(declaration) || ts.isPropertyDeclaration(declaration))) return undefined;
-    if (!declaration.initializer) return declaration.type;
+    if (!declaration.initializer || isNullish(declaration.initializer)) return declaration.type;
     const value = unwrap(declaration.initializer);
     return ts.isPropertyAccessExpression(value) || ts.isIdentifier(value) ? declaredTypeOf(checker, value, depth + 1) : undefined;
   }

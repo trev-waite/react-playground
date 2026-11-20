@@ -13,7 +13,7 @@ type PreviewDetail = { stage: string; targets: string[] };
 
 /** `shift` leaves out the flying card's own, which depends on how fast the runner draws; `shiftInAll` does not. */
 export type Flight = { frames: Frame[]; shift: number; shiftInAll: number };
-export type FlightRecorder = { record: (title: string, detail?: PreviewDetail) => void; stop: () => Flight };
+export type FlightRecorder = { record: (slug: string, detail?: PreviewDetail) => void; stop: () => Flight };
 
 /**
  * Runs in the page, handed over as source, so it stands alone. Each recording
@@ -32,16 +32,16 @@ export function installFlightRecorder() {
 
   let current: { since: number; card: Element; frames: Frame[]; end: () => void } | null = null;
 
-  const record = (title: string, detail?: PreviewDetail) => {
+  const record = (slug: string, detail?: PreviewDetail) => {
     current?.end();
-    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(each => each.getAttribute("data-deck-card") === title);
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(each => each.getAttribute("data-deck-card") === slug);
     const fit = card?.querySelector<HTMLElement>("[data-deck-fit]");
     const scroller = document.querySelector("[data-layout]");
-    if (!card || !fit || !scroller) throw new Error(`No card called ${title} to record.`);
+    if (!card || !fit || !scroller) throw new Error(`No deck card with the slug ${slug} to record.`);
     const watched = Array.from(fit.querySelectorAll("button, input, canvas, svg, a, [role]")).slice(0, 8);
     const stage = detail && fit.querySelector(detail.stage);
     const targets = detail?.targets.map(selector => stage && stage.querySelector(selector));
-    if (detail && (!stage || targets?.some(target => !target))) throw new Error(`Preview details for ${title} are missing.`);
+    if (detail && (!stage || targets?.some(target => !target))) throw new Error(`Preview details for ${slug} are missing.`);
     const frames: Frame[] = [];
     let last = card.getBoundingClientRect();
     let active = true;
