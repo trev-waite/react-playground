@@ -12,13 +12,22 @@ export type VisibleLoop = {
   readonly visible: boolean;
   /** Queues a frame, unless one is queued already or the target is off screen. */
   wake(): void;
-  /** Drops a queued frame or wait; the loop sleeps until the next `wake()`. */
+  /**
+   * Drops a queued frame or wait, and the loop sleeps until the next `wake()`: not even the frame that
+   * calls it, or the target coming back on screen, starts it again.
+   */
   sleep(): void;
   /** Stops for good and lets go of the target. */
   stop(): void;
 };
 
 export type VisibleLoopOptions = {
+  /**
+   * Whether the target counts as on screen until the browser first reports where it is. On (the
+   * default), a component can draw its first frame as it mounts. Off, nothing runs until the target is
+   * seen, and that first sighting calls `onVisibleChange(true)`.
+   */
+  initiallyVisible?: boolean;
   /**
    * Called as the target leaves the screen, after the loop has paused, and as it comes back, before it
    * wakes. A target that starts on screen never left, so this is not called for it: start work with
@@ -30,13 +39,13 @@ export type VisibleLoopOptions = {
 /**
  * The frame loop every animated Live component runs on. The deck keeps every card mounted, so a loop
  * runs only while its target is on screen: leaving it drops any queued frame or wait, and coming back
- * wakes it. Until the browser first reports where the target is, it counts as on screen, so a component
- * can draw its first frame as it mounts. A frame that has nothing left to move returns nothing, so a
+ * wakes it, unless it was put to sleep. A frame that has nothing left to move returns nothing, so a
  * still component costs nothing until something wakes it.
  */
 export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleLoopOptions = {}): VisibleLoop {
-  let visible = true;
+  let visible = options.initiallyVisible ?? true;
   let stopped = false;
+  let slept = false;
   let queued = 0;
   let wait: ReturnType<typeof setTimeout> | undefined;
   let last = 0;
@@ -53,20 +62,20 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
     } finally {
       running = false;
     }
-    if (stopped || !visible || queued || wait !== undefined) return;
+    if (stopped || slept || !visible || queued || wait !== undefined) return;
     if (next === true) queued = requestAnimationFrame(run);
-    else if (typeof next === "number") wait = setTimeout(wake, Math.max(0, next));
+    else if (typeof next === "number") wait = setTimeout(resume, Math.max(0, next));
   };
 
-  function wake() {
+  function resume() {
     clearTimeout(wait);
     wait = undefined;
-    if (stopped || !visible || queued) return;
+    if (stopped || slept || !visible || queued) return;
     if (!running) last = performance.now();
     queued = requestAnimationFrame(run);
   }
 
-  function sleep() {
+  function pause() {
     cancelAnimationFrame(queued);
     queued = 0;
     clearTimeout(wait);
@@ -74,13 +83,14 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
   }
 
   const observer = new IntersectionObserver(entries => {
+    if (stopped) return;
     const next = entries[entries.length - 1]?.isIntersecting ?? true;
     if (next !== visible) {
       visible = next;
-      if (!visible) sleep();
+      if (!visible) pause();
       options.onVisibleChange?.(visible);
     }
-    if (visible) wake();
+    if (visible) resume();
   });
   observer.observe(target);
 
@@ -88,11 +98,17 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
     get visible() {
       return visible;
     },
-    wake,
-    sleep,
+    wake() {
+      slept = false;
+      resume();
+    },
+    sleep() {
+      slept = true;
+      pause();
+    },
     stop() {
       stopped = true;
-      sleep();
+      pause();
       observer.disconnect();
     },
   };

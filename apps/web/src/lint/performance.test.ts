@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  ALLOW,
   allowedNear,
   cssRules,
   declarations,
@@ -12,6 +11,7 @@ import {
   stripCssComments,
   transitionedProperties,
 } from "./source";
+import { frameBodies } from "./syntax";
 
 /**
  * Performance lint. Each rule guards a fix that took a transition from
@@ -39,100 +39,10 @@ function lastCompound(selector: string): string {
   return selector.slice(start);
 }
 
-const IDENTIFIER = "[A-Za-z_$][\\w$]*";
-const PARAMS_AND_TYPE = "(?:\\([^)]*\\)|\\w+)(?:\\s*:\\s*[\\w<>|\\s]+?)?\\s*=>\\s*\\{";
-
-/** The `{ … }` block that opens at or after `from`. */
-function blockFrom(text: string, from: number): { body: string; start: number } | null {
-  const open = text.indexOf("{", from);
-  if (open < 0) return null;
-  let depth = 0;
-  for (let i = open; i < text.length; i++) {
-    if (text[i] === "{") depth++;
-    else if (text[i] === "}" && --depth === 0) return { body: text.slice(open, i + 1), start: open };
-  }
-  return null;
-}
-
-const KEYWORDS = new Set(["if", "for", "while", "switch", "catch", "return", "function", "typeof", "new", "super"]);
-
-/** The body of the function, arrow, or method named `name` in `text`: a function, a const, a class field, or a method. */
-function functionBody(text: string, name: string): { body: string; start: number } | null {
-  if (KEYWORDS.has(name)) return null;
-  const declaration = new RegExp(
-    `(?:(?:const|let)\\s+|(?:private|public|protected|readonly)\\s+(?:readonly\\s+)?)${name}\\s*=\\s*${PARAMS_AND_TYPE}|function\\s+${name}\\s*\\(` +
-      `|^[ \\t]*(?:(?:private|public|protected|static|async|override)\\s+)*${name}\\s*\\([^)]*\\)\\s*(?::\\s*[^{=;]+)?\\{`,
-    "m",
-  ).exec(text);
-  return declaration ? blockFrom(text, declaration.index + declaration[0].length - 1) : null;
-}
-
-/** Local functions and `this.` methods a block calls, except calls marked `perf-allow: <reason>` on their line or the one above. */
-function callees(source: string, { body, start }: { body: string; start: number }): string[] {
-  return [...body.matchAll(new RegExp(`(?:(?<=\\bthis\\.)|(?<![.\\w$]))(${IDENTIFIER})\\(`, "g"))]
-    .filter(call => !allowedNear(source, start + call.index, ALLOW, 1))
-    .map(call => call[1]!);
-}
-
-/** The arguments of the call whose `(` is at `open`, with their offsets, split at top-level commas. */
-function callArguments(text: string, open: number): { text: string; start: number }[] {
-  const args: { text: string; start: number }[] = [];
-  let depth = 0;
-  let start = open + 1;
-  for (let i = open; i < text.length; i++) {
-    const ch = text[i]!;
-    if (ch === '"' || ch === "'" || ch === "`") {
-      const close = text.indexOf(ch, i + 1);
-      i = close < 0 ? text.length : close;
-    } else if ("([{".includes(ch)) depth++;
-    else if (")]}".includes(ch) && --depth === 0) {
-      args.push({ text: text.slice(start, i), start });
-      return args;
-    } else if (ch === "," && depth === 1) {
-      args.push({ text: text.slice(start, i), start });
-      start = i + 1;
-    }
-  }
-  return args;
-}
-
-/** The body a frame callback argument runs: a named function or method, a block, or an arrow's expression. */
-function callbackBody(text: string, arg: { text: string; start: number }): { body: string; start: number } | null {
-  const trimmed = arg.text.trim();
-  const offset = arg.start + arg.text.indexOf(trimmed);
-  const named = new RegExp(`^(?:this\\.)?(${IDENTIFIER})(?:\\.bind\\([^)]*\\))?$`).exec(trimmed);
-  if (named) return functionBody(text, named[1]!);
-  const arrow = /^(?:async\s+)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)(?:\s*:\s*[\w<>|\s]+?)?\s*=>\s*/.exec(trimmed);
-  if (arrow) {
-    const rest = offset + arrow[0].length;
-    return text[rest] === "{" ? blockFrom(text, rest) : { body: trimmed.slice(arrow[0].length), start: rest };
-  }
-  if (/^(?:async\s+)?function\b/.test(trimmed)) return blockFrom(text, offset + trimmed.indexOf(")") + 1);
-  return null;
-}
-
-/**
- * The code that runs every frame, comments blanked: the callbacks handed to requestAnimationFrame or
- * visibleLoop, in any form, and the local functions and methods they call, two calls deep. A call
- * marked `perf-allow: <reason>` (one that runs only when something changed, or at most every so
- * often) is not followed.
- */
-function frameCallbacks(source: string): { body: string; start: number }[] {
-  const text = blankComments(source);
-  const blocks = new Map<number, { body: string; start: number }>();
-  for (const call of text.matchAll(/\b(requestAnimationFrame|visibleLoop)\(/g)) {
-    const args = callArguments(text, call.index! + call[0].length - 1);
-    const callback = args[call[1] === "visibleLoop" ? 1 : 0];
-    const block = callback && callbackBody(text, callback);
-    if (block) blocks.set(block.start, block);
-  }
-  let frontier = [...blocks.values()];
-  for (let hop = 0; hop < 2; hop++) {
-    const names = new Set(frontier.flatMap(block => callees(source, block)));
-    frontier = [...names].flatMap(name => functionBody(text, name) ?? []).filter(block => !blocks.has(block.start));
-    for (const block of frontier) blocks.set(block.start, block);
-  }
-  return [...blocks.values()];
+/** The code that runs every frame, comments blanked, with offsets into the file. */
+function frameCallbacks(file: string, text: string): { body: string; start: number }[] {
+  const code = blankComments(text);
+  return frameBodies(file, text).map(({ start, end }) => ({ body: code.slice(start, end), start }));
 }
 
 /** `// …` and `/* … *\/` comments blanked to spaces, so offsets still line up. */
@@ -231,7 +141,7 @@ describe("performance lint: code", () => {
           match => match[1] ?? match[2]!,
         ),
       );
-      for (const { body, start } of frameCallbacks(text)) {
+      for (const { body, start } of frameCallbacks(file, text)) {
         const setter = [...body.matchAll(/(?<![.\w])(set(?!Timeout\b|Interval\b)[A-Z]\w*)\(/g)].find(call => !ownFunctions.has(call[1]!));
         if (!setter || allowedNear(text, start) || allowedNear(text, start + setter.index)) continue;
         violations.push(
@@ -248,7 +158,7 @@ describe("performance lint: code", () => {
     const read =
       /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b(?!\s*=(?!=))|\{[^{}]*\b(?:client|offset|scroll)(?:Width|Height|Left|Top)\b[^{}]*\}\s*=(?!=)|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
     for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
-      for (const { body, start } of frameCallbacks(text)) {
+      for (const { body, start } of frameCallbacks(file, text)) {
         for (const match of body.matchAll(read)) {
           const index = start + match.index;
           if (allowedNear(text, index)) continue;

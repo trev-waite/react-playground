@@ -161,6 +161,64 @@ describe("visibleLoop", () => {
     expect(seen).toEqual([16, 16]);
   });
 
+  test("a frame that puts the loop to sleep stays asleep, whatever it returns", () => {
+    const loop: { current?: ReturnType<typeof visibleLoop> } = {};
+    let runs = 0;
+    loop.current = visibleLoop({} as Element, () => {
+      runs++;
+      loop.current?.sleep();
+      return true;
+    });
+    loop.current.wake();
+    runFrame(16);
+    runFrame(32);
+    expect(runs).toBe(1);
+  });
+
+  test("a loop put to sleep stays asleep through visibility reports until it is woken", () => {
+    const changes: boolean[] = [];
+    const { loop, seen } = (() => {
+      const seen: number[] = [];
+      const loop = visibleLoop({} as Element, now => void seen.push(now), { onVisibleChange: visible => changes.push(visible) });
+      return { loop, seen };
+    })();
+    loop.wake();
+    loop.sleep();
+    report?.([{ isIntersecting: true }]);
+    report?.([{ isIntersecting: false }]);
+    report?.([{ isIntersecting: true }]);
+    runFrame(16);
+    expect(seen).toEqual([]);
+    expect(changes).toEqual([false, true]);
+    loop.wake();
+    runFrame(32);
+    expect(seen).toEqual([32]);
+  });
+
+  test("a visibility report delivered after stop is ignored", () => {
+    const changes: boolean[] = [];
+    const loop = visibleLoop({} as Element, () => true, { onVisibleChange: visible => changes.push(visible) });
+    loop.stop();
+    report?.([{ isIntersecting: false }]);
+    report?.([{ isIntersecting: true }]);
+    expect(changes).toEqual([]);
+    expect(frames.size).toBe(0);
+  });
+
+  test("initiallyVisible: false runs nothing until the target is first seen, then announces it", () => {
+    const changes: boolean[] = [];
+    const loop = visibleLoop({} as Element, () => undefined, {
+      initiallyVisible: false,
+      onVisibleChange: visible => changes.push(visible),
+    });
+    expect(loop.visible).toBe(false);
+    loop.wake();
+    expect(frames.size).toBe(0);
+    report?.([{ isIntersecting: true }]);
+    expect(changes).toEqual([true]);
+    expect(frames.size).toBe(1);
+  });
+
   test("stop drops everything and ignores later wakes", () => {
     const { loop } = loopWith([true]);
     loop.wake();

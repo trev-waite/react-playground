@@ -108,7 +108,10 @@ function startHologram(
     return moving();
   }
 
-  const loop = visibleLoop(viewport, tick, { onVisibleChange: visible => visible && measure() });
+  const loop = visibleLoop(viewport, tick, {
+    initiallyVisible: false,
+    onVisibleChange: visible => visible && measure(),
+  });
 
   function measure() {
     if (!projection || !width || !height || !loop.visible || document.hidden) return;

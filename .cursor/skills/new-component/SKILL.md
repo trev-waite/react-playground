@@ -64,7 +64,7 @@ const loop = visibleLoop(canvas, (now, delta) => {
 // loop.wake() after input or a resize; loop.stop() on unmount
 ```
 
-A frame returns `true` for another frame, milliseconds to wait (an idle tick, in place of `setInterval`), or nothing to sleep until `wake()`. Start work by calling `wake()`; `onVisibleChange` is only for what leaving and returning change, such as a timer. The lint reads whatever runs each frame, in any callback form, and the functions and methods it calls two deep: read sizes in a `ResizeObserver` and keep them. Shared parts like this live in `live/kit/`, which the one-file download inlines; `kit` holds no cards.
+A frame returns `true` for another frame, milliseconds to wait (an idle tick, in place of `setInterval`), or nothing to sleep until `wake()`. Call `wake()` as the component mounts to draw its first frame at once; the loop also wakes itself when the browser first reports the card on screen. A card that should not draw until it is seen, such as a WebGL scene, passes `initiallyVisible: false`, and that first sighting calls `onVisibleChange(true)`. Otherwise `onVisibleChange` is only for what leaving and returning change, such as a timer. `sleep()` holds until the next `wake()`, even through the card coming back on screen. The lint reads whatever runs each frame, in any callback form, and the functions and methods it calls two deep: read sizes in a `ResizeObserver` and keep them. Shared parts like this live in `live/kit/`, which the one-file download inlines; `kit` holds no cards.
 
 ## Straight into Live, or an idea first
 

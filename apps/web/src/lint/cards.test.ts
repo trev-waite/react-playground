@@ -1,7 +1,9 @@
 import { describe, test } from "bun:test";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import { lineOf, report, SRC, sources } from "./source";
+import { defaultFunction, exportedConst, exportedNames, importedNames, parse, rendersElement } from "./syntax";
 
 /**
  * The card contract. The deck opens, flies, fits, pages, resets, and publishes every Live
@@ -17,12 +19,16 @@ const KIT = "kit";
 async function previews() {
   return (await sources(["live"], "**/preview.tsx")).map(source => {
     const [, folder, name] = PREVIEW.exec(source.file) ?? [];
-    return { ...source, folder, name };
+    return { ...source, folder, name, syntax: parse(source.file, source.text) };
   });
 }
 
 function isFamilyFolder(folder: string): boolean {
   return existsSync(path.join(SRC, "live", folder, "family.ts"));
+}
+
+function same(a: string[], b: string[]): boolean {
+  return a.length === b.length && [...a].sort().join() === [...b].sort().join();
 }
 
 describe("card contract", () => {
@@ -41,14 +47,25 @@ describe("card contract", () => {
         violations.push(`${file}: the component folder "${name}" must be its PascalCase name, which is also its URL.`);
         continue;
       }
-      const component = path.join(SRC, "live", folder, name, `${name}.tsx`);
-      if (!existsSync(component)) {
+      const component = `live/${folder}/${name}/${name}.tsx`;
+      if (!existsSync(path.join(SRC, component))) {
         violations.push(`${file} has no ${name}.tsx beside it. The Code sheet and the one-file download start from it.`);
         continue;
       }
-      const text = await Bun.file(component).text();
-      if (!new RegExp(`^export (?:function|const) ${name}\\b`, "m").test(text)) {
-        violations.push(`live/${folder}/${name}/${name}.tsx must export \`${name}\`, the component its preview renders.`);
+      if (!exportedNames(parse(component, await Bun.file(path.join(SRC, component)).text())).includes(name)) {
+        violations.push(`${component} must export \`${name}\`, the component its preview renders.`);
+      }
+    }
+    report(violations);
+  });
+
+  test("each component folder in Live has a preview, so it gets a card and a page", async () => {
+    const violations: string[] = [];
+    for (const { file } of await sources(["live"], "*/*/*.tsx")) {
+      const [, folder, name, base] = /^live\/([^/]+)\/([^/]+)\/([^/]+)\.tsx$/.exec(file) ?? [];
+      if (!folder || !name || folder === KIT || name !== base) continue;
+      if (!existsSync(path.join(SRC, "live", folder, name, "preview.tsx"))) {
+        violations.push(`${file} has no preview.tsx beside it, so the deck never shows it. Add one (see the new-component skill).`);
       }
     }
     report(violations);
@@ -56,58 +73,68 @@ describe("card contract", () => {
 
   test("a preview types its meta: CardMeta for its own card, FamilyMemberMeta inside a family folder", async () => {
     const violations: string[] = [];
-    for (const { file, text, folder, name } of await previews()) {
+    for (const { file, text, folder, name, syntax } of await previews()) {
       if (!folder || !name || folder === KIT) continue;
       const expected = isFamilyFolder(folder) ? "FamilyMemberMeta" : "CardMeta";
-      const declared = /^export const meta(?::\s*(\w+))?\s*=/m.exec(text);
-      if (!declared) {
+      const meta = exportedConst(syntax, "meta");
+      if (!meta) {
         violations.push(
           `${file} exports no \`meta\`. Declare \`export const meta: ${expected} = { … }\`` +
             (expected === "CardMeta" ? " with its description, size, and surface." : " with its title."),
         );
         continue;
       }
-      if (declared[1] !== expected) {
+      const type = meta.type && ts.isTypeReferenceNode(meta.type) ? meta.type.typeName.getText(syntax) : undefined;
+      if (type !== expected || !meta.initializer || !ts.isObjectLiteralExpression(meta.initializer)) {
         violations.push(
-          `${file}:${lineOf(text, declared.index)} declares meta as ${declared[1] ?? "an untyped literal"}; ` +
-            `type it \`export const meta: ${expected}\` so the type checker holds it to the card's shape` +
+          `${file}:${lineOf(text, meta.getStart(syntax))} declares meta as ${type ?? "an untyped value"}; ` +
+            `write \`export const meta: ${expected} = { … }\` so the type checker holds it to the card's shape` +
             (expected === "FamilyMemberMeta" ? `, since live/${folder}/family.ts owns the card.` : "."),
         );
         continue;
       }
-      if (!new RegExp(`^import type \\{[^}]*\\b${expected}\\b[^}]*\\} from "@/lib/types";`, "m").test(text)) {
+      if (!importedNames(syntax, "@/lib/types").includes(expected)) {
         violations.push(`${file} must import ${expected} with \`import type { ${expected} } from "@/lib/types"\`.`);
       }
     }
     report(violations);
   });
 
-  test("a preview's default export renders the component with no props, and it exports nothing else", async () => {
+  test("a preview exports only meta and a default <Name>Preview() that takes no props and renders <Name>", async () => {
     const violations: string[] = [];
-    for (const { file, text, folder, name } of await previews()) {
+    for (const { file, folder, name, syntax } of await previews()) {
       if (!folder || !name || folder === KIT) continue;
-      const component = new RegExp(`^export default function ${name}Preview\\(\\s*\\)`, "m");
-      if (!component.test(text)) {
+      const exported = exportedNames(syntax);
+      if (!same(exported, ["meta", "default"])) {
+        violations.push(
+          `${file} exports ${exported.join(", ") || "nothing"}. A preview exports only \`meta\` and its default ` +
+            `component; put shared code in ${name}.tsx or a file beside it.`,
+        );
+      }
+      const preview = defaultFunction(syntax);
+      if (!preview || preview.name?.text !== `${name}Preview` || preview.parameters.length > 0) {
         violations.push(
           `${file} must \`export default function ${name}Preview()\`, taking no props: the deck mounts it bare, ` +
             "in the grid tile, in flight, and on its page, and remounts it to reset.",
         );
-      }
-      for (const match of text.matchAll(/^export\s+(?!const meta\b|default function\b)(.*)$/gm)) {
+      } else if (!rendersElement(preview, name)) {
         violations.push(
-          `${file}:${lineOf(text, match.index!)} exports "${match[1]!.trim()}". A preview exports only \`meta\` and its ` +
-            `default component; put shared code in ${name}.tsx or a file beside it.`,
+          `${file}: ${name}Preview() must render <${name} />, the component this card is for, so the card, ` +
+            "its code, and its download are the same thing.",
         );
       }
     }
     report(violations);
   });
 
-  test("a family's family.ts types its meta as FamilyMeta", async () => {
+  test("a family's family.ts exports only its meta, typed FamilyMeta", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "*/family.ts")) {
-      if (!/^export const meta: FamilyMeta = \{/m.test(text) || !/^import type \{ FamilyMeta \} from "@\/lib\/types";/m.test(text)) {
-        violations.push(`${file} must declare \`export const meta: FamilyMeta = { … }\`, imported from "@/lib/types".`);
+      const syntax = parse(file, text);
+      const meta = exportedConst(syntax, "meta");
+      const type = meta?.type && ts.isTypeReferenceNode(meta.type) ? meta.type.typeName.getText(syntax) : undefined;
+      if (!same(exportedNames(syntax), ["meta"]) || type !== "FamilyMeta" || !importedNames(syntax, "@/lib/types").includes("FamilyMeta")) {
+        violations.push(`${file} must export only \`export const meta: FamilyMeta = { … }\`, imported from "@/lib/types".`);
       }
     }
     report(violations);
