@@ -26,6 +26,7 @@ struct Params {
   presence: f32,
   dark: f32,
   accent: f32,
+  depth: f32,
 }
 
 @group(0) @binding(0) var sharp: texture_2d<f32>;
@@ -63,7 +64,7 @@ fn ink(tex: texture_2d<f32>, uv: vec2f) -> f32 {
     return vec4f(paper, 1.0);
   }
 
-  let rows = abs(pageUv.y - params.focus);
+  let rows = abs(pageUv.y - params.focus) * params.depth;
   let level = min(MAX_LEVEL, max(rows / ROWS_PER_LEVEL, (1.0 - params.presence) * MAX_LEVEL));
   let a = ink(sharp, pageUv);
   let b = ink(soft, pageUv);
@@ -83,10 +84,15 @@ fn ink(tex: texture_2d<f32>, uv: vec2f) -> f32 {
 }
 `;
 
+/** Under reduced motion nothing drifts, so the depth of field is shallower and every line stays readable. */
+const REDUCED_DEPTH = 0.15;
+
 type Rack = {
   open: () => void;
-  /** The page row in focus (0 top, 1 bottom) and how far the page has come into focus. */
-  sample: (now: number) => { focus: number; presence: number };
+  /** The page row in focus (0 top, 1 bottom), how far the page has come into focus, and how quickly blur grows away from it. */
+  sample: (now: number) => { focus: number; presence: number; depth: number };
+  /** The rows of the poem's lines, so the keyboard can step between them. */
+  lines: (rows: readonly number[]) => void;
   /** Tells the rack how to find the row under the hand. */
   aim: (rowAt: (place: PointerPlace) => number | null) => void;
   stop: () => void;
@@ -96,6 +102,8 @@ function createRack(holder: HTMLElement): Rack {
   const reduced = prefersReducedMotion();
   let rowAt: (place: PointerPlace) => number | null = () => null;
   let hand: number | null = null;
+  let rows: readonly number[] = [];
+  let chosen: number | null = null;
   let focus = reduced ? 0.12 : idleFocus(0);
   let openedAt: number | null = null;
   let last = 0;
@@ -103,6 +111,27 @@ function createRack(holder: HTMLElement): Rack {
   const unfollow = followPointer(holder, place => {
     hand = place ? rowAt(place) : null;
   });
+  const choose = (index: number) => {
+    chosen = Math.min(rows.length - 1, Math.max(0, index));
+    holder.setAttribute("aria-valuenow", String(chosen + 1));
+    holder.setAttribute("aria-valuetext", POEM.filter(Boolean)[chosen] ?? "");
+  };
+  const keys: Record<string, (index: number) => number> = {
+    ArrowDown: index => index + 1,
+    ArrowRight: index => index + 1,
+    ArrowUp: index => index - 1,
+    ArrowLeft: index => index - 1,
+    Home: () => 0,
+    End: () => rows.length - 1,
+  };
+  const onKey = (event: KeyboardEvent) => {
+    const step = keys[event.key];
+    if (!step || rows.length === 0) return;
+    event.preventDefault();
+    const nearest = rows.reduce((best, row, index) => (Math.abs(row - focus) < Math.abs(rows[best]! - focus) ? index : best), 0);
+    choose(step(chosen ?? nearest));
+  };
+  holder.addEventListener("keydown", onKey);
   return {
     open: () => {
       openedAt ??= performance.now();
@@ -112,15 +141,22 @@ function createRack(holder: HTMLElement): Rack {
       const seconds = last ? Math.min(0.05, (now - last) / 1000) : 0;
       last = now;
       if (hand !== null) idleSince = now;
-      const target = hand ?? (reduced ? focus : idleFocus((now - idleSince) / 1000));
+      if (chosen !== null) idleSince = now;
+      const target = hand ?? (chosen !== null ? rows[chosen]! : reduced ? focus : idleFocus((now - idleSince) / 1000));
       focus = reduced ? target : target + (focus - target) * Math.exp(-RACK_RATE * seconds);
       const presence = openedAt === null ? 0 : reduced ? 1 : Math.min(1, (now - openedAt) / FOCUS_IN_MS) ** 0.6;
-      return { focus, presence };
+      return { focus, presence, depth: reduced ? REDUCED_DEPTH : 1 };
+    },
+    lines: next => {
+      rows = next;
     },
     aim: next => {
       rowAt = next;
     },
-    stop: unfollow,
+    stop: () => {
+      unfollow();
+      holder.removeEventListener("keydown", onKey);
+    },
   };
 }
 
@@ -145,12 +181,13 @@ function startFocus({ gpu, surface, canvas }: GpuSession, rack: Rack, holder: HT
       softer: blur.levels[1],
       softest: blur.levels[2],
       pageSampler: linear,
-      params: { resolution: [1, 1], page: [1, 1], lens: [1, 0], tilt: 0.9, focus: 0.5, presence: 0, dark: 0, accent: 1 },
+      params: { resolution: [1, 1], page: [1, 1], lens: [1, 0], tilt: 0.9, focus: 0.5, presence: 0, dark: 0, accent: 1, depth: 1 },
     },
   });
   const unwatchTone = watchTone(holder, dark => paint.set({ params: { dark: dark ? 1 : 0 } }));
   const unsubscribeError = gpu.onError(error => console.error("Focus Pull could not draw", error));
   const rows = layout.rows.filter(Number.isFinite);
+  rack.lines(rows);
   const lineHalf = (rows[1]! - rows[0]!) / 2;
   const content = { left: 0.03, right: 0.94, top: rows[0]! - lineHalf, bottom: rows.at(-1)! + lineHalf };
   let page: Page = fitPage(1, layout.aspect, content);
@@ -168,8 +205,8 @@ function startFocus({ gpu, surface, canvas }: GpuSession, rack: Rack, holder: HT
       blur.render(frame, texture);
       blurred = true;
     }
-    const { focus, presence } = rack.sample(performance.now());
-    paint.set({ params: { focus, presence } });
+    const { focus, presence, depth } = rack.sample(performance.now());
+    paint.set({ params: { focus, presence, depth } });
     frame.pass(surface, paint);
   });
 
@@ -189,6 +226,7 @@ function runFallbackRack(page: HTMLElement, rack: Rack): () => void {
   let rows: number[] = [];
   const measure = () => {
     rows = lines.map(line => (line.offsetTop + line.offsetHeight / 2) / Math.max(1, page.offsetHeight));
+    rack.lines(rows);
   };
   const resize = new ResizeObserver(measure);
   resize.observe(page);
@@ -212,9 +250,9 @@ function runFallbackRack(page: HTMLElement, rack: Rack): () => void {
   let visible = true;
   const draw = (now: number) => {
     frame = 0;
-    const { focus, presence } = rack.sample(now);
+    const { focus, presence, depth } = rack.sample(now);
     lines.forEach((line, index) => {
-      const level = String(Math.round(blurLevel((rows[index] ?? 0) - focus, presence) * 2));
+      const level = String(Math.round(blurLevel(((rows[index] ?? 0) - focus) * depth, presence) * 2));
       if (line.dataset.level !== level) line.dataset.level = level;
     });
     if (visible) frame = requestAnimationFrame(draw);
@@ -279,7 +317,19 @@ export function FocusPull() {
 
   return (
     <Stage className={styles.stage} onOpen={root => openPage(root, rackRef.current)}>
-      <div ref={holderRef} className={styles.holder} data-gpu={status === "running" || undefined}>
+      <div
+        ref={holderRef}
+        className={styles.holder}
+        data-gpu={status === "running" || undefined}
+        tabIndex={0}
+        role="slider"
+        aria-label="Line in focus"
+        aria-orientation="vertical"
+        aria-valuemin={1}
+        aria-valuemax={POEM.filter(Boolean).length}
+        aria-valuenow={1}
+        aria-valuetext={POEM[0]}
+      >
         <div className={styles.fallback}>
           <div ref={pageRef} className={`${stageStyles.display} ${styles.page}`} aria-hidden="true">
             {POEM.map((line, index) =>

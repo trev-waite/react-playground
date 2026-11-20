@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cascadeDelays, glide, play, positionIn, type Move, type Playback } from "@/live/shared/Stage/choreography";
 import { Stage } from "@/live/shared/Stage/Stage";
 import stageStyles from "@/live/shared/Stage/Stage.module.css";
@@ -23,9 +23,13 @@ function wordsOf(container: Element | null) {
   return container ? Array.from(container.querySelectorAll<HTMLElement>("[data-index]")) : [];
 }
 
-/** Each kept word glides from where its twin stands in the other layer. */
-function gatherMoves(root: Element, from: HTMLElement[], to: HTMLElement[]): Move[] {
-  const origins = new Map(from.map(element => [element.dataset.index, positionIn(root, element)]));
+/** Where each word is drawn right now, mid-glide included, keyed by its place in the passage. */
+function drawnAt(root: Element, words: HTMLElement[]): Map<string | undefined, { x: number; y: number }> {
+  return new Map(words.map(element => [element.dataset.index, positionIn(root, element)]));
+}
+
+/** Each kept word glides from where its twin was drawn in the other layer. */
+function gatherMoves(root: Element, origins: Map<string | undefined, { x: number; y: number }>, to: HTMLElement[]): Move[] {
   return to.flatMap(element => {
     const origin = origins.get(element.dataset.index);
     if (!origin) return [];
@@ -44,6 +48,9 @@ export function FoundPoem({ passage = PASSAGE, source = SOURCE, suggested = SUGG
   const [active, setActive] = useState(0);
   const [turn, setTurn] = useState<{ count: number; to: Mode }>({ count: 0, to: "passage" });
   const poem = keptPoem(words, kept);
+  const running = useRef<Playback[]>([]);
+
+  useEffect(() => () => running.current.forEach(playback => playback.cancel()), []);
 
   useLayoutEffect(() => {
     const root = sheetRef.current;
@@ -52,13 +59,13 @@ export function FoundPoem({ passage = PASSAGE, source = SOURCE, suggested = SUGG
     const poemWords = wordsOf(poemRef.current);
     const erased = passageWords.filter(element => element.dataset.kept === undefined);
     const keptInPassage = passageWords.filter(element => element.dataset.kept !== undefined);
-    const playbacks: Playback[] =
-      turn.to === "poem"
-        ? [play(erased, "recede", { staggerMs: 12 }), glide(gatherMoves(root, keptInPassage, poemWords), { delayMs: GATHER_DELAY_MS, staggerMs: GATHER_STAGGER_MS })]
-        : [glide(gatherMoves(root, poemWords, keptInPassage), { staggerMs: GATHER_STAGGER_MS }), play(erased, "rise", { delayMs: 160, staggerMs: 12 })];
-    return () => {
-      for (const playback of playbacks) playback.cancel();
-    };
+    const gathering = turn.to === "poem";
+    const origins = drawnAt(root, gathering ? keptInPassage : poemWords);
+    for (const playback of running.current) playback.cancel();
+    const moves = gatherMoves(root, origins, gathering ? poemWords : keptInPassage);
+    running.current = gathering
+      ? [play(erased, "recede", { staggerMs: 12 }), glide(moves, { delayMs: GATHER_DELAY_MS, staggerMs: GATHER_STAGGER_MS })]
+      : [glide(moves, { staggerMs: GATHER_STAGGER_MS }), play(erased, "rise", { delayMs: 160, staggerMs: 12 })];
   }, [turn]);
 
   const switchTo = (next: Mode) => {
@@ -93,7 +100,7 @@ export function FoundPoem({ passage = PASSAGE, source = SOURCE, suggested = SUGG
   return (
     <Stage className={styles.stage} onOpen={open}>
         <div ref={sheetRef} className={styles.sheet} data-mode={mode}>
-          <div className={styles.text}>
+          <div className={styles.text} data-reveal>
             <div
               ref={passageRef}
               className={`${stageStyles.display} ${styles.passage}`}

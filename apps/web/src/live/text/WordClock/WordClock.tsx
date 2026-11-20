@@ -177,6 +177,7 @@ function useHold(step: () => void) {
 
 export function WordClock() {
   const [clock, setClock] = useState(initialClock);
+  const laterRef = useRef<HTMLButtonElement>(null);
 
   useEffect(
     () =>
@@ -233,11 +234,14 @@ export function WordClock() {
             className={styles.now}
             data-hidden={clock.offset === 0 || undefined}
             disabled={clock.offset === 0}
-            onClick={() => setClock(previous => settle(previous, previous.minute, previous.second, 0, true))}
+            onClick={() => {
+              setClock(previous => settle(previous, previous.minute, previous.second, 0, true));
+              laterRef.current?.focus();
+            }}
           >
             Now
           </button>
-          <button type="button" className={styles.wind} aria-label="One minute later" {...later}>
+          <button ref={laterRef} type="button" className={styles.wind} aria-label="One minute later" {...later}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

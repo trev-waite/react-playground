@@ -58,6 +58,7 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   let mouseInside = false;
   let sized = false;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   let dragged = false;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -183,6 +184,13 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     if (grab?.claimed) event.preventDefault();
   };
 
+  /** A mouse never presses the glass itself, which floats under it: a click anywhere on the page but a link looks closer. */
+  const onPageClick = (event: MouseEvent) => {
+    if (!fine.matches || !shown || (event.target as Element).closest("a") || lens.contains(event.target as Node)) return;
+    lens.setAttribute("aria-pressed", String(!zoomed()));
+    wake();
+  };
+
   const onClick = (event: MouseEvent) => {
     if (dragged || event.timeStamp - touchedAt < 50) {
       dragged = false;
@@ -251,6 +259,7 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   surface.addEventListener("pointerleave", onMouseLeave);
   page.addEventListener("pointerdown", onPageDown);
   page.addEventListener("pointerup", onPageUp);
+  page.addEventListener("click", onPageClick);
   page.addEventListener("pointercancel", onPageCancel);
   lens.addEventListener("pointerdown", onDown);
   lens.addEventListener("pointermove", onMove);
@@ -281,6 +290,7 @@ function startLens({ page, lens, clone }: LensParts): Lens {
       surface.removeEventListener("pointerleave", onMouseLeave);
       page.removeEventListener("pointerdown", onPageDown);
       page.removeEventListener("pointerup", onPageUp);
+      page.removeEventListener("click", onPageClick);
       page.removeEventListener("pointercancel", onPageCancel);
       lens.removeEventListener("pointerdown", onDown);
       lens.removeEventListener("pointermove", onMove);
@@ -378,7 +388,7 @@ export function QuoteLens({ quote = QUOTE }: { quote?: Quote }) {
 
   return (
     <Stage className={styles.stage} onOpen={open}>
-      <div ref={pageRef} className={`${styles.sheet} ${styles.page}`}>
+      <div ref={pageRef} className={`${styles.sheet} ${styles.page}`} data-reveal>
         <Passage quote={quote} />
       </div>
       <button

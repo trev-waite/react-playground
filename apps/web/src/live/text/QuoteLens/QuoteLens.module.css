@@ -61,6 +61,24 @@
   cursor: zoom-out;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .lens {
+    pointer-events: none;
+  }
+
+  .page {
+    cursor: zoom-in;
+  }
+
+  .stage:has(.lens[aria-pressed="true"]) .page {
+    cursor: zoom-out;
+  }
+
+  .page a {
+    cursor: pointer;
+  }
+}
+
 .lens:not([data-shown]) {
   visibility: hidden;
 }

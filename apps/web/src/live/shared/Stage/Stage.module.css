@@ -23,7 +23,7 @@
 }
 
 .root:not([data-open]) [data-reveal] {
-  opacity: 0;
+  visibility: hidden;
 }
 
 .root :focus-visible {
