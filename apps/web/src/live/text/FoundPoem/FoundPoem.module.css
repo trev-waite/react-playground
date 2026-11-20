@@ -1,0 +1,163 @@
+.stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 24px;
+  padding: 32px;
+}
+
+.sheet {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 0;
+}
+
+.text {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: 100%;
+}
+
+.source {
+  width: min(100%, 36rem);
+  margin-top: 16px;
+}
+
+.passage,
+.poem {
+  width: min(100%, 36rem);
+  font-size: clamp(1.25rem, 3.4cqw, 1.875rem);
+  line-height: 1.4;
+}
+
+.poemFrame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.poem {
+  max-width: 20em;
+  margin: 0;
+  text-align: center;
+  text-wrap: balance;
+  color: var(--stage-accent);
+}
+
+.sheet[data-mode="passage"] .poemFrame,
+.sheet[data-mode="poem"] .word[data-kept] {
+  visibility: hidden;
+}
+
+.word {
+  display: inline-block;
+  margin: 0 -2px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--stage-ink);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    color 200ms var(--stage-fade-ease),
+    background-color 200ms var(--stage-fade-ease);
+}
+
+.word[data-kept] {
+  color: var(--stage-accent);
+}
+
+.word[data-kept][data-waiting] {
+  color: var(--stage-ink);
+}
+
+.word:active {
+  background: var(--stage-hover);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  width: min(100%, 36rem);
+  justify-self: center;
+}
+
+.primary,
+.quiet {
+  min-height: var(--stage-control);
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    opacity 200ms var(--stage-fade-ease),
+    background-color 200ms var(--stage-fade-ease),
+    color 200ms var(--stage-fade-ease);
+}
+
+.primary {
+  color: var(--stage-paper);
+  background: var(--stage-ink);
+}
+
+.quiet {
+  margin-inline-start: -8px;
+  padding: 0 12px;
+  color: var(--stage-muted);
+  background: none;
+}
+
+.primary:disabled,
+.quiet:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.primary:active:not(:disabled) {
+  opacity: 0.8;
+}
+
+.count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .word:hover {
+    background: var(--stage-hover);
+  }
+
+  .quiet:hover:not(:disabled) {
+    color: var(--stage-ink);
+  }
+
+  .primary:hover:not(:disabled) {
+    opacity: 0.86;
+  }
+}
+
+@media (max-width: 48rem) {
+  .stage {
+    padding: 24px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .word,
+  .primary,
+  .quiet {
+    transition: none;
+  }
+}

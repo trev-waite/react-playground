@@ -1,0 +1,232 @@
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { glide, play, type Move, type Playback } from "@/live/shared/Stage/choreography";
+import { Stage } from "@/live/shared/Stage/Stage";
+import stageStyles from "@/live/shared/Stage/Stage.module.css";
+import { changeWords, dayPart, splitWords, timeSentence, type Word } from "./timeWords";
+import styles from "./WordClock.module.css";
+
+const MINUTE_MS = 60_000;
+/** Holding a wind button steps once, waits, then steps faster and faster. */
+const HOLD_DELAY_MS = 420;
+const HOLD_FIRST_MS = 160;
+const HOLD_FASTEST_MS = 70;
+/** Old words leave quickly, and the new ones start rising as they go, so the two barely overlap even while the clock winds. */
+const LEAVE_MS = 280;
+const ARRIVE_AFTER_MS = 180;
+
+type Run = { words: Word[]; removed: Word[] };
+
+type Clock = {
+  /** Minutes the reader has wound away from now. */
+  offset: number;
+  /** The real minute, as minutes since the epoch. */
+  minute: number;
+  /** Seconds into the real minute when it was last read. */
+  second: number;
+  sentence: Run;
+  part: Run;
+  nextId: number;
+  version: number;
+  wound: boolean;
+};
+
+function readNow() {
+  const now = Date.now();
+  return { minute: Math.floor(now / MINUTE_MS), second: (now % MINUTE_MS) / 1000 };
+}
+
+function textsAt(totalMinutes: number) {
+  const date = new Date(totalMinutes * MINUTE_MS);
+  const hour = date.getHours();
+  const minute = date.getMinutes();
+  return { sentence: splitWords(timeSentence(hour, minute)), part: splitWords(dayPart(hour, minute)) };
+}
+
+function settle(previous: Clock | null, minute: number, second: number, offset: number, wound: boolean): Clock {
+  const texts = textsAt(minute + offset);
+  const sentence = changeWords(previous?.sentence.words ?? [], texts.sentence, previous?.nextId ?? 0);
+  const part = changeWords(previous?.part.words ?? [], texts.part, sentence.nextId);
+  return {
+    offset,
+    minute,
+    second,
+    sentence: { words: sentence.words, removed: sentence.removed },
+    part: { words: part.words, removed: part.removed },
+    nextId: part.nextId,
+    version: (previous?.version ?? 0) + 1,
+    wound,
+  };
+}
+
+/** Calls `tick` just after each minute turns on the wall clock. */
+function everyMinute(tick: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout>;
+  const schedule = () => {
+    timer = setTimeout(() => {
+      tick();
+      schedule();
+    }, MINUTE_MS - (Date.now() % MINUTE_MS) + 20);
+  };
+  schedule();
+  return () => clearTimeout(timer);
+}
+
+function initialClock(): Clock {
+  const { minute, second } = readNow();
+  return settle(null, minute, second, 0, false);
+}
+
+/** Moves words that stayed, raises words that arrived, and lets removed words fade where they stood. */
+function WordRun({ run, version }: { run: Run; version: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const places = useRef(new Map<number, { x: number; y: number }>());
+  const laidOut = useRef(false);
+
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const first = !laidOut.current;
+    laidOut.current = true;
+    const next = new Map<number, { x: number; y: number }>();
+    const moves: Move[] = [];
+    const entering: Element[] = [];
+    for (const element of Array.from(root.querySelectorAll<HTMLElement>("[data-id]"))) {
+      const id = Number(element.dataset.id);
+      const at = { x: element.offsetLeft, y: element.offsetTop };
+      next.set(id, at);
+      const was = places.current.get(id);
+      if (!was) entering.push(element);
+      else if (Math.abs(was.x - at.x) > 0.5 || Math.abs(was.y - at.y) > 0.5) moves.push({ element, dx: was.x - at.x, dy: was.y - at.y });
+    }
+    const leaving: Element[] = [];
+    for (const ghost of Array.from(root.querySelectorAll<HTMLElement>("[data-ghost]"))) {
+      const was = places.current.get(Number(ghost.dataset.ghost));
+      if (!was) continue;
+      ghost.style.left = `${was.x}px`;
+      ghost.style.top = `${was.y}px`;
+      leaving.push(ghost);
+    }
+    places.current = next;
+    if (first) return;
+    play(leaving, "recede", { durationMs: LEAVE_MS, staggerMs: 0 });
+    glide(moves);
+    play(entering, "rise", { delayMs: leaving.length ? ARRIVE_AFTER_MS : 0 });
+  }, [version]);
+
+  return (
+    <span ref={ref} className={styles.run} aria-hidden="true">
+      {run.words.map((word, index) => (
+        <span key={word.id}>
+          {index > 0 ? " " : null}
+          <span className={stageStyles.word} data-id={word.id} data-word>
+            {word.text}
+          </span>
+        </span>
+      ))}
+      {run.removed.map(word => (
+        <span key={`ghost-${word.id}`} className={`${stageStyles.word} ${styles.ghost}`} data-ghost={word.id}>
+          {word.text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function useHold(step: () => void) {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const stop = () => clearTimeout(timer.current);
+  useEffect(() => stop, []);
+  return {
+    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return;
+      stop();
+      step();
+      let wait = HOLD_FIRST_MS;
+      const repeat = () => {
+        step();
+        wait = Math.max(HOLD_FASTEST_MS, wait * 0.85);
+        timer.current = setTimeout(repeat, wait);
+      };
+      timer.current = setTimeout(repeat, HOLD_DELAY_MS);
+    },
+    onPointerUp: stop,
+    onPointerLeave: stop,
+    onPointerCancel: stop,
+    onClick: (event: { detail: number }) => {
+      if (event.detail === 0) step();
+    },
+  };
+}
+
+export function WordClock() {
+  const [clock, setClock] = useState(initialClock);
+
+  useEffect(
+    () =>
+      everyMinute(() => {
+        const { minute, second } = readNow();
+        setClock(previous => (previous.minute === minute ? previous : settle(previous, minute, second, previous.offset, previous.wound)));
+      }),
+    [],
+  );
+
+  const wind = (minutes: number) => setClock(previous => settle(previous, previous.minute, previous.second, previous.offset + minutes, true));
+  const earlier = useHold(() => wind(-1));
+  const later = useHold(() => wind(1));
+
+  const open = (root: HTMLDivElement) => {
+    const playbacks: Playback[] = [
+      play(Array.from(root.querySelectorAll("[data-word]")), "rise"),
+      play(Array.from(root.querySelectorAll("[data-after-words]")), "rise", { delayMs: 480 }),
+    ];
+    return () => {
+      for (const playback of playbacks) playback.cancel();
+    };
+  };
+
+  const spoken = [clock.sentence.words, clock.part.words].map(run => run.map(word => word.text).join(" ")).join(" ");
+
+  return (
+    <Stage className={styles.stage} onOpen={open}>
+      <div className={styles.face}>
+        <p className={stageStyles.srOnly} aria-live={clock.wound ? "polite" : "off"}>
+          {spoken}
+        </p>
+        <p className={`${stageStyles.display} ${styles.sentence}`} data-reveal>
+          <WordRun run={clock.sentence} version={clock.version} />
+        </p>
+        <p className={`${stageStyles.support} ${styles.part}`} data-reveal>
+          <WordRun run={clock.part} version={clock.version} />
+        </p>
+        <div className={styles.minute} data-after-words data-reveal aria-hidden="true">
+          <span
+            key={clock.minute}
+            className={styles.minuteFill}
+            style={{ "--second": clock.second } as CSSProperties}
+          />
+        </div>
+        <div className={styles.controls} data-after-words data-reveal>
+          <button type="button" className={styles.wind} aria-label="One minute earlier" {...earlier}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={styles.now}
+            data-hidden={clock.offset === 0 || undefined}
+            disabled={clock.offset === 0}
+            onClick={() => setClock(previous => settle(previous, previous.minute, previous.second, 0, true))}
+          >
+            Now
+          </button>
+          <button type="button" className={styles.wind} aria-label="One minute later" {...later}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </Stage>
+  );
+}

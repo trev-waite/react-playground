@@ -1,0 +1,176 @@
+.stage {
+  overflow: hidden;
+}
+
+.sheet {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: 24px 32px;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+}
+
+.figure {
+  display: grid;
+  box-sizing: border-box;
+  gap: 24px;
+  width: min(100%, 36rem);
+  margin: 0;
+}
+
+.quote {
+  display: block;
+  margin: 0;
+  font-size: clamp(1.5rem, 4.6cqw, 2.5rem);
+}
+
+.quote p {
+  margin: 0;
+}
+
+.attribution {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.lens {
+  --lens: clamp(112px, 44cqh, 196px);
+  --bezel: calc(var(--lens) * 0.035 + 2px);
+
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--lens);
+  height: var(--lens);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: none;
+  font: inherit;
+  cursor: zoom-in;
+  touch-action: pan-y;
+}
+
+.lens[aria-pressed="true"] {
+  cursor: zoom-out;
+}
+
+.lens:not([data-shown]) {
+  visibility: hidden;
+}
+
+.lens[data-lifted] {
+  touch-action: none;
+}
+
+.body {
+  position: absolute;
+  inset: 0;
+  transition: transform var(--stage-turn) var(--stage-spring-ease);
+}
+
+.lens[data-lifted] .body {
+  transform: scale(1.04);
+}
+
+.shadow {
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / light-dark(0.2, 0.6)) 55%, transparent);
+  transform: translate(5%, 9%);
+  transition:
+    transform var(--stage-turn) var(--stage-spring-ease),
+    opacity var(--stage-turn) var(--stage-fade-ease);
+}
+
+.lens[data-lifted] .shadow {
+  opacity: 0.7;
+  transform: translate(10%, 18%) scale(1.06);
+}
+
+.rim {
+  position: absolute;
+  inset: calc(var(--bezel) * -1);
+  border-radius: 50%;
+  background: var(--stage-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stage-paper) 22%, transparent);
+  transition: box-shadow 200ms var(--stage-fade-ease);
+}
+
+.window {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--stage-paper);
+}
+
+.clone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.glass {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 22%, rgb(255 255 255 / light-dark(0.55, 0.05)), transparent 22%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--stage-ink) 14%, transparent),
+    inset 0 calc(var(--lens) * -0.06) calc(var(--lens) * 0.14) rgb(0 0 0 / light-dark(0.08, 0.35));
+  pointer-events: none;
+  transition: box-shadow 200ms var(--stage-fade-ease);
+}
+
+.lens[aria-pressed="true"] .glass {
+  box-shadow:
+    inset 0 0 0 2px var(--stage-accent),
+    inset 0 calc(var(--lens) * -0.06) calc(var(--lens) * 0.14) rgb(0 0 0 / light-dark(0.08, 0.35));
+}
+
+.handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--lens) * 0.5);
+  height: calc(var(--lens) * 0.08 + 4px);
+  margin-top: calc((var(--lens) * 0.08 + 4px) / -2);
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(
+    to right,
+    var(--stage-ink) 0 18%,
+    color-mix(in srgb, var(--stage-paper) 55%, var(--stage-ink)) 18% calc(18% + 1.5px),
+    var(--stage-ink) calc(18% + 1.5px)
+  );
+  transform-origin: 0 50%;
+  transform: rotate(45deg) translateX(calc(var(--lens) / 2 + var(--bezel) - 2px));
+}
+
+.lens:focus-visible {
+  outline: none;
+}
+
+.lens:focus-visible .rim {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--stage-paper) 22%, transparent),
+    0 0 0 3px var(--stage-paper),
+    0 0 0 5px var(--stage-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body,
+  .shadow,
+  .rim,
+  .glass {
+    transition: none;
+  }
+}
