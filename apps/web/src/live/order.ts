@@ -24,5 +24,6 @@ export const cardOrder: readonly string[] = [
   "navigation/ProjectRail",
   "svgs/BlobPet",
   "text/ParticleText",
+  "text/Letterpress",
   "inputs/StretchSlider",
 ];

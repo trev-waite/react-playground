@@ -1,5 +1,5 @@
 import path from "node:path";
-import { chromium, type Page } from "playwright";
+import { chromium, webkit, type Page } from "playwright";
 import { preview } from "vite";
 import { livePath, routeTitle, SITE_TITLE } from "../src/lib/liveRoutes.ts";
 import { readLiveCards } from "../vite/liveCards.ts";
@@ -27,6 +27,7 @@ const MID_FLIGHT_MS = 160;
 const PAGE_EDGE = 24;
 /** How close a width must be to a tile's or a page's to count as one of them. */
 const SNAP = 2;
+const LETTERPRESS = "text/Letterpress";
 
 const webRoot = path.resolve(import.meta.dirname, "..");
 const cards = await readLiveCards(path.join(webRoot, "src/live"));
@@ -170,6 +171,236 @@ async function checkKeyboardFocus(page: Page) {
   }
 }
 
+async function checkLetterpressRouting(page: Page) {
+  const route = livePath(LETTERPRESS);
+  const slider = page.getByRole("slider", { name: "Scroll to assemble" });
+  const letters = page.locator("[data-letter]");
+  await page.locator("[data-letterpress] [data-ready]").waitFor();
+  const stack = () => letters.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).style.zIndex).join(" "));
+  const initialStack = await stack();
+  const pile = await letters.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).style.transform));
+  const overlap = await page.addStyleTag({ content: `
+    [data-letter="0"] { transform: translate(-50%, -50%) translateX(1.75em) rotate(22deg) !important; }
+    [data-letter="9"] { transform: translate(-50%, -50%) translateX(1.75em) scale(1.75) !important; }
+  ` });
+  const stem = await letters.first().boundingBox();
+  if (!stem) throw new Error("Letterpress should show the T in its pile.");
+  const point = { x: stem.x + stem.width / 2, y: stem.y + stem.height / 2 };
+  const covered = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest("[data-letter]")?.getAttribute("data-letter"), point);
+  expect(covered === "9", "the period's transparent hit box should cover the T for the overlap check");
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  const held = page.locator("[data-letter][data-lifted]");
+  expect(await held.getAttribute("data-letter") === "0", "pressing the visible stem of T should lift T through the period's transparent hit box");
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await overlap.evaluate(node => node.parentNode?.removeChild(node));
+
+  const heldThroughLanding = await slider.evaluate(node => {
+    const port = node.closest("[data-scroll-scene]")!;
+    const press = (key: string) => node.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    let consumed = false;
+    port.addEventListener("wheel", event => { consumed = event.defaultPrevented; }, { once: true });
+    press("End");
+    node.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true }));
+    press("Home");
+    return consumed;
+  });
+  expect(heldThroughLanding, "Letterpress should consume outward wheel input until its title has visibly landed");
+  const track = await slider.boundingBox();
+  if (!track) throw new Error("Letterpress should show its scrubber.");
+  await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
+  await page.mouse.wheel(0, 120);
+  await page.waitForFunction(pathname => location.pathname !== pathname ||
+    Number(document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 0, route, { timeout: SETTLE_TIMEOUT_MS });
+  const played = (await state(page)).path === route;
+  expect(played, "a wheel step over the Letterpress scrubber should play the scene");
+  if (!played) return;
+
+  const stableStack = await page.evaluate(async initial => {
+    const glyphs = Array.from(document.querySelectorAll<HTMLElement>("[data-letter]"));
+    const range = document.querySelector("[data-letterpress] [role=slider]")!;
+    const atPile = () => glyphs.every((glyph, index) => glyph.style.transform === initial[index]);
+    const readStack = () => glyphs.map(glyph => glyph.style.zIndex).join(" ");
+    const stack = readStack();
+    const clock = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const press = (key: string) => range.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    async function reach(value: number, ready: () => boolean) {
+      const reached = () => Number(range.getAttribute("aria-valuenow")) === value && ready();
+      const deadline = performance.now() + 2000;
+      while (!reached() && performance.now() < deadline) await clock();
+      return reached();
+    }
+    press("Home");
+    if (!(await reach(0, atPile))) return false;
+    press("ArrowRight");
+    press("ArrowRight");
+    if (!(await reach(2, atPile))) return false;
+    let stable = true;
+    const observer = new MutationObserver(() => { stable &&= readStack() === stack; });
+    glyphs.forEach(glyph => observer.observe(glyph, { attributeFilter: ["style"] }));
+    press("ArrowRight");
+    const departed = await reach(3, () => !atPile());
+    press("ArrowLeft");
+    const rewound = await reach(2, atPile);
+    observer.disconnect();
+    return departed && rewound && stable && readStack() === stack;
+  }, pile);
+  expect(stableStack, "Letterpress should keep the same stacking order over the first departure and reverse");
+
+  const playback = page.locator("[data-playback]");
+  const buttonLabel = () => playback.getAttribute("aria-label");
+  const progress = () => slider.getAttribute("aria-valuenow");
+  const tableOpacity = () => page.locator("[data-pile-plate]").evaluate(node => getComputedStyle(node).opacity);
+  await playback.press("Enter");
+  await page.waitForFunction(() => Number(document.querySelector("[role=slider]")?.getAttribute("aria-valuenow")) > 10);
+  await playback.click();
+  const paused = await progress();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(paused === await progress() && await buttonLabel() === "Play animation", "pausing Letterpress should hold the current frame");
+  expect(await tableOpacity() === "1", "Letterpress should keep the tabletop opaque during the reveal");
+  await playback.click();
+  await page.getByRole("button", { name: "Replay animation" }).waitFor();
+  expect(await progress() === "100" && await page.locator("[data-letter][data-home]").count() === 10,
+    "playing Letterpress should reach the assembled title without scrolling the page");
+  expect(await tableOpacity() === "1", "Letterpress should keep the tabletop visible behind the assembled title");
+  const startReplay = () => playback.evaluate(button => {
+    (button as HTMLButtonElement).click();
+    return button.closest("[data-letterpress]")?.querySelector("[role=slider]")?.getAttribute("aria-valuenow");
+  });
+  expect(await startReplay() === "100", "starting replay should keep the scrubber with the assembled title");
+  await page.waitForFunction(() => Number(document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) < 65);
+  await playback.press("Enter");
+  const pausedRewind = Number(await progress());
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(pausedRewind > 10 && pausedRewind === Number(await progress()) && await buttonLabel() === "Play animation",
+    "pausing replay should hold both the rewind and the scrubber");
+  await playback.press("Enter");
+  await page.waitForFunction(pausedAt => Number(document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) < pausedAt - 8,
+    pausedRewind, { timeout: 1000 });
+  await page.waitForFunction(() => document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow") === "0");
+  await page.waitForFunction(() => Number(document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 10);
+  await slider.press("Home");
+  expect(await buttonLabel() !== "Pause animation", "using the scrubber should stop Letterpress playback");
+
+  const waitForPile = () => page.waitForFunction(initial =>
+    Array.from(document.querySelectorAll<HTMLElement>("[data-letter]")).every((letter, index) => letter.style.transform === initial[index]),
+    pile, { timeout: SETTLE_TIMEOUT_MS });
+  await waitForPile();
+  for (const letter of await letters.all()) {
+    await letter.press("Space");
+    await letter.press("Space");
+  }
+  await page.waitForFunction(() => document.querySelectorAll("[data-letter][data-home]").length === 10);
+  expect(await progress() === "0" && await buttonLabel() === "Replay animation",
+    "completing the title by hand should offer Replay while the scrubber is still at the start");
+  expect(await startReplay() === "100", "replaying a hand-assembled title should rewind from the assembled position");
+  await waitForPile();
+
+  await letters.first().focus();
+  await slider.focus();
+  await page.keyboard.press("End");
+  await page.waitForFunction(() => !document.querySelector("[data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
+  expect(await stack() === initialStack, "scrolling Letterpress should keep overlapping letters in the same depth order");
+
+  const firstLetter = letters.first();
+  const restPose = await firstLetter.evaluate(node => (node as HTMLElement).style.transform);
+  await firstLetter.hover();
+  await page.mouse.down();
+  await held.waitFor();
+  await page.mouse.wheel(0, 120);
+  expect((await state(page)).path === route, "a wheel step during a Letterpress grab should keep the deck in place");
+  await page.keyboard.press("Escape");
+  expect(await held.count() === 0, "Escape should release the Letterpress pointer even while the scrubber has focus");
+  await page.mouse.up();
+
+  const waitForRest = () => page.waitForFunction(pose =>
+    document.querySelector<HTMLElement>('[data-letter="0"]')?.style.transform === pose, restPose, { timeout: SETTLE_TIMEOUT_MS });
+  await waitForRest();
+  await firstLetter.evaluate(node => {
+    node.addEventListener("pointerdown", event => {
+      if (event instanceof PointerEvent) node.dataset.testPointer = [event.pointerId, event.clientX, event.clientY].join(",");
+    }, { once: true });
+  });
+  await firstLetter.hover();
+  await page.mouse.down();
+  const releaseShift = await firstLetter.evaluate(node => {
+    const before = node.getBoundingClientRect();
+    const [pointerId, x, y] = (node.dataset.testPointer ?? "").split(",").map(Number);
+    node.dispatchEvent(new PointerEvent("pointerup", {
+      bubbles: true,
+      pointerId,
+      clientX: x! + 40,
+      clientY: y,
+    }));
+    const after = node.getBoundingClientRect();
+    return after.left + after.width / 2 - before.left - before.width / 2;
+  });
+  expect(Math.abs(releaseShift - 40) < 3, `Letterpress should spring from the release coordinates, shifting 40px here: ${releaseShift.toFixed(2)}px`);
+  await page.mouse.up();
+
+  await waitForRest();
+  const slot = await firstLetter.boundingBox();
+  if (!slot) throw new Error("Letterpress should show the first letter in its slot.");
+  await slider.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  expect(await firstLetter.evaluate(node => node.matches(":focus-visible")), "the first Letterpress letter should retain its keyboard focus ring");
+  const visibleDepth = () => letters.evaluateAll(nodes => nodes.slice(0, 2).map(node => Number(getComputedStyle(node).zIndex)));
+  await letters.nth(1).hover();
+  await page.mouse.down();
+  await page.mouse.move(slot.x + slot.width / 2, slot.y + slot.height / 2, { steps: 4 });
+  const liftedDepths = await visibleDepth();
+  expect(liftedDepths[1]! > liftedDepths[0]!, "a held Letterpress letter should stay in front of the focused letter");
+  await page.mouse.up();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const depths = await visibleDepth();
+  expect(depths[1]! > depths[0]!, "the latest overlapping drop should stay in front of the focused letter");
+  await page.mouse.down();
+  expect(await held.getAttribute("data-letter") === "1", "re-grabbing a visible returning letter should keep that letter");
+  await page.mouse.up();
+
+  const scene = page.locator("[data-letterpress]");
+  const handOff = async (delta: number, neighbor: string, edge: string) => {
+    const bounds = await scene.boundingBox();
+    if (!bounds) throw new Error("Letterpress should show its scene at the wheel boundary.");
+    await page.mouse.move(bounds.x + bounds.width / 4, bounds.y + bounds.height / 3);
+    await page.mouse.wheel(0, delta);
+    await page.waitForFunction(({ route, edge }) => location.pathname !== route ||
+      document.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow") !== edge,
+    { route, edge }, { timeout: SETTLE_TIMEOUT_MS });
+    expect((await state(page)).path === neighbor, `a fresh outward wheel step should page from Letterpress to ${neighbor}`);
+    expect(await scene.locator("[role=slider]").getAttribute("aria-valuenow") === edge, "paging should leave Letterpress at the same boundary");
+  };
+  const index = cards.findIndex(card => card.slug === LETTERPRESS);
+  await handOff(120, livePath(cards[index + 1]!.slug), "100");
+  await page.goto(`${origin}${route}`);
+  await settle(page, current => current.path === route && isPageOf(current, "Letterpress"));
+  await scene.locator("[data-ready]").waitFor();
+  await handOff(-120, livePath(cards[index - 1]!.slug), "0");
+}
+
+async function checkLetterpressInWebKit() {
+  const engine = await webkit.launch();
+  try {
+    const page = await engine.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
+    const route = livePath(LETTERPRESS);
+    await page.goto(`${origin}${route}`);
+    await settle(page, current => current.path === route && isPageOf(current, "Letterpress"));
+    await page.locator("[data-letterpress] [data-ready]").waitFor();
+    for (const [x, y, glyph] of [[553.5, 509.5, "7"], [603.5, 465.5, "0"]] as const) {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      const lifted = await page.locator("[data-lifted]").evaluateAll(nodes => nodes[0]?.getAttribute("data-letter"));
+      expect(lifted === glyph, `the visible glyph at (${x}, ${y}) should lift in WebKit; expected ${glyph}, picked ${lifted}`);
+      await page.keyboard.press("Escape");
+      await page.mouse.up();
+    }
+  } finally {
+    await engine.close();
+  }
+}
+
 try {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
@@ -217,6 +448,7 @@ try {
       const direct = await settle(page, current => current.layout === "pages" && isPageOf(current, card.title));
       expect(direct.title === routeTitle(card), `${livePath(slug)} should be titled for ${card.title}: ${JSON.stringify(direct)}`);
       expect(isPageOf(direct, card.title), `${livePath(slug)} should fill the page with ${card.title}`);
+      if (slug === LETTERPRESS) await checkLetterpressRouting(page);
     }
   }
   await checkKeyboardFocus(page);
@@ -308,6 +540,7 @@ try {
   const between = widths.filter(width => Math.abs(width - tileWidth) > SNAP && Math.abs(width - pageWidth) > SNAP);
   expect(pageWidth > tileWidth * 2, `with reduced motion the card should still grow from a tile to a page: ${tileWidth}px to ${pageWidth}px`);
   expect(between.length === 0, `with reduced motion the card should jump between tile and page, but ${between.length} frames showed it in between (first: ${between[0]}px)`);
+  if (process.argv.includes("--webkit")) await checkLetterpressInWebKit();
 } finally {
   await browser.close();
   await server.close();

@@ -149,6 +149,7 @@ function place(fit: Fit) {
   const y = (fit.height - height * scale) / 2;
   const offset = Math.abs(x) > 0.5 || Math.abs(y) > 0.5 ? `translate(${x}px, ${y}px) ` : "";
   fit.content.style.transform = scale === 1 && !offset ? "" : `${offset}scale(${scale})`;
+  fit.content.style.setProperty("--preview-scale", String(scale));
 }
 
 /** Where the card is between tile (0) and page (1), or the end it has landed at. */
@@ -162,6 +163,7 @@ type Progress = number | End | undefined;
  * here it goes in while the card still moves enough to carry it.
  */
 const LANDS_ON_PAGE_FROM = 0.98;
+const BLEND_TO_PAGE_FROM = 0.70;
 
 function progressOf(fit: Fit): Progress {
   const at = fit.flight?.progress.get();
@@ -203,7 +205,7 @@ function landingLayout(fit: Fit, flight: FitFlight, end: End, area: Size): FitLa
   const pad = padAt(fit, flight, end, area);
   const rest = fit.rest[end];
   const landing = rest && near(rest.pad, pad, UNDER_A_LINE) ? restAt(flight, rest, end) : restLayout(inset(flight.ends()[end], pad));
-  return near(landing, fit.layout) ? fit.layout : landing;
+  return near(landing, fit.layout, HAIR) ? fit.layout : landing;
 }
 
 function layoutFor(fit: Fit, progress: Progress): FitLayout {
@@ -215,11 +217,17 @@ function layoutFor(fit: Fit, progress: Progress): FitLayout {
   fit.landing = landing;
   if (flight && landing) return heldLayout(arrived ? landingLayout(fit, flight, landing, area) : fit.layout, area);
   if (!flight || typeof progress !== "number") return settledLayout(fit, area);
-  // Nothing to blend toward until the preview has rested at both ends.
-  if (!rest.tile || !rest.page) return restLayout(area);
+  const intoLanding = Math.max(0, progress - BLEND_TO_PAGE_FROM) / (LANDS_ON_PAGE_FROM - BLEND_TO_PAGE_FROM);
+  const easeToPage = intoLanding * intoLanding * (3 - 2 * intoLanding);
+  if (!rest.tile || !rest.page) {
+    const current = restLayout(area);
+    if (easeToPage === 0) return current;
+    return flightLayout(area, current, landingLayout(fit, flight, "page", area), easeToPage);
+  }
   const tile = restAt(flight, rest.tile, "tile");
   const page = restAt(flight, rest.page, "page");
-  return flightLayout(area, tile, page, fit.stepped ? stopAt(flightStops(tile, page), progress) : progress);
+  const blend = progress + (1 - progress) * easeToPage;
+  return flightLayout(area, tile, page, fit.stepped ? stopAt(flightStops(tile, page), progress) : blend);
 }
 
 /** Each canvas's pixel size: an attribute, so reading it costs no layout. */
