@@ -51,35 +51,50 @@ export function defaultFunction(source: ts.SourceFile): ts.FunctionDeclaration |
   );
 }
 
-const PLAIN_JSX_PARENTS = new Set([
-  ts.SyntaxKind.JsxElement,
-  ts.SyntaxKind.JsxFragment,
-  ts.SyntaxKind.ParenthesizedExpression,
-  ts.SyntaxKind.ReturnStatement,
-  ts.SyntaxKind.Block,
-]);
+/** The expressions `fn` returns: each `return` of its own (not of functions nested in it), or an arrow's expression body. */
+function returnedExpressions(fn: ts.FunctionLikeDeclaration): (ts.Expression | undefined)[] {
+  if (!fn.body) return [];
+  if (!ts.isBlock(fn.body)) return [fn.body];
+  const found: (ts.Expression | undefined)[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isFunctionLike(node) || ts.isClassLike(node)) return;
+    if (ts.isReturnStatement(node)) found.push(node.expression);
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(fn.body, visit);
+  return found;
+}
+
+/** True when `expression` is JSX that contains an element whose tag `isTag` accepts, wrapped only by other elements. */
+function plainlyContains(expression: ts.Expression, isTag: (tag: ts.JsxTagNameExpression) => boolean): boolean {
+  const target = ts.isParenthesizedExpression(expression) ? plainlyContains(expression.expression, isTag) : undefined;
+  if (target !== undefined) return target;
+  if (ts.isJsxSelfClosingElement(expression)) return isTag(expression.tagName);
+  if (ts.isJsxElement(expression)) {
+    return isTag(expression.openingElement.tagName) || expression.children.some(child => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child) ? plainlyContains(child, isTag) : false);
+  }
+  if (ts.isJsxFragment(expression)) {
+    return expression.children.some(child => ts.isJsxElement(child) || ts.isJsxSelfClosingElement(child) || ts.isJsxFragment(child) ? plainlyContains(child, isTag) : false);
+  }
+  return false;
+}
 
 /**
- * True when `fn` always renders a JSX element named `tag`: one inside the JSX it returns, wrapped only
- * by other elements, never behind a condition, a call, or an expression in braces.
+ * True when `fn` always renders `name` imported from `module`: every value it returns is JSX holding
+ * that element, wrapped only by other elements, never behind a condition, a call, or braces, and the
+ * tag resolves to the import itself rather than anything that shadows it.
  */
-export function rendersElement(fn: ts.FunctionLikeDeclaration, tag: string): boolean {
-  let found = false;
-  const plainlyReturned = (element: ts.Node) => {
-    let node: ts.Node = ts.isJsxOpeningElement(element) ? element.parent : element;
-    for (let parent = node.parent; parent && parent !== fn; node = parent, parent = parent.parent) {
-      if (!PLAIN_JSX_PARENTS.has(parent.kind)) return false;
-    }
-    return node === fn.body;
+export function rendersElement(source: ts.SourceFile, fn: ts.FunctionLikeDeclaration, name: string, module: string): boolean {
+  const checker = checkerFor(source);
+  const isTag = (tag: ts.JsxTagNameExpression) => {
+    if (!ts.isIdentifier(tag) || tag.text !== name) return false;
+    const declaration = checker.getSymbolAtLocation(tag)?.declarations?.[0];
+    if (!declaration || !ts.isImportSpecifier(declaration)) return false;
+    const from = declaration.parent.parent.parent.moduleSpecifier;
+    return ts.isStringLiteral(from) && from.text === module && (declaration.propertyName ?? declaration.name).text === name;
   };
-  const visit = (child: ts.Node) => {
-    if (found) return;
-    if ((ts.isJsxOpeningElement(child) || ts.isJsxSelfClosingElement(child)) && child.tagName.getText() === tag && plainlyReturned(child)) {
-      found = true;
-    } else ts.forEachChild(child, visit);
-  };
-  if (fn.body) visit(fn.body);
-  return found;
+  const returns = returnedExpressions(fn);
+  return returns.length > 0 && returns.every(expression => !!expression && plainlyContains(expression, isTag));
 }
 
 /** True when the module imports `name` as itself, unrenamed, from `module`. */
@@ -135,20 +150,33 @@ function unwrap(expression: ts.Expression): ts.Expression {
   return target;
 }
 
-/** The function a declaration holds: a function or method itself, or a variable or field initialised with one. */
-function functionOf(declaration: ts.Declaration): FunctionLike | undefined {
-  if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) return declaration;
+/** The function a declaration holds: a function or method itself, a variable or field initialised with one, or an alias of one. */
+function functionOf(checker: ts.TypeChecker, declaration: ts.Declaration, depth = 0): FunctionLike[] {
+  if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) return [declaration];
   if ((ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration)) && declaration.initializer) {
     const value = unwrap(declaration.initializer);
-    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value;
+    if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return [value];
+    if (depth < 3 && (ts.isIdentifier(value) || isThisMember(value))) return resolve(checker, ts.isIdentifier(value) ? value : value.name, depth + 1);
   }
-  return undefined;
+  return [];
+}
+
+function isThisMember(node: ts.Node): node is ts.PropertyAccessExpression {
+  return ts.isPropertyAccessExpression(node) && node.expression.kind === ts.SyntaxKind.ThisKeyword;
 }
 
 /** The functions a name or `this.name` refers to, resolved by the checker. */
-function resolve(checker: ts.TypeChecker, node: ts.Node): FunctionLike[] {
+function resolve(checker: ts.TypeChecker, node: ts.Node, depth = 0): FunctionLike[] {
   const symbol = checker.getSymbolAtLocation(node);
-  return (symbol?.declarations ?? []).flatMap(declaration => functionOf(declaration) ?? []);
+  return (symbol?.declarations ?? []).flatMap(declaration => functionOf(checker, declaration, depth));
+}
+
+/** The functions a call reaches in this file: `name(…)` or `this.name(…)`. */
+function calleeFunctions(checker: ts.TypeChecker, call: ts.CallExpression): FunctionLike[] {
+  const callee = unwrap(call.expression);
+  if (ts.isIdentifier(callee)) return resolve(checker, callee);
+  if (isThisMember(callee)) return resolve(checker, callee.name);
+  return [];
 }
 
 /** The functions an expression handed to a loop runs: an inline function, a name, `this.name`, or either with `.bind(…)`. */
@@ -159,7 +187,7 @@ function callbackFunctions(checker: ts.TypeChecker, expression: ts.Expression): 
   }
   if (ts.isArrowFunction(target) || ts.isFunctionExpression(target)) return [target];
   if (ts.isIdentifier(target)) return resolve(checker, target);
-  if (ts.isPropertyAccessExpression(target) && target.expression.kind === ts.SyntaxKind.ThisKeyword) return resolve(checker, target.name);
+  if (isThisMember(target)) return resolve(checker, target.name);
   return [];
 }
 
@@ -181,25 +209,50 @@ function frameArgument(checker: ts.TypeChecker, call: ts.CallExpression): ts.Exp
   return undefined;
 }
 
+/** Calls whose function arguments run later, not during the frame that makes the call. */
+const DEFERRING_CALLS = new Set([
+  "setTimeout", "setInterval", "requestAnimationFrame", "requestIdleCallback", "queueMicrotask",
+  "addEventListener", "then", "catch", "finally", "visibleLoop",
+]);
+
+function calledName(call: ts.CallExpression): string | undefined {
+  const callee = unwrap(call.expression);
+  return ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
+}
+
 /**
- * The function bodies that run every frame, as offsets into the file: the callback handed to
- * requestAnimationFrame or visibleLoop, in any form, and the functions and methods of this file it
- * calls by name or `this.`, two calls deep, each name resolved through its real scope. A call marked
- * `perf-allow: <reason>` on its line or the one above (one that runs only when something changed, or
- * at most every so often) is not followed.
+ * True when a function nested in a frame body runs during that frame: an inline callback such as a
+ * forEach's. A named function runs only when called (calls are followed on their own), and a callback
+ * handed to an observer, a timer, a listener, or a promise runs later.
  */
-export function frameBodies(file: string, text: string): { start: number; end: number }[] {
-  const source = parse(file, text);
-  const checker = checkerFor(source);
-  const seen = new Set<FunctionLike>();
-  let frontier: FunctionLike[] = [];
-  const visitCalls = (node: ts.Node, onCall: (call: ts.CallExpression) => void) => {
-    const visit = (child: ts.Node) => {
-      if (ts.isCallExpression(child)) onCall(child);
-      ts.forEachChild(child, visit);
-    };
+function runsInline(fn: FunctionLike): boolean {
+  if (!ts.isArrowFunction(fn) && !ts.isFunctionExpression(fn)) return false;
+  const parent = fn.parent;
+  if (ts.isNewExpression(parent)) return false;
+  if (ts.isCallExpression(parent) && parent.arguments.includes(fn)) return !DEFERRING_CALLS.has(calledName(parent) ?? "");
+  return false;
+}
+
+/** Visits the nodes a frame body runs, stepping into inline callbacks and around everything that runs later. */
+function walkFrame(body: ts.Node, visit: (node: ts.Node) => void) {
+  const step = (node: ts.Node) => {
+    if (node !== body && ts.isFunctionLike(node) && !runsInline(node as FunctionLike)) return;
+    if (ts.isClassLike(node)) return;
     visit(node);
+    ts.forEachChild(node, step);
   };
+  step(body);
+}
+
+/**
+ * The functions that run every frame: the callback handed to requestAnimationFrame or visibleLoop,
+ * in any form, and the functions and methods of this file it calls by name or `this.`, two calls
+ * deep, each name resolved through its real scope. A call marked `perf-allow: <reason>` on its line
+ * or the one above (one that runs only when something changed, or at most every so often) is not
+ * followed.
+ */
+function frameFunctions(source: ts.SourceFile, checker: ts.TypeChecker, text: string): FunctionLike[] {
+  const seen = new Set<FunctionLike>();
   const add = (fns: FunctionLike[], into: FunctionLike[]) => {
     for (const fn of fns) {
       if (seen.has(fn)) continue;
@@ -207,66 +260,109 @@ export function frameBodies(file: string, text: string): { start: number; end: n
       into.push(fn);
     }
   };
-  visitCalls(source, call => {
-    const argument = frameArgument(checker, call);
-    if (argument) add(callbackFunctions(checker, argument), frontier);
-  });
+  let frontier: FunctionLike[] = [];
+  const findLoops = (node: ts.Node) => {
+    if (ts.isCallExpression(node)) {
+      const argument = frameArgument(checker, node);
+      if (argument) add(callbackFunctions(checker, argument), frontier);
+    }
+    ts.forEachChild(node, findLoops);
+  };
+  findLoops(source);
   for (let hop = 0; hop < 2; hop++) {
     const next: FunctionLike[] = [];
     for (const fn of frontier) {
       if (!fn.body) continue;
-      visitCalls(fn.body, call => {
-        if (allowedNear(text, call.getStart(source), ALLOW, 1)) return;
-        const callee = unwrap(call.expression);
-        if (ts.isIdentifier(callee)) add(resolve(checker, callee), next);
-        else if (ts.isPropertyAccessExpression(callee) && callee.expression.kind === ts.SyntaxKind.ThisKeyword) add(resolve(checker, callee.name), next);
+      walkFrame(fn.body, node => {
+        if (!ts.isCallExpression(node) || allowedNear(text, node.getStart(source), ALLOW, 1)) return;
+        add(calleeFunctions(checker, node), next);
       });
     }
     frontier = next;
   }
-  return [...seen].flatMap(fn => (fn.body ? [{ start: fn.body.getStart(source), end: fn.body.end }] : []));
+  return [...seen];
 }
 
-/** The function a timeout runs: `name`, `this.name`, or an inline function that only calls one of those. */
-function scheduledName(callback: ts.Expression): string | undefined {
-  if (ts.isIdentifier(callback)) return callback.text;
-  if (ts.isPropertyAccessExpression(callback)) return callback.name.text;
-  if (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) {
-    const body = callback.body;
-    const only = ts.isBlock(body) ? (body.statements.length === 1 ? body.statements[0] : undefined) : body;
-    const expression = only && ts.isExpressionStatement(only) ? only.expression : only && ts.isExpression(only) ? only : undefined;
-    if (expression && ts.isCallExpression(expression)) return scheduledName(unwrap(expression.expression));
+const LAYOUT_READS = /^(?:client|offset|scroll)(?:Width|Height|Left|Top)$/;
+
+function isAssigned(node: ts.Node): boolean {
+  const parent = node.parent;
+  return ts.isBinaryExpression(parent) && parent.left === node &&
+    parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
+}
+
+/** True when a setter is React state: a `useState`/`useReducer` pair, or one handed in as a parameter or prop. */
+function isStateSetter(checker: ts.TypeChecker, callee: ts.Identifier): boolean {
+  if (!/^set[A-Z]/.test(callee.text) || callee.text === "setTimeout" || callee.text === "setInterval") return false;
+  const declaration = checker.getSymbolAtLocation(callee)?.declarations?.[0];
+  if (!declaration) return false;
+  if (ts.isParameter(declaration)) return true;
+  if (!ts.isBindingElement(declaration)) return false;
+  let pattern: ts.Node = declaration.parent;
+  while (ts.isBindingElement(pattern.parent) || ts.isObjectBindingPattern(pattern.parent) || ts.isArrayBindingPattern(pattern.parent)) pattern = pattern.parent;
+  const holder = pattern.parent;
+  if (ts.isParameter(holder)) return true;
+  if (ts.isVariableDeclaration(holder) && holder.initializer) {
+    const init = unwrap(holder.initializer);
+    return ts.isCallExpression(init) && /^use(?:State|Reducer)$/.test(calledName(init) ?? "");
   }
-  return undefined;
+  return false;
 }
 
-/** Offsets of `setTimeout(…)` calls that schedule the function they run in: a loop on timers rather than the kit. */
+export type FrameFinding = { index: number; code: string; fnStart: number };
+
+/** What the frame code in a file does that it should not: layout reads, font changes, and React state updates. */
+export function frameFindings(file: string, text: string): { reads: FrameFinding[]; setters: FrameFinding[] } {
+  const source = parse(file, text);
+  const checker = checkerFor(source);
+  const reads: FrameFinding[] = [];
+  const setters: FrameFinding[] = [];
+  for (const fn of frameFunctions(source, checker, text)) {
+    if (!fn.body) continue;
+    const fnStart = fn.getStart(source);
+    const found = (into: FrameFinding[], node: ts.Node) => into.push({ index: node.getStart(source), code: node.getText(source), fnStart });
+    walkFrame(fn.body, node => {
+      if (ts.isPropertyAccessExpression(node)) {
+        if (LAYOUT_READS.test(node.name.text) && !isAssigned(node)) found(reads, node);
+        else if (node.name.text === "font" && isAssigned(node)) found(reads, node.parent);
+      } else if (ts.isCallExpression(node)) {
+        const name = calledName(node);
+        if (name === "getBoundingClientRect" || name === "getClientRects" || name === "getComputedStyle") found(reads, node);
+        const callee = unwrap(node.expression);
+        if (ts.isIdentifier(callee) && isStateSetter(checker, callee)) found(setters, node);
+      } else if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+        const name = (node.propertyName ?? node.name).getText(source);
+        if (LAYOUT_READS.test(name)) found(reads, node);
+      }
+    });
+  }
+  return { reads, setters };
+}
+
+/** Offsets of timeouts that schedule the function they run in, by name or from a callback that calls it: a loop on timers rather than the kit. */
 export function selfSchedulingTimeouts(file: string, text: string): number[] {
   const source = parse(file, text);
+  const checker = checkerFor(source);
   const found: number[] = [];
-  const visit = (node: ts.Node, enclosing: string[]) => {
-    let names = enclosing;
-    if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name && ts.isIdentifier(node.name)) {
-      names = [...enclosing, node.name.text];
-    } else if (
-      (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
-    ) {
-      names = [...enclosing, node.name.text];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && calledName(node) === "setTimeout" && node.arguments[0]) {
+      const callback = unwrap(node.arguments[0]);
+      const targets = ts.isArrowFunction(callback) || ts.isFunctionExpression(callback) ? [] : callbackFunctions(checker, callback);
+      if (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) {
+        const collect = (child: ts.Node) => {
+          if (ts.isCallExpression(child)) targets.push(...calleeFunctions(checker, child));
+          ts.forEachChild(child, collect);
+        };
+        collect(callback.body);
+      }
+      const insideTarget = targets.some(target => {
+        for (let parent: ts.Node | undefined = node.parent; parent; parent = parent.parent) if (parent === target) return true;
+        return false;
+      });
+      if (insideTarget) found.push(node.getStart(source));
     }
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      const isTimeout =
-        (ts.isIdentifier(callee) && callee.text === "setTimeout") ||
-        (ts.isPropertyAccessExpression(callee) && callee.name.text === "setTimeout");
-      const first = node.arguments[0] && unwrap(node.arguments[0]);
-      const target = first && scheduledName(first);
-      if (isTimeout && target && names.includes(target)) found.push(node.getStart(source));
-    }
-    ts.forEachChild(node, child => visit(child, names));
+    ts.forEachChild(node, visit);
   };
-  visit(source, []);
+  visit(source);
   return found;
 }

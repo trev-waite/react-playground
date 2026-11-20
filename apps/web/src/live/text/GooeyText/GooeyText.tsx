@@ -92,7 +92,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   const cycles = lines.words.map(word => phases(word.letters.length).total);
   let wordIndex = 0;
   let elapsed = 0;
-  let timer = 0;
+  let stillShown = false;
   let lastDropX: number | null = null;
   /** The drop's stretch rides a spring toward the stretch its speed asks for, so it wobbles like jelly when it starts and stops. */
   let stretch = 0;
@@ -180,35 +180,31 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   }
 
   function tick(_now: number, delta: number): FrameRequest {
-    if (reducedMotion.matches) return false;
+    if (reducedMotion.matches) {
+      if (stillShown) wordIndex = (wordIndex + 1) % lines.words.length;
+      still();
+      stillShown = true;
+      return STILL_MS;
+    }
     const dt = Math.min(48, delta);
     advance(dt);
     play(wordIndex, elapsed, dt);
     return true;
   }
 
-  const loop = visibleLoop(svg, tick, { onVisibleChange: visible => (visible ? wake() : window.clearTimeout(timer)) });
+  const loop = visibleLoop(svg, tick, { onVisibleChange: visible => visible && wake() });
 
   function still() {
-    window.clearTimeout(timer);
     show(wordIndex);
     lastDropX = null;
     draw(wordIndex, restingPose(lines.words[wordIndex]!, FONT_SIZE), 0);
-    timer = window.setTimeout(() => {
-      wordIndex = (wordIndex + 1) % lines.words.length;
-      still();
-    }, STILL_MS);
   }
 
   function wake() {
     loop.sleep();
-    window.clearTimeout(timer);
     if (!loop.visible) return;
-    if (reducedMotion.matches) {
-      still();
-      return;
-    }
-    show(wordIndex);
+    stillShown = false;
+    if (!reducedMotion.matches) show(wordIndex);
     loop.wake();
   }
 
@@ -218,7 +214,6 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
 
   return () => {
     loop.stop();
-    window.clearTimeout(timer);
     reducedMotion.removeEventListener("change", wake);
   };
 }

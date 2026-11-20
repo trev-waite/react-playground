@@ -117,10 +117,10 @@ describe("card contract", () => {
           `${file} must \`export default function ${name}Preview()\`, taking no props: the deck mounts it bare, ` +
             "in the grid tile, in flight, and on its page, and remounts it to reset.",
         );
-      } else if (!importsAsItself(syntax, name, `./${name}`) || !rendersElement(preview, name)) {
+      } else if (!importsAsItself(syntax, name, `./${name}`) || !rendersElement(syntax, preview, name, `./${name}`)) {
         violations.push(
-          `${file}: ${name}Preview() must import { ${name} } from "./${name}" and always render <${name} /> in the JSX ` +
-            "it returns (wrappers are fine, a condition is not), so the card, its code, and its download are the same thing.",
+          `${file}: ${name}Preview() must import { ${name} } from "./${name}" and render <${name} /> in every JSX it returns ` +
+            "(wrappers are fine, a condition or an early return of something else is not), so the card, its code, and its download are the same thing.",
         );
       }
     }

@@ -513,6 +513,7 @@ function prebuildForms(): () => void {
       });
       cancel = () => window.cancelIdleCallback(id);
     } else {
+      // perf-allow: builds each remaining form once, in idle time, then stops.
       const id = setTimeout(() => {
         formAt(index);
         next();

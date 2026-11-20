@@ -11,7 +11,7 @@ import {
   stripCssComments,
   transitionedProperties,
 } from "./source";
-import { frameBodies, selfSchedulingTimeouts } from "./syntax";
+import { frameFindings, selfSchedulingTimeouts } from "./syntax";
 
 /**
  * Performance lint. Each rule guards a fix that took a transition from
@@ -37,12 +37,6 @@ function lastCompound(selector: string): string {
     else if (depth === 0 && /[\s>+~]/.test(ch)) start = i + 1;
   }
   return selector.slice(start);
-}
-
-/** The code that runs every frame, comments blanked, with offsets into the file. */
-function frameCallbacks(file: string, text: string): { body: string; start: number }[] {
-  const code = blankComments(text);
-  return frameBodies(file, text).map(({ start, end }) => ({ body: code.slice(start, end), start }));
 }
 
 /** `// …` and `/* … *\/` comments blanked to spaces, so offsets still line up. */
@@ -136,16 +130,10 @@ describe("performance lint: code", () => {
   test("frame loops never set React state", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
-      const ownFunctions = new Set(
-        [...text.matchAll(/\bfunction\s+(set[A-Z]\w*)\s*\(|\b(?:const|let)\s+(set[A-Z]\w*)\s*=\s*(?:\([^)]*\)|\w+)\s*=>/g)].map(
-          match => match[1] ?? match[2]!,
-        ),
-      );
-      for (const { body, start } of frameCallbacks(file, text)) {
-        const setter = [...body.matchAll(/(?<![.\w])(set(?!Timeout\b|Interval\b)[A-Z]\w*)\(/g)].find(call => !ownFunctions.has(call[1]!));
-        if (!setter || allowedNear(text, start) || allowedNear(text, start + setter.index)) continue;
+      for (const { index, code, fnStart } of frameFindings(file, text).setters) {
+        if (allowedNear(text, fnStart) || allowedNear(text, index)) continue;
         violations.push(
-          `${file}:${lineOf(text, start + setter.index)} calls ${setter[0]}) every frame, re-rendering React 60 times a second. ` +
+          `${file}:${lineOf(text, index)} calls ${code.split("(")[0]}() every frame, re-rendering React 60 times a second. ` +
             "Write to a motion value, a ref, or the DOM instead.",
         );
       }
@@ -155,18 +143,13 @@ describe("performance lint: code", () => {
 
   test("frame loops read no layout and set no font, which would restyle the page after the deck moves a card", async () => {
     const violations: string[] = [];
-    const read =
-      /\.(?:getBoundingClientRect|getClientRects)\(|\.(?:client|offset|scroll)(?:Width|Height|Left|Top)\b(?!\s*=(?!=))|\{[^{}]*\b(?:client|offset|scroll)(?:Width|Height|Left|Top)\b[^{}]*\}\s*=(?!=)|\bgetComputedStyle\(|\.font\s*=(?!=)/g;
     for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
-      for (const { body, start } of frameCallbacks(file, text)) {
-        for (const match of body.matchAll(read)) {
-          const index = start + match.index;
-          if (allowedNear(text, index)) continue;
-          violations.push(
-            `${file}:${lineOf(text, index)} runs \`${match[0]}\` every frame. Read sizes in a ResizeObserver callback and keep them, ` +
-              "and set the font when the canvas resizes; or add `perf-allow: <reason>`.",
-          );
-        }
+      for (const { index, code } of frameFindings(file, text).reads) {
+        if (allowedNear(text, index)) continue;
+        violations.push(
+          `${file}:${lineOf(text, index)} runs \`${code.split("\n")[0]}\` every frame. Read sizes in a ResizeObserver callback and keep them, ` +
+            "and set the font when the canvas resizes; or add `perf-allow: <reason>`.",
+        );
       }
     }
     report(violations);

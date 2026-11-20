@@ -4,7 +4,10 @@
  */
 export type FrameRequest = boolean | number | void;
 
-/** One frame: the rAF timestamp, and the milliseconds since the last frame, or since the wake for the first one. */
+/**
+ * One frame: the rAF timestamp, and the milliseconds since the last frame (including any wait it asked
+ * for), or since the wake for the first frame after a sleep or a return to the screen.
+ */
 export type LoopFrame = (now: number, delta: number) => FrameRequest;
 
 export type VisibleLoop = {
@@ -66,8 +69,14 @@ export function visibleLoop(target: Element, frame: LoopFrame, options: VisibleL
     }
     if (stopped || slept || !visible || queued || wait !== undefined) return;
     if (next === true) queued = requestAnimationFrame(run);
-    else if (typeof next === "number") wait = setTimeout(resume, Math.max(0, next));
+    else if (typeof next === "number") wait = setTimeout(continueAfterWait, Math.max(0, next));
   };
+
+  function continueAfterWait() {
+    wait = undefined;
+    if (stopped || slept || !visible || queued) return;
+    queued = requestAnimationFrame(run);
+  }
 
   function resume() {
     clearTimeout(wait);

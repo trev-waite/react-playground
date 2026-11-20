@@ -118,6 +118,19 @@ describe("visibleLoop", () => {
     expect(seen.map(([now]) => now)).toEqual([16, 432]);
   });
 
+  test("the frame after a wait measures from the frame that asked for it", () => {
+    const { loop, seen } = loopWith([300, undefined]);
+    loop.wake();
+    runFrame(16);
+    clock = 316;
+    runTimers();
+    runFrame(332);
+    expect(seen).toEqual([
+      [16, 16],
+      [332, 316],
+    ]);
+  });
+
   test("leaving the screen drops the queued frame and wait, and coming back wakes it", () => {
     const changes: boolean[] = [];
     const loop = visibleLoop({} as Element, () => 400, { onVisibleChange: visible => changes.push(visible) });
