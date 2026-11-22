@@ -3,13 +3,10 @@ import { glide, play, type Move, type Playback } from "@/live/kit/Stage/choreogr
 import { Stage } from "@/live/kit/Stage/Stage";
 import stageStyles from "@/live/kit/Stage/Stage.module.css";
 import { changeWords, dayPart, splitWords, timeSentence, type Word } from "./timeWords";
+import { windHold } from "./windHold";
 import styles from "./WordClock.module.css";
 
 const MINUTE_MS = 60_000;
-/** Holding a wind button steps once, waits, then steps faster and faster. */
-const HOLD_DELAY_MS = 420;
-const HOLD_FIRST_MS = 160;
-const HOLD_FASTEST_MS = 70;
 /** Old words leave quickly, and the new ones start rising as they go, so the two barely overlap even while the clock winds. */
 const LEAVE_MS = 280;
 const ARRIVE_AFTER_MS = 180;
@@ -151,29 +148,17 @@ function WordRun({ run, version }: { run: Run; version: number }) {
 }
 
 function useHold(step: () => void) {
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const stop = () => clearTimeout(timer.current);
-  useEffect(() => stop, []);
+  const [hold] = useState(() => windHold(step));
+  useEffect(() => hold.release, [hold]);
   return {
     onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) return;
-      stop();
-      step();
-      let wait = HOLD_FIRST_MS;
-      const repeat = () => {
-        step();
-        wait = Math.max(HOLD_FASTEST_MS, wait * 0.85);
-        // perf-allow: repeats only while a finger or mouse holds the button.
-        timer.current = setTimeout(repeat, wait);
-      };
-      timer.current = setTimeout(repeat, HOLD_DELAY_MS);
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      hold.press();
     },
-    onPointerUp: stop,
-    onPointerLeave: stop,
-    onPointerCancel: stop,
-    onClick: (event: { detail: number }) => {
-      if (event.detail === 0) step();
-    },
+    onPointerUp: hold.release,
+    onPointerLeave: hold.release,
+    onPointerCancel: hold.cancel,
+    onClick: (event: { detail: number }) => hold.activate(event.detail === 0),
   };
 }
 
