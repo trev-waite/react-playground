@@ -4,6 +4,14 @@
   overflow: hidden;
 }
 
+/* The deck places every card itself. Scroll anchoring (Safari, once the
+   reader has scrolled) would move the scroll to hold a card still while a
+   flight moves it, so a page landed short of its place and then jumped. */
+.scroller,
+:global(:root[data-scroll="document"]) {
+  overflow-anchor: none;
+}
+
 .scroller {
   position: absolute;
   inset: 0;

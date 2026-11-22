@@ -301,6 +301,28 @@ async function checkLetterpressRouting(page: Page) {
   await slider.press("Home");
   expect(await buttonLabel() !== "Pause animation", "using the scrubber should stop Letterpress playback");
 
+  const trackY = track.y + track.height / 2;
+  await page.mouse.move(track.x + track.width * 0.9, trackY);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width * 0.5, trackY, { steps: 6 });
+  // Measured once the drag has reached mid-track and the held thumb has grown to its full size.
+  await page.waitForFunction(() => {
+    const card = document.querySelector("article[data-deck-card='text/Letterpress']");
+    const value = Number(card?.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow"));
+    const thumb = card?.querySelector("[data-scrubber-thumb]");
+    return value >= 40 && value <= 60 && thumb instanceof Element && getComputedStyle(thumb).scale === "1.15";
+  }, undefined, { timeout: SETTLE_TIMEOUT_MS });
+  const thumbGap = await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const card = document.querySelector("article[data-deck-card='text/Letterpress']");
+    const thumb = card?.querySelector("[data-scrubber-thumb]")?.getBoundingClientRect();
+    const fill = card?.querySelector("[data-scrubber-fill]")?.getBoundingClientRect();
+    return thumb && fill ? Math.abs(thumb.left + thumb.width / 2 - fill.right) : Infinity;
+  });
+  await page.mouse.up();
+  expect(thumbGap <= 1.5, `a held Letterpress thumb should sit on the end of the fill (${thumbGap.toFixed(1)}px off)`);
+  await slider.press("Home");
+
   const waitForPile = () => page.waitForFunction(initial =>
     Array.from(document.querySelectorAll<HTMLElement>("article[data-deck-card='text/Letterpress'] [data-letter]")).every((letter, index) => letter.style.transform === initial[index]),
     pile, { timeout: SETTLE_TIMEOUT_MS });

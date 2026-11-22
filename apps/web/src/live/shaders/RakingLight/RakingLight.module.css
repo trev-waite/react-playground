@@ -32,7 +32,7 @@
   inset: 0;
   background: radial-gradient(
     circle 30cqw at var(--lamp-x, 30%) var(--lamp-y, 40%),
-    rgb(255 184 74 / calc(light-dark(0.2, 0.3) * var(--presence))),
+    light-dark(rgb(255 184 74 / calc(0.2 * var(--presence))), rgb(255 184 74 / calc(0.3 * var(--presence)))),
     transparent
   );
 }

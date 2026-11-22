@@ -185,8 +185,10 @@
   height: 448px;
 }
 
+/* One pill of controls, in the deck's button language: a tinted bar, a filled play button, and a rounded track. */
 .controls {
   --control-px: calc(1px / var(--preview-scale, 1));
+  --control-tint: color-mix(in srgb, var(--ink) 8%, transparent);
 
   position: relative;
   z-index: 40;
@@ -194,11 +196,15 @@
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr) max-content;
   align-items: center;
-  column-gap: calc(8 * var(--control-px));
-  width: min(calc(100% - 24 * var(--control-px)), calc(380 * var(--control-px)));
+  column-gap: calc(12 * var(--control-px));
+  box-sizing: border-box;
+  width: min(calc(100% - 24 * var(--control-px)), calc(400 * var(--control-px)));
   margin-inline: auto;
-  padding-block-end: clamp(0px, calc(5cqh - 5 * var(--control-px)), 17px);
-  font: 500 max(0.75rem, calc(12 * var(--control-px))) / 1.4 system-ui, sans-serif;
+  margin-block-end: clamp(0px, calc(5cqh - 5 * var(--control-px)), 17px);
+  padding: calc(4 * var(--control-px)) calc(18 * var(--control-px)) calc(4 * var(--control-px)) calc(4 * var(--control-px));
+  border-radius: 999px;
+  background: var(--control-tint);
+  font: 600 max(0.75rem, calc(13 * var(--control-px))) / 1.4 system-ui, sans-serif;
   color: var(--ink);
   pointer-events: none;
 }
@@ -209,23 +215,28 @@
   width: calc(44 * var(--control-px));
   height: calc(44 * var(--control-px));
   padding: 0;
-  border: calc(1 * var(--control-px)) solid var(--line);
+  border: 0;
   border-radius: 50%;
-  color: var(--ink);
-  background: var(--paper);
+  color: var(--paper);
+  background: var(--ink);
   cursor: pointer;
   pointer-events: auto;
+  transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), opacity 160ms ease;
 }
 
 @media (hover: hover) {
   .playback:hover {
-    background: var(--panel);
+    opacity: 0.86;
   }
+}
+
+.playback:active {
+  transform: scale(0.96);
 }
 
 .playbackIcon {
   grid-area: 1 / 1;
-  width: calc(20 * var(--control-px));
+  width: calc(18 * var(--control-px));
   pointer-events: none;
   opacity: 0;
   filter: blur(2px);
@@ -246,6 +257,8 @@
 
 .hint {
   justify-self: end;
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  white-space: nowrap;
 }
 
 .touchHint {
@@ -258,40 +271,58 @@
   touch-action: pan-y pinch-zoom;
   user-select: none;
   -webkit-user-select: none;
-  cursor: ew-resize;
+  cursor: grab;
   pointer-events: auto;
 }
 
 .track {
   position: absolute;
-  top: calc(50% - var(--control-px));
-  inset-inline: calc(6 * var(--control-px));
-  height: calc(2 * var(--control-px));
+  top: calc(50% - 2 * var(--control-px));
+  inset-inline: calc(8 * var(--control-px));
+  height: calc(4 * var(--control-px));
   container-type: inline-size;
-  border-radius: 2px;
-  background: var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
   pointer-events: none;
+}
+
+.fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;
 }
 
 .thumb {
   position: absolute;
-  top: calc(-5 * var(--control-px));
-  left: calc(-6 * var(--control-px));
-  width: calc(12 * var(--control-px));
-  height: calc(12 * var(--control-px));
+  top: calc(-6 * var(--control-px));
+  left: calc(-8 * var(--control-px));
+  width: calc(16 * var(--control-px));
+  height: calc(16 * var(--control-px));
   border-radius: 50%;
   background: var(--ink);
-  transform: translateX(0);
+  box-shadow: 0 0 0 calc(3 * var(--control-px)) var(--paper);
+  transition: scale 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.scrubber:active {
+  cursor: grabbing;
+}
+
+.scrubber:active .thumb {
+  scale: 1.15;
 }
 
 .playback:focus-visible,
 .scrubber:focus-visible {
   outline: calc(2 * var(--control-px)) solid var(--ink);
-  outline-offset: -2px;
+  outline-offset: calc(2 * var(--control-px));
 }
 
 .scrubber:focus-visible {
-  border-radius: 4px;
+  border-radius: 999px;
 }
 
 @media (forced-colors: active) {
@@ -300,7 +331,8 @@
     background: GrayText;
   }
 
-  .thumb {
+  .thumb,
+  .fill {
     forced-color-adjust: none;
     background: Highlight;
   }
@@ -334,7 +366,9 @@
     display: none;
   }
 
-  .playbackIcon {
+  .playbackIcon,
+  .playback,
+  .thumb {
     transition: none;
   }
 

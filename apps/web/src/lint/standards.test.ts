@@ -164,6 +164,21 @@ describe("standards lint: CSS", () => {
     }
     report(violations);
   });
+
+  test("light-dark() picks between two whole colors, never two numbers", async () => {
+    const violations: string[] = [];
+    for (const { file, text } of await sources(STYLED_DIRS, "**/*.css")) {
+      for (const rule of cssRules(text)) {
+        if (/\blight-dark\(\s*-?[\d.]+%?\s*,/.test(stripCssComments(rule.body))) {
+          violations.push(
+            `${file}:${rule.line} passes numbers to light-dark(). It takes two colors, so the browser drops the ` +
+              "whole declaration and the property falls back (often to black); write `light-dark(rgb(… / 0.2), rgb(… / 0.6))`.",
+          );
+        }
+      }
+    }
+    report(violations);
+  });
 });
 
 describe("standards lint: code", () => {

@@ -3,7 +3,7 @@ import type { CardMeta } from "@/lib/types";
 
 export const meta: CardMeta = {
   title: "Found Poem",
-  description: "A meditation on today as the first day of the rest of your life, traded away for whatever you make of it, ready to make an erasure poem from. Tap the words to keep and they turn blue; erase the rest and every other word blurs away while the kept ones glide together into the poem. Bring the words back to try another.",
+  description: "A short meditation on today, ready to become an erasure poem. Tap the words to keep, erase the rest, and the kept words glide together into the poem.",
   size: "wide",
   surface: {
     light: { swatch: "paper", content: ["#000000", "#2563eb"] },

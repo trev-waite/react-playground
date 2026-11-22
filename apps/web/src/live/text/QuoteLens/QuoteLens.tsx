@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useId, useRef, type RefObject } from "react";
 import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 import { cascadeDelays, play, prefersReducedMotion } from "@/live/kit/Stage/choreography";
 import { Stage, Words } from "@/live/kit/Stage/Stage";
@@ -8,9 +8,9 @@ import styles from "./QuoteLens.module.css";
 
 export type Quote = { text: string; author: string; source: string; href?: string };
 
-/** Dan Campbell on the Lions' injuries, November 17, 2026, in the words NFL.com printed, joined where it left a line out. */
+/** Dan Campbell on the Lions' injuries, November 17, 2026, as NFL.com reported it (it printed "s---"), joined where it left lines out. */
 const QUOTE: Quote = {
-  text: "If you’re not careful, you lay in bed at night and you start thinking about all the ‘what ifs.’ … I refuse to look at it that way. It’s time to move on.",
+  text: "If you’re not careful, you lay in bed at night and you start thinking about all the ‘what ifs?’ And at some point, you become a miserable piece of shit. … I refuse to look at it that way. It’s time to move on.",
   author: "Dan Campbell",
   source: "Detroit Lions head coach, November 17, 2026",
   href: "https://www.nfl.com/news/lions-dan-campbell-refuses-to-be-a-miserable-piece-of-expletive-after-string-of-injuries",
@@ -27,8 +27,6 @@ const DRIFT_RATE = 2.5;
 const ZOOM_RATE = 12;
 /** Left alone this long, the glass goes back to drifting over the page. */
 const IDLE_MS = 3500;
-/** Quiet time after the page last resized before the magnified copy lays out at the new size. */
-const RESIZE_SETTLE_MS = 120;
 const KEY_STEP = 16;
 const KEY_LEAP = 48;
 
@@ -55,8 +53,6 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   let grab: { id: number; offset: Point; from: Point; claimed: boolean } | null = null;
   let tap: { id: number; from: Point } | null = null;
   let mouseInside = false;
-  let sized = false;
-  let settleTimer: ReturnType<typeof setTimeout> | undefined;
   const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   let dragged = false;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -222,25 +218,12 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     aim({ x: (drifting ? current.x : target.x) + move.x, y: (drifting ? current.y : target.y) + move.y });
   };
 
-  /** The copy relays out its text only once the page has stopped resizing, so a deck flight lays out one quote a frame, not two. */
-  const sizeClone = () => {
-    clone.style.width = `${size.width}px`;
-    clone.style.height = `${size.height}px`;
-    clone.style.visibility = "";
-    draw();
-  };
-
+  // The copy lays out with the page, so the glass never shows it out of step: in a deck flight, one more short text layout a frame.
   const resize = new ResizeObserver(() => {
     size = { width: page.clientWidth, height: page.clientHeight };
     radius = lens.offsetWidth / 2;
-    clearTimeout(settleTimer);
-    if (sized) {
-      clone.style.visibility = "hidden";
-      settleTimer = setTimeout(sizeClone, RESIZE_SETTLE_MS);
-    } else {
-      sized = true;
-      sizeClone();
-    }
+    clone.style.width = `${size.width}px`;
+    clone.style.height = `${size.height}px`;
     target = drifting ? target : clampCenter(target, size);
     current = clampCenter(current, size);
     draw();
@@ -278,7 +261,6 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     stop: () => {
       loop.stop();
       clearTimeout(idleTimer);
-      clearTimeout(settleTimer);
       resize.disconnect();
       surface.removeEventListener("pointermove", onHover);
       surface.removeEventListener("pointerenter", onMouseEnter);
@@ -365,6 +347,87 @@ function Passage({ quote, copy = false }: { quote: Quote; copy?: boolean }) {
   );
 }
 
+/**
+ * The glass is drawn on a 200-unit square around the lens's center: the window is 100 units across
+ * each way, the rim sits outside it, and the handle runs off to the lower right.
+ */
+const GRIP = "M147 -11.5C175 -13 225 -13.5 246 -12Q262 -11 262 0Q262 11 246 12C225 13.5 175 13 147 11.5Z";
+
+/** The glass's soft shadow on the page, rim and handle together. */
+function LensShadow() {
+  return (
+    <svg className={styles.shadow} viewBox="-100 -100 200 200" aria-hidden="true">
+      <circle r="110" />
+      <path d={GRIP} transform="rotate(45)" />
+      <rect x="104" y="-12.5" width="44" height="25" rx="3" transform="rotate(45)" />
+    </svg>
+  );
+}
+
+/** A polished steel rim and a lacquered handle with a steel ferrule, over a lens that catches the light. */
+function LensFrame() {
+  const id = useId();
+  const url = (name: string) => `url(#${id}${name})`;
+  return (
+    <svg className={styles.frame} viewBox="-100 -100 200 200" aria-hidden="true">
+      <defs>
+        <linearGradient id={`${id}rim`} gradientUnits="userSpaceOnUse" x1="-80" y1="-80" x2="80" y2="80">
+          <stop offset="0" className={styles.steelLight} />
+          <stop offset="0.2" className={styles.steelMid} />
+          <stop offset="0.42" className={styles.steelDark} />
+          <stop offset="0.52" className={styles.steelMid} />
+          <stop offset="0.64" className={styles.steelLight} />
+          <stop offset="0.86" className={styles.steelDark} />
+          <stop offset="1" className={styles.steelDeep} />
+        </linearGradient>
+        <linearGradient id={`${id}steel`} gradientUnits="userSpaceOnUse" x1="0" y1="-13" x2="0" y2="13">
+          <stop offset="0" className={styles.steelDark} />
+          <stop offset="0.28" className={styles.steelLight} />
+          <stop offset="0.55" className={styles.steelMid} />
+          <stop offset="1" className={styles.steelDeep} />
+        </linearGradient>
+        <linearGradient id={`${id}grip`} gradientUnits="userSpaceOnUse" x1="0" y1="-13.5" x2="0" y2="13.5">
+          <stop offset="0" className={styles.gripEdge} />
+          <stop offset="0.3" className={styles.gripShine} />
+          <stop offset="0.6" className={styles.gripBody} />
+          <stop offset="1" className={styles.gripEdge} />
+        </linearGradient>
+        <radialGradient id={`${id}lens`} gradientUnits="userSpaceOnUse" cx="0" cy="0" r="100">
+          <stop offset="0.72" className={styles.lensClear} />
+          <stop offset="0.94" className={styles.lensTint} />
+          <stop offset="1" className={styles.lensEdge} />
+        </radialGradient>
+        <linearGradient id={`${id}shine`} gradientUnits="userSpaceOnUse" x1="-70" y1="-70" x2="10" y2="10">
+          <stop offset="0" className={styles.shineStrong} />
+          <stop offset="1" className={styles.shineNone} />
+        </linearGradient>
+        <clipPath id={`${id}inside`}>
+          <circle r="92" />
+        </clipPath>
+        <radialGradient id={`${id}glint`}>
+          <stop offset="0" className={styles.shineStrong} />
+          <stop offset="1" className={styles.shineNone} />
+        </radialGradient>
+      </defs>
+      <g transform="rotate(45)">
+        <rect x="104" y="-6" width="22" height="12" fill={url("steel")} />
+        <rect x="122" y="-12.5" width="27" height="25" rx="3" fill={url("steel")} />
+        <path d="M128 -12.5v25M143 -12.5v25" className={styles.groove} />
+        <path d={GRIP} fill={url("grip")} />
+        <path d="M153 -7.5C185 -9.5 225 -9.5 248 -7.5" className={styles.gripHighlight} />
+      </g>
+      <circle r="100" fill={url("lens")} />
+      <path d="M0 -92A92 92 0 1 0 0 92A92 92 0 1 0 0 -92ZM9 -79A90 90 0 1 1 9 101A90 90 0 1 1 9 -79Z" fillRule="evenodd" fill={url("shine")} clipPath={url("inside")} />
+      <ellipse cx="-50" cy="-56" rx="15" ry="6" transform="rotate(-42 -50 -56)" fill={url("glint")} />
+      <circle r="98.5" className={styles.pressedRing} />
+      <circle r="105" fill="none" stroke={url("rim")} strokeWidth="10" />
+      <circle r="100.6" className={styles.rimInner} />
+      <circle r="101.8" className={styles.rimInnerLight} />
+      <circle r="109.6" className={styles.rimOuter} />
+    </svg>
+  );
+}
+
 export function QuoteLens({ quote = QUOTE }: { quote?: Quote }) {
   const pageRef = useRef<HTMLDivElement>(null);
   const lensRef = useRef<HTMLButtonElement>(null);
@@ -394,15 +457,13 @@ export function QuoteLens({ quote = QUOTE }: { quote?: Quote }) {
         aria-label="Magnifying glass. Press to look closer; move it with the arrow keys, or by pointing, tapping, or dragging."
       >
         <span className={styles.body}>
-          <span className={styles.shadow} />
-          <span className={styles.handle} />
-          <span className={styles.rim} />
+          <LensShadow />
           <span className={styles.window}>
             <span ref={cloneRef} className={`${styles.sheet} ${styles.clone}`} inert aria-hidden="true">
               <Passage quote={quote} copy />
             </span>
-            <span className={styles.glass} />
           </span>
+          <LensFrame />
         </span>
       </button>
     </Stage>

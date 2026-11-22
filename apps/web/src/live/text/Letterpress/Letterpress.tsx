@@ -92,6 +92,7 @@ export function Letterpress({ progress }: LetterpressProps) {
                 aria-valuenow={0}
               >
                 <span className={styles.track} data-scrubber-track aria-hidden="true">
+                  <span className={styles.fill} data-scrubber-fill />
                   <span className={styles.thumb} data-scrubber-thumb />
                 </span>
               </div>

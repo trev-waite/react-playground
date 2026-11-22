@@ -1,6 +1,6 @@
 .stage {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(min-content, 1fr) auto;
   gap: 24px;
   padding: 32px;
 }
@@ -158,6 +158,14 @@
   .stage {
     gap: 16px;
     padding: 24px 16px;
+  }
+}
+
+/* A tall stage with room to spare, as on most phones, spreads the passage over its height: each word is a whole line tall, so taller lines are easier to tap. */
+@container (aspect-ratio < 0.9) and (height >= 520px) {
+  .passage {
+    font-size: clamp(0.9375rem, 4.4cqw, 1.375rem);
+    line-height: clamp(1.36em, 4.2cqh, 2.3em);
   }
 }
 

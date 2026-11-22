@@ -9,6 +9,10 @@ const MAX_LANDING_JUMP = 0.05;
 /** The preview must be laid out for good this long before the flight ends. */
 const SETTLED_FOR_MS = 250;
 const MAX_LAYOUT_SHIFT = 0.02;
+/** A card that had held still and then moves this fast has jumped to a place it should already have reached. */
+const JUMP_PX = 12;
+/** Speeds are per frame at 60 Hz, so one long frame reads as the steady motion it covers, not a jump. */
+const FRAME_MS = 1000 / 60;
 
 /**
  * What a recorded flight got wrong. A jump is a new layout that changes the
@@ -34,6 +38,19 @@ export function judgeFlight(what: string, { frames, shift }: Flight): string[] {
   }
   if (jump > MAX_LANDING_JUMP) {
     failures.push(`${what}: the preview's content jumped ${Math.round(jump * 100)}% in size while its card was all but still.`);
+  }
+
+  let held = 0;
+  let travelled = false;
+  for (let index = Math.max(took, 1); index < frames.length; index++) {
+    const { moved, at } = frames[index]!;
+    const speed = (moved * FRAME_MS) / Math.max(FRAME_MS, at - frames[index - 1]!.at);
+    if (travelled && held >= 2 && speed > JUMP_PX) {
+      failures.push(`${what}: the card stopped short of its place, then jumped ${Math.round(moved)}px.`);
+      break;
+    }
+    held = speed < NEARLY_STILL_PX ? held + 1 : 0;
+    travelled ||= speed >= NEARLY_STILL_PX;
   }
 
   const end = frames[landed]!.at;

@@ -1,19 +1,21 @@
 import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
 import { effect, sampler, type Frame } from "vgpu";
-import { createBlurChain, createTextMask, maskFits, pausableLoop, useGpu, viewportMaskSize, WGSL_HASH, WGSL_NOISE, type GpuSession } from "@/gpu";
+import { createBlurChain, createTextMask, maskFits, pausableLoop, useGpu, WGSL_HASH, WGSL_NOISE, type GpuSession } from "@/gpu";
 import { Stage } from "@/live/kit/Stage/Stage";
 import { visibleLoop } from "@/live/kit/visibleLoop";
 import stageStyles from "@/live/kit/Stage/Stage.module.css";
 import { DISPLAY_FONT, watchTone } from "@/live/kit/Stage/tone";
 import { createLamp, type Lamp } from "./lamp";
+import { MASK_HEIGHT, maskSize, wordPlacement } from "./word";
 import styles from "./RakingLight.module.css";
 
 const WORD = "Quiet";
-/** Quiet time after the last canvas resize before the word is pressed again at the new size. */
+/** Quiet time after the last resize before the word is pressed again for a new screen. */
 const RESIZE_SETTLE_MS = 120;
 
 const SHADER = WGSL_HASH + WGSL_NOISE + /* wgsl */ `
 struct Params {
+  word: vec4f,
   resolution: vec2f,
   lamp: vec2f,
   presence: f32,
@@ -30,8 +32,10 @@ struct Params {
 const LAMP_HEIGHT = 0.16;
 const WARM = vec3f(1.0, 0.72, 0.29);
 
+// The word is pressed once into its own texture and placed on the stage here, so it keeps its shape as the stage resizes.
 fn tap(tex: texture_2d<f32>, uv: vec2f) -> f32 {
-  return textureSampleLevel(tex, maskSampler, clamp(uv, vec2f(0.0), vec2f(1.0)), 0.0).r;
+  let inWord = (uv - params.word.xy) / params.word.zw;
+  return textureSampleLevel(tex, maskSampler, clamp(inWord, vec2f(0.0), vec2f(1.0)), 0.0).r;
 }
 
 // The press: a crisp floor with soft shoulders, so its walls catch a low light.
@@ -90,8 +94,16 @@ function textFont(size: number) {
   return `400 ${size}px ${DISPLAY_FONT}`;
 }
 
+/** The word's width per pixel of type size. */
+function wordWidth(context: CanvasRenderingContext2D | null): number {
+  if (!context) return 2.4;
+  context.font = textFont(100);
+  return context.measureText(WORD).width / 100;
+}
+
 function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTMLElement) {
-  const mask = createTextMask(gpu, { text: WORD, font: textFont, label: "Raking Light word", softness: 0.0016, scale: { height: 0.62, width: 0.34 }, fitWidth: 0.78 });
+  // Type at 1 / MASK_HEIGHT of the texture's height, never narrowed: the texture is sized around the word.
+  const mask = createTextMask(gpu, { text: WORD, font: textFont, label: "Raking Light word", softness: 0.0016, scale: { height: 1 / MASK_HEIGHT, width: 1 }, fitWidth: 1 });
   const shoulders = createBlurChain(gpu, { levels: 3, radius: 3, format: "r8unorm", label: "Raking Light shoulders" });
   const linear = sampler(gpu, { minFilter: "linear", magFilter: "linear", addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
   const press = effect(gpu, SHADER, {
@@ -102,33 +114,51 @@ function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTM
       mid: shoulders.levels[1],
       far: shoulders.levels[2],
       maskSampler: linear,
-      params: { resolution: [1, 1], lamp: [0.5, 0.5], presence: 0, dark: 0 },
+      params: { word: [0, 0, 1, 1], resolution: [1, 1], lamp: [0.5, 0.5], presence: 0, dark: 0 },
     },
   });
   const unwatchTone = watchTone(stage, dark => press.set({ params: { dark: dark ? 1 : 0 } }));
   const unsubscribeError = gpu.onError(error => console.error("Raking Light could not draw", error));
 
-  let pending: { aspect: number; dpr: number; width: number; height: number } | null = null;
+  const measurer = document.createElement("canvas").getContext("2d");
+  let ratio = wordWidth(measurer);
+  /** The ratio the pressed texture was drawn at: the word is placed by it until a new press replaces it. */
+  let pressedRatio = ratio;
+  type Size = { dpr: number; width: number; height: number };
+  let last: Size | null = null;
+  let pending: Size | null = null;
   let resizedAt = 0;
   let pressed = false;
   const unsubscribeResize = surface.onResize(({ width, height, dpr }) => {
-    pending = { aspect: Math.max(1, width) / Math.max(1, height), dpr, width, height };
+    pending = last = { dpr, width, height };
     resizedAt = performance.now();
   });
+  // The display face can arrive after the first press: measured again, the word is pressed again.
+  const remeasure = () => {
+    const measured = wordWidth(measurer);
+    if (measured === ratio) return;
+    ratio = measured;
+    pending = last;
+  };
+  document.fonts.addEventListener("loadingdone", remeasure);
 
+  // Placing the word follows every resize at once; pressing it again waits until a new screen size settles.
   const flush = (frame: Frame) => {
     if (!pending) return;
+    const { dpr, width, height } = pending;
+    const place = () => press.set({ params: { resolution: [width, height], word: wordPlacement(width, height, pressedRatio) } });
+    place();
     if (pressed && performance.now() - resizedAt < RESIZE_SETTLE_MS) return;
-    const { aspect, dpr, width, height } = pending;
     pending = null;
-    press.set({ params: { resolution: [width, height] } });
-    const size = viewportMaskSize(aspect, [window.innerWidth, window.innerHeight], dpr);
-    if (pressed && maskFits(mask.size, size)) return;
+    const size = maskSize(ratio, [window.innerWidth, window.innerHeight], dpr);
+    if (pressed && pressedRatio === ratio && maskFits(mask.size, size)) return;
     pressed = true;
+    pressedRatio = ratio;
     const texture = mask.update(size[0], size[1]);
     shoulders.resize(size);
     shoulders.render(frame, texture);
     press.set({ mask: texture });
+    place();
   };
 
   const loop = pausableLoop(gpu, canvas, frame => {
@@ -141,6 +171,7 @@ function startPress({ gpu, surface, canvas }: GpuSession, lamp: Lamp, stage: HTM
   return () => {
     loop.stop();
     unsubscribeResize();
+    document.fonts.removeEventListener("loadingdone", remeasure);
     unsubscribeError();
     unwatchTone();
     shoulders.destroy();

@@ -96,6 +96,7 @@ export function connectLetterpress(stage: HTMLDivElement, scrollport: HTMLDivEle
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
   const touchScroll = window.matchMedia("(any-pointer: coarse)");
   const thumb = stage.querySelector<HTMLElement>("[data-scrubber-thumb]");
+  const fill = stage.querySelector<HTMLElement>("[data-scrubber-fill]");
   let progress = 0;
   let targetProgress = 0;
   let rewind = 0;
@@ -168,7 +169,8 @@ export function connectLetterpress(stage: HTMLDivElement, scrollport: HTMLDivEle
       next = followScroll(progress, targetProgress, elapsed);
     }
     if (thumb && thumbProgress !== targetProgress) {
-      thumb.style.transform = `translateX(${100 * targetProgress}cqi)`;
+      thumb.style.translate = `${100 * targetProgress}cqi`;
+      if (fill) fill.style.transform = `scaleX(${targetProgress})`;
       thumbProgress = targetProgress;
     }
     if (next < progress) {

@@ -121,6 +121,16 @@ try {
   await page.goto(url);
   await atRest(page, "grid");
   for (const title of CARDS) await roundTrip(page, title);
+  // A new component joins the end of the deck: wheel down to the last row, as a reader would, and open it from there.
+  const newest = await page.locator("article[data-deck-card]").last().getAttribute("data-deck-card");
+  if (!newest) throw new Error("The deck has no cards.");
+  await page.mouse.move(640, 400);
+  await page.mouse.wheel(0, 20_000);
+  await page.waitForFunction(() => {
+    const scroller = document.querySelector("[data-layout]");
+    return scroller !== null && scroller.scrollTop >= scroller.scrollHeight - scroller.clientHeight - 1;
+  }, undefined, { timeout: SETTLE_TIMEOUT_MS });
+  await roundTrip(page, newest, ", the newest card, from the bottom of the grid");
 
   await page.setViewportSize(SHORTER);
   await page.waitForFunction(height => document.querySelector("[data-layout]")?.clientHeight === height, SHORTER.height, {
@@ -172,5 +182,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `Desktop, portrait phone, short landscape, and 200% text flights land without a jump, a late layout, or a layout shift for nearby cards, Letterpress among them on a desktop and a phone. Reversing during landing leaves nothing hidden. Across all flights, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
+  `Desktop (the newest card among them), portrait phone, short landscape, and 200% text flights land without a jump or a stop short of the page, a late layout, or a layout shift for nearby cards, Letterpress among them on a desktop and a phone. Reversing during landing leaves nothing hidden. Across all flights, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
 );
