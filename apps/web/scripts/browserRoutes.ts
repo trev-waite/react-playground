@@ -3,7 +3,7 @@ import { chromium, webkit, type Page } from "playwright";
 import { preview } from "vite";
 import { livePath, routeTitle, SITE_TITLE } from "../src/lib/liveRoutes.ts";
 import { readLiveCards } from "../vite/liveCards.ts";
-import { deckCard } from "./deckCards.ts";
+import { deckCard, deckTile } from "./deckCards.ts";
 
 /**
  * Drives the built app in a browser to hold the routing to what a reader
@@ -84,7 +84,7 @@ async function settle(page: Page, done: (current: State) => boolean): Promise<St
   }
 }
 
-const tile = (page: Page, slug: string) => deckCard(page, slug).getByRole("link");
+const tile = deckTile;
 
 /** The card is the one asked for and spans the viewport as a page does. */
 function isPageOf(current: State, slug: string): boolean {

@@ -66,7 +66,7 @@ describe("performance lint: CSS", () => {
 
   test("backdrop blurs never animate", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.css")) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.css")) {
       for (const rule of cssRules(text)) {
         if (transitionedProperties(rule).some(p => p.endsWith("backdrop-filter"))) {
           violations.push(`${file}:${rule.line} transitions backdrop-filter; keep the blur fixed and fade opacity.`);
@@ -162,7 +162,7 @@ describe("performance lint: code", () => {
       /useMotionValueEvent\([^)]*,\s*["']change["']\s*,\s*(?:\([^)]*\)|\w+)\s*=>\s*\{?\s*set[A-Z]/g,
       /\.on\(\s*["']change["']\s*,\s*(?:\([^)]*\)|\w+)\s*=>\s*\{?\s*set[A-Z]/g,
     ];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.{ts,tsx}")) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
       for (const pattern of mirrors) {
         for (const match of text.matchAll(pattern)) {
           if (allowedNear(text, match.index!)) continue;
@@ -175,7 +175,7 @@ describe("performance lint: code", () => {
 
   test("blur radii are never set from script", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.tsx")) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.tsx")) {
       for (const match of text.matchAll(/\b(Webkit)?[bB]ackdropFilter\s*:/g)) {
         violations.push(`${file}:${lineOf(text, match.index!)} sets backdrop-filter inline; keep blurs fixed in CSS.`);
       }

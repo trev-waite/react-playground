@@ -288,10 +288,12 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
     width: `${((lines.width + SPILL_X * 2) / lines.width) * 100}%`,
     height: `${((HEIGHT + SPILL_Y * 2) / HEIGHT) * 100}%`,
   };
+  // Narrower by the goo's spill, so the goo stays in the stage and the deck never sees it overflow.
+  const line: CSSProperties = { width: `min(${(lines.width / (lines.width + SPILL_X * 2)) * 100}%, 880px)` };
 
   return (
     <div className={styles.stage}>
-      <div className={styles.line}>
+      <div className={styles.line} style={line}>
         <canvas ref={canvasRef} className={styles.goo} style={spill} aria-hidden="true" />
         <svg
           ref={svgRef}

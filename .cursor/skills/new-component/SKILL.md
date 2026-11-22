@@ -23,7 +23,7 @@ A thin checklist. The detail lives in the skills and docs it links.
 - [ ] Look at it in every state a visitor can reach (below)
 - [ ] Refresh the link-preview images (below): the card's own, and the site's
 - [ ] `bun run lint`, `bun run typecheck`, and `bun run test`
-- [ ] Check the card's page as shipped (below): `bun run build`, then `check:deploy`, `check:routes`, `check:phone`, and `check:idle`
+- [ ] Check the card's page as shipped (below): `bun run build`, then `check:deploy`, `check:routes`, `check:flights`, `check:phone`, `check:idle`, and `check:gpu`
 ```
 
 Card `meta` and `family.ts`: [Using the playground](../../../docs/USING_THE_PLAYGROUND.md).
@@ -158,8 +158,10 @@ bun run --cwd apps/web og         # the site's og.png and og.mp4
 bun run build
 bun run --cwd apps/web check:deploy   # a page for every route, each the app with its own tags
 bun run --cwd apps/web check:routes   # tile links, Back and Forward, paging, every card's path
+bun run --cwd apps/web check:flights  # every card flies to its page and back without a jump
 bun run --cwd apps/web check:phone    # no preview shrinks on a phone page
 bun run --cwd apps/web check:idle     # no card keeps working while it is off screen
+bun run --cwd apps/web check:gpu      # every card mounts with and without WebGPU
 ```
 
 `bun run dev` serves the same tags on the path it is asked for, so `view-source:` on `http://localhost:3000/<slug>` shows the title and link preview the build will write.
