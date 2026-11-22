@@ -15,7 +15,7 @@ const browserTimers: HoldTimers = {
 };
 
 export type WindHold = {
-  /** A finger or the main mouse button went down on the button. */
+  /** A finger or the main mouse button went down on the button; another while it is held is ignored. */
   press: () => void;
   /** It lifted or slid off; the click that may follow is the same tap. */
   release: () => void;
@@ -34,10 +34,15 @@ export type WindHold = {
 export function windHold(step: () => void, timers: HoldTimers = browserTimers): WindHold {
   let timer: unknown;
   let pressed = false;
-  const stop = () => timers.clear(timer);
+  let holding = false;
+  const stop = () => {
+    holding = false;
+    timers.clear(timer);
+  };
   return {
     press: () => {
-      stop();
+      if (holding) return;
+      holding = true;
       pressed = true;
       step();
       let wait = HOLD_FIRST_MS;
@@ -58,5 +63,40 @@ export function windHold(step: () => void, timers: HoldTimers = browserTimers): 
       pressed = false;
       if (!counted) step();
     },
+  };
+}
+
+/**
+ * Winds `button` while it is held. A finger is followed by its touch events
+ * alone, so its pointer events can't count the same press again; pointer
+ * events follow a mouse or pen.
+ */
+export function bindWindHold(button: EventTarget, step: () => void, timers?: HoldTimers): () => void {
+  const hold = windHold(step, timers);
+  const fromPointer =
+    (run: () => void) =>
+    (event: Event): void => {
+      if ((event as PointerEvent).pointerType !== "touch") run();
+    };
+  const pressPointer = (event: Event) => {
+    const pointer = event as PointerEvent;
+    if (pointer.pointerType !== "touch" && pointer.button === 0) hold.press();
+  };
+  const activate = (event: Event) => hold.activate((event as MouseEvent).detail === 0);
+  const listeners: [string, (event: Event) => void, AddEventListenerOptions?][] = [
+    // React's touch listeners are passive, and in Safari on iOS a press reached controls with a non-passive one when these buttons missed it.
+    ["touchstart", hold.press, { passive: false }],
+    ["touchend", hold.release],
+    ["touchcancel", hold.cancel],
+    ["pointerdown", pressPointer],
+    ["pointerup", fromPointer(hold.release)],
+    ["pointerleave", fromPointer(hold.release)],
+    ["pointercancel", fromPointer(hold.cancel)],
+    ["click", activate],
+  ];
+  for (const [type, listener, options] of listeners) button.addEventListener(type, listener, options);
+  return () => {
+    for (const [type, listener] of listeners) button.removeEventListener(type, listener);
+    hold.release();
   };
 }
