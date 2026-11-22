@@ -109,7 +109,10 @@ function bound() {
   const button = new Button();
   let steps = 0;
   const unbind = bindWindHold(button, () => steps++, clock.timers);
-  const fire = (type: string, fields: Record<string, unknown> = {}) => button.dispatchEvent(Object.assign(new Event(type), fields));
+  const fire = (type: string, fields: Record<string, unknown> = {}) => {
+    const touches = type.startsWith("touch") ? { touches: [{ clientX: 0, clientY: 0 }] } : {};
+    button.dispatchEvent(Object.assign(new Event(type), touches, fields));
+  };
   return { button, fire, unbind, advance: clock.advance, steps: () => steps };
 }
 
@@ -183,6 +186,27 @@ describe("bindWindHold", () => {
     advance(1000);
     fire("click", { detail: 1 });
     expect(steps()).toBe(2);
+  });
+
+  test("a held finger that starts to scroll stops winding, and a small wobble doesn't", () => {
+    const { fire, advance, steps } = bound();
+    const at = (x: number, y: number) => ({ touches: [{ clientX: x, clientY: y }] });
+    fire("touchstart", at(100, 100));
+    fire("touchmove", at(104, 106));
+    advance(HOLD_DELAY_MS);
+    expect(steps()).toBe(2);
+    fire("touchmove", at(100, 130));
+    advance(1000);
+    expect(steps()).toBe(2);
+  });
+
+  test("a finger's press the browser takes back for a scroll stops winding", () => {
+    const { fire, advance, steps } = bound();
+    fire("pointerdown", finger);
+    fire("touchstart");
+    fire("pointercancel", finger);
+    advance(1000);
+    expect(steps()).toBe(1);
   });
 
   test("unbinding stops a hold and ignores later presses", () => {
