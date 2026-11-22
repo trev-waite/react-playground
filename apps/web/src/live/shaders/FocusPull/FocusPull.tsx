@@ -5,7 +5,7 @@ import { MOTION, play, prefersReducedMotion } from "@/live/kit/Stage/choreograph
 import { Stage } from "@/live/kit/Stage/Stage";
 import { visibleLoop } from "@/live/kit/visibleLoop";
 import stageStyles from "@/live/kit/Stage/Stage.module.css";
-import { followPointer, watchTone, type PointerPlace } from "@/live/kit/Stage/tone";
+import { followPointer, placeIn, watchTone, type PointerPlace } from "@/live/kit/Stage/tone";
 import { blurLevel, CAMERA, fitPage, idleFocus, MAX_BLUR_LEVEL, pageRowAt, ROWS_PER_LEVEL, type Page } from "./focus";
 import { POEM, rasterPoem } from "./poem";
 import styles from "./FocusPull.module.css";
@@ -109,13 +109,31 @@ function createRack(holder: HTMLElement): Rack {
   let openedAt: number | null = null;
   let last = 0;
   let idleSince = 0;
-  const unfollow = followPointer(holder, place => {
-    hand = place ? rowAt(place) : null;
-  });
+  let ownsTouch = false;
   const choose = (index: number) => {
     chosen = Math.min(rows.length - 1, Math.max(0, index));
     holder.setAttribute("aria-valuenow", String(chosen + 1));
     holder.setAttribute("aria-valuetext", POEM.filter(Boolean)[chosen] ?? "");
+  };
+  const nearestLine = (row: number) =>
+    rows.reduce((best, line, index) => (Math.abs(line - row) < Math.abs(rows[best]! - row) ? index : best), 0);
+  /** Within a line of the poem's first or last line. */
+  const onPoem = (row: number | null): row is number => {
+    if (row === null || rows.length < 2) return false;
+    const reach = (rows.at(-1)! - rows[0]!) / (rows.length - 1);
+    return row >= rows[0]! - reach && row <= rows.at(-1)! + reach;
+  };
+  const unfollow = followPointer(holder, (place, lifted) => {
+    if (lifted && onPoem(hand)) choose(nearestLine(hand));
+    hand = place ? rowAt(place) : null;
+  });
+  /** A finger that lands on the poem pulls focus up and down it; one that lands beside it still pages the deck. */
+  const onTouchStart = (event: TouchEvent) => {
+    const touch = event.touches[0];
+    ownsTouch = event.touches.length === 1 && touch !== undefined && onPoem(rowAt(placeIn(holder, touch.clientX, touch.clientY)));
+  };
+  const onTouchMove = (event: TouchEvent) => {
+    if (ownsTouch && event.cancelable) event.preventDefault();
   };
   const keys: Record<string, (index: number) => number> = {
     ArrowDown: index => index + 1,
@@ -129,10 +147,11 @@ function createRack(holder: HTMLElement): Rack {
     const step = keys[event.key];
     if (!step || rows.length === 0) return;
     event.preventDefault();
-    const nearest = rows.reduce((best, row, index) => (Math.abs(row - focus) < Math.abs(rows[best]! - focus) ? index : best), 0);
-    choose(step(chosen ?? nearest));
+    choose(step(chosen ?? nearestLine(focus)));
   };
   holder.addEventListener("keydown", onKey);
+  holder.addEventListener("touchstart", onTouchStart, { passive: true });
+  holder.addEventListener("touchmove", onTouchMove, { passive: false });
   return {
     open: () => {
       openedAt ??= performance.now();
@@ -157,6 +176,8 @@ function createRack(holder: HTMLElement): Rack {
     stop: () => {
       unfollow();
       holder.removeEventListener("keydown", onKey);
+      holder.removeEventListener("touchstart", onTouchStart);
+      holder.removeEventListener("touchmove", onTouchMove);
     },
   };
 }
@@ -234,18 +255,23 @@ function runFallbackRack(page: HTMLElement, rack: Rack): () => void {
   measure();
   rack.aim(place => {
     const bounds = page.parentElement!.getBoundingClientRect();
+    const poem = page.getBoundingClientRect();
+    const x = bounds.left + place.x * bounds.width;
+    if (x < poem.left || x > poem.right) return null;
     const y = bounds.top + place.y * bounds.height;
     let best: number | null = null;
     let gap = Infinity;
+    let reach = 0;
     for (const [index, line] of lines.entries()) {
       const box = line.getBoundingClientRect();
       const distance = Math.abs(box.top + box.height / 2 - y);
       if (distance < gap) {
         gap = distance;
         best = rows[index] ?? null;
+        reach = box.height * 1.5;
       }
     }
-    return best;
+    return gap <= reach ? best : null;
   });
   const draw = (now: number) => {
     const { focus, presence, depth } = rack.sample(now);
