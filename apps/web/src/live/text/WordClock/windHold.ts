@@ -2,6 +2,8 @@
 export const HOLD_DELAY_MS = 420;
 const HOLD_FIRST_MS = 160;
 const HOLD_FASTEST_MS = 70;
+/** A finger that strays this far from where it pressed is starting a scroll, not holding. */
+const TOUCH_SLOP_PX = 10;
 
 export type HoldTimers = {
   set: (run: () => void, ms: number) => unknown;
@@ -15,7 +17,7 @@ const browserTimers: HoldTimers = {
 };
 
 export type WindHold = {
-  /** A finger or the main mouse button went down on the button. */
+  /** A finger or the main mouse button went down on the button; another while it is held is ignored. */
   press: () => void;
   /** It lifted or slid off; the click that may follow is the same tap. */
   release: () => void;
@@ -34,10 +36,15 @@ export type WindHold = {
 export function windHold(step: () => void, timers: HoldTimers = browserTimers): WindHold {
   let timer: unknown;
   let pressed = false;
-  const stop = () => timers.clear(timer);
+  let holding = false;
+  const stop = () => {
+    holding = false;
+    timers.clear(timer);
+  };
   return {
     press: () => {
-      stop();
+      if (holding) return;
+      holding = true;
       pressed = true;
       step();
       let wait = HOLD_FIRST_MS;
@@ -58,5 +65,53 @@ export function windHold(step: () => void, timers: HoldTimers = browserTimers): 
       pressed = false;
       if (!counted) step();
     },
+  };
+}
+
+/**
+ * Winds `button` while it is held. A finger is followed by its touch events,
+ * so its pointer events can't count the same press again; pointer events
+ * follow a mouse or pen. A finger that starts to scroll lets go.
+ */
+export function bindWindHold(button: EventTarget, step: () => void, timers?: HoldTimers): () => void {
+  const hold = windHold(step, timers);
+  const fromPointer =
+    (run: () => void) =>
+    (event: Event): void => {
+      if ((event as PointerEvent).pointerType !== "touch") run();
+    };
+  const pressPointer = (event: Event) => {
+    const pointer = event as PointerEvent;
+    if (pointer.pointerType !== "touch" && pointer.button === 0) hold.press();
+  };
+  let start: { x: number; y: number } | null = null;
+  const pressTouch = (event: Event) => {
+    const touch = (event as TouchEvent).touches[0];
+    start = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    hold.press();
+  };
+  const moveTouch = (event: Event) => {
+    const touch = (event as TouchEvent).touches[0];
+    if (!start || !touch || Math.hypot(touch.clientX - start.x, touch.clientY - start.y) <= TOUCH_SLOP_PX) return;
+    start = null;
+    hold.cancel();
+  };
+  const activate = (event: Event) => hold.activate((event as MouseEvent).detail === 0);
+  const listeners: [string, (event: Event) => void, AddEventListenerOptions?][] = [
+    // React's touch listeners are passive, and in Safari on iOS a press reached controls with a non-passive one when these buttons missed it.
+    ["touchstart", pressTouch, { passive: false }],
+    ["touchmove", moveTouch, { passive: true }],
+    ["touchend", hold.release],
+    ["touchcancel", hold.cancel],
+    ["pointerdown", pressPointer],
+    ["pointerup", fromPointer(hold.release)],
+    ["pointerleave", fromPointer(hold.release)],
+    ["pointercancel", hold.cancel],
+    ["click", activate],
+  ];
+  for (const [type, listener, options] of listeners) button.addEventListener(type, listener, options);
+  return () => {
+    for (const [type, listener] of listeners) button.removeEventListener(type, listener);
+    hold.release();
   };
 }

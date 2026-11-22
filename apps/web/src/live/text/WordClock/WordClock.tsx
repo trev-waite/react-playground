@@ -1,9 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { glide, play, type Move, type Playback } from "@/live/kit/Stage/choreography";
 import { Stage } from "@/live/kit/Stage/Stage";
 import stageStyles from "@/live/kit/Stage/Stage.module.css";
 import { changeWords, dayPart, splitWords, timeSentence, type Word } from "./timeWords";
-import { windHold } from "./windHold";
+import { bindWindHold } from "./windHold";
 import styles from "./WordClock.module.css";
 
 const MINUTE_MS = 60_000;
@@ -147,23 +147,9 @@ function WordRun({ run, version }: { run: Run; version: number }) {
   );
 }
 
-function useHold(step: () => void) {
-  const [hold] = useState(() => windHold(step));
-  useEffect(() => hold.release, [hold]);
-  return {
-    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (event.pointerType === "mouse" && event.button !== 0) return;
-      hold.press();
-    },
-    onPointerUp: hold.release,
-    onPointerLeave: hold.release,
-    onPointerCancel: hold.cancel,
-    onClick: (event: { detail: number }) => hold.activate(event.detail === 0),
-  };
-}
-
 export function WordClock() {
   const [clock, setClock] = useState(initialClock);
+  const earlierRef = useRef<HTMLButtonElement>(null);
   const laterRef = useRef<HTMLButtonElement>(null);
 
   useEffect(
@@ -175,9 +161,16 @@ export function WordClock() {
     [],
   );
 
-  const wind = (minutes: number) => setClock(previous => settle(previous, previous.minute, previous.second, previous.offset + minutes, true));
-  const earlier = useHold(() => wind(-1));
-  const later = useHold(() => wind(1));
+  useEffect(() => {
+    const wind = (minutes: number) => setClock(previous => settle(previous, previous.minute, previous.second, previous.offset + minutes, true));
+    const earlier = earlierRef.current;
+    const later = laterRef.current;
+    if (!earlier || !later) return;
+    const unbind = [bindWindHold(earlier, () => wind(-1)), bindWindHold(later, () => wind(1))];
+    return () => {
+      for (const release of unbind) release();
+    };
+  }, []);
 
   const open = (root: HTMLDivElement) => {
     const playbacks: Playback[] = [
@@ -211,7 +204,7 @@ export function WordClock() {
           />
         </div>
         <div className={styles.controls} data-after-words data-reveal>
-          <button type="button" className={styles.wind} aria-label="One minute earlier" {...earlier}>
+          <button ref={earlierRef} type="button" className={styles.wind} aria-label="One minute earlier">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M10 3.5 5.5 8l4.5 4.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -228,7 +221,7 @@ export function WordClock() {
           >
             Now
           </button>
-          <button ref={laterRef} type="button" className={styles.wind} aria-label="One minute later" {...later}>
+          <button ref={laterRef} type="button" className={styles.wind} aria-label="One minute later">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

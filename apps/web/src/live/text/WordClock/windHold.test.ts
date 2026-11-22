@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { HOLD_DELAY_MS, windHold, type HoldTimers } from "./windHold";
+import { bindWindHold, HOLD_DELAY_MS, windHold, type HoldTimers } from "./windHold";
 
 function fakeTimers() {
   let now = 0;
@@ -81,5 +81,141 @@ describe("windHold", () => {
     hold.release();
     hold.activate(true);
     expect(steps()).toBe(2);
+  });
+
+  test("a second finger on a held button doesn't step again", () => {
+    const { hold, advance, steps } = setup();
+    hold.press();
+    hold.press();
+    expect(steps()).toBe(1);
+    advance(HOLD_DELAY_MS);
+    expect(steps()).toBe(2);
+    hold.release();
+    hold.press();
+    expect(steps()).toBe(3);
+  });
+});
+
+class Button extends EventTarget {
+  readonly options = new Map<string, AddEventListenerOptions | boolean | undefined>();
+  override addEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: AddEventListenerOptions | boolean) {
+    this.options.set(type, options);
+    super.addEventListener(type, listener, options);
+  }
+}
+
+function bound() {
+  const clock = fakeTimers();
+  const button = new Button();
+  let steps = 0;
+  const unbind = bindWindHold(button, () => steps++, clock.timers);
+  const fire = (type: string, fields: Record<string, unknown> = {}) => {
+    const touches = type.startsWith("touch") ? { touches: [{ clientX: 0, clientY: 0 }] } : {};
+    button.dispatchEvent(Object.assign(new Event(type), touches, fields));
+  };
+  return { button, fire, unbind, advance: clock.advance, steps: () => steps };
+}
+
+const finger = { pointerType: "touch", button: 0 };
+
+describe("bindWindHold", () => {
+  test("listens for a finger's touchstart without marking it passive", () => {
+    const { button } = bound();
+    expect(button.options.get("touchstart")).toEqual({ passive: false });
+  });
+
+  test("a held finger winds when only its touches arrive", () => {
+    const { fire, advance, steps } = bound();
+    fire("touchstart");
+    advance(1000);
+    const held = steps();
+    expect(held).toBeGreaterThan(5);
+    fire("touchend");
+    fire("click", { detail: 1 });
+    advance(1000);
+    expect(steps()).toBe(held);
+  });
+
+  test("a finger's pointer events, even late ones, add nothing to its touches", () => {
+    const { fire, advance, steps } = bound();
+    fire("pointerdown", finger);
+    fire("touchstart");
+    fire("pointerup", finger);
+    fire("touchend");
+    fire("click", { detail: 1 });
+    expect(steps()).toBe(1);
+    fire("touchstart");
+    fire("touchend");
+    fire("pointerdown", finger);
+    fire("pointerup", finger);
+    fire("click", { detail: 1 });
+    expect(steps()).toBe(2);
+    fire("touchstart");
+    fire("pointerup", finger);
+    fire("pointerleave", finger);
+    advance(HOLD_DELAY_MS);
+    expect(steps()).toBe(4);
+  });
+
+  test("a tap that arrives only as a click steps", () => {
+    const { fire, steps } = bound();
+    fire("click", { detail: 1 });
+    expect(steps()).toBe(1);
+  });
+
+  test("a mouse or pen holds with its main button only, and stops when it slides off", () => {
+    const { fire, advance, steps } = bound();
+    fire("pointerdown", { pointerType: "mouse", button: 2 });
+    expect(steps()).toBe(0);
+    fire("pointerdown", { pointerType: "mouse", button: 0 });
+    advance(HOLD_DELAY_MS);
+    expect(steps()).toBe(2);
+    fire("pointerleave", { pointerType: "mouse" });
+    advance(1000);
+    expect(steps()).toBe(2);
+    fire("pointerdown", { pointerType: "pen", button: 0 });
+    fire("pointerup", { pointerType: "pen" });
+    fire("click", { detail: 1 });
+    expect(steps()).toBe(3);
+  });
+
+  test("a touch the browser takes back stops the hold and leaves the next tap to count", () => {
+    const { fire, advance, steps } = bound();
+    fire("touchstart");
+    fire("touchcancel");
+    advance(1000);
+    fire("click", { detail: 1 });
+    expect(steps()).toBe(2);
+  });
+
+  test("a held finger that starts to scroll stops winding, and a small wobble doesn't", () => {
+    const { fire, advance, steps } = bound();
+    const at = (x: number, y: number) => ({ touches: [{ clientX: x, clientY: y }] });
+    fire("touchstart", at(100, 100));
+    fire("touchmove", at(104, 106));
+    advance(HOLD_DELAY_MS);
+    expect(steps()).toBe(2);
+    fire("touchmove", at(100, 130));
+    advance(1000);
+    expect(steps()).toBe(2);
+  });
+
+  test("a finger's press the browser takes back for a scroll stops winding", () => {
+    const { fire, advance, steps } = bound();
+    fire("pointerdown", finger);
+    fire("touchstart");
+    fire("pointercancel", finger);
+    advance(1000);
+    expect(steps()).toBe(1);
+  });
+
+  test("unbinding stops a hold and ignores later presses", () => {
+    const { fire, unbind, advance, steps } = bound();
+    fire("touchstart");
+    unbind();
+    advance(1000);
+    fire("touchstart");
+    fire("click", { detail: 0 });
+    expect(steps()).toBe(1);
   });
 });
