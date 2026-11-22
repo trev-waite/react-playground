@@ -8,7 +8,6 @@
 
 .line {
   position: relative;
-  width: min(100%, 880px);
 }
 
 .goo {

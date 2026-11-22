@@ -43,8 +43,8 @@ try {
   await hold(1);
   const grid = await page.screenshot();
   await hold(0.6);
-  const pages = await page.getByRole("article").count();
-  await page.getByRole("article").first().click();
+  const pages = await page.locator("article[data-deck-card]").count();
+  await page.locator("article[data-deck-card]").first().click();
   await page.mouse.move(WIDTH / 2, 4);
   await hold(1.2);
   for (let i = 1; i < Math.min(pages, 4); i++) {

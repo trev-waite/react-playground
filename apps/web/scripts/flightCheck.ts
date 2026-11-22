@@ -3,6 +3,7 @@ import { chromium, type Page } from "playwright";
 import { preview } from "vite";
 import { judgeFlight } from "./flight/judge.ts";
 import { installFlightRecorder, type Flight, type FlightRecorder } from "./flight/recorder.ts";
+import { deckCard, deckTile } from "./deckCards.ts";
 
 /**
  * Flies cards between the grid and their pages in the built app: a preview
@@ -14,11 +15,12 @@ const DESKTOP = { viewport: { width: 1280, height: 800 } };
 const SHORTER = { width: 1280, height: 560 };
 const PHONE = { viewport: { width: 400, height: 700 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true };
 /** A canvas that resizes with its stage, so its second flight steps. */
-const STEPPED = "Moon Phase";
+const STEPPED = "dither/MoonPhase";
 const SETTLE_TIMEOUT_MS = 15_000;
-const CARDS = ["Controls", "Profile Button", "Menu Pill", "Moon Phase"];
-const AFTER_RESIZE = ["Controls", "Spacing Tidy"];
+const AFTER_RESIZE = ["controls", "tools/SpacingTidy"];
 const BACK = "Show all components";
+/** A page rests evenly inset from every edge of the window, by its gutter. */
+const PAGE_INSET_MAX = 24;
 
 type InPage = { flightRecorder: FlightRecorder; turnedBack?: boolean };
 
@@ -34,8 +36,8 @@ let shiftInAll = 0;
 async function atRest(page: Page, layout: "pages" | "grid") {
   await page.waitForFunction(
     name => {
-      const cards = Array.from(document.querySelectorAll("article"));
-      const loaded = cards.every(card => card.querySelector('[class*="_fit_"] > :not([class*="_loading_"])') !== null);
+      const cards = Array.from(document.querySelectorAll("article[data-deck-card]"));
+      const loaded = cards.every(card => card.querySelector("[data-deck-members]") !== null && card.querySelector("[data-deck-loading]") === null);
       return loaded && document.querySelector(`[data-layout="${name}"]:not([data-flying])`) !== null;
     },
     layout,
@@ -43,11 +45,12 @@ async function atRest(page: Page, layout: "pages" | "grid") {
   );
 }
 
-const tileOf = (page: Page, title: string) => page.getByRole("article", { name: title, exact: true }).getByRole("link");
-
 /** Records `title`'s card through `action` until the deck rests in `layout`, and for a few frames after. */
 async function fly(page: Page, title: string, action: () => Promise<unknown>, layout: "pages" | "grid"): Promise<Flight> {
-  await page.evaluate(name => (window as unknown as InPage).flightRecorder.record(name), title);
+  await page.evaluate(name => (window as unknown as InPage).flightRecorder.record(name, name === "text/Letterpress" ? {
+    stage: "[data-letterpress]",
+    targets: ['[data-letter="0"] [data-glyph-art]', '[role="slider"]'],
+  } : undefined), title);
   await action();
   // Off the deck, so the page that lands is not hovered: a control that grows under the pointer is not a jump.
   await page.mouse.move(1, 1);
@@ -57,12 +60,32 @@ async function fly(page: Page, title: string, action: () => Promise<unknown>, la
 }
 
 async function roundTrip(page: Page, title: string, note = "") {
-  const tile = tileOf(page, title);
+  const tile = deckTile(page, title);
   await tile.scrollIntoViewIfNeeded();
   const opened = await fly(page, title, () => tile.click(), "pages");
+  const inset = await deckCard(page, title).evaluate(card => {
+    const box = card.getBoundingClientRect();
+    return [box.left, box.top, innerWidth - box.right, innerHeight - box.bottom];
+  });
+  if (inset.some(edge => edge < 0 || edge > PAGE_INSET_MAX || Math.abs(edge - inset[0]!) > 1)) {
+    failures.push(`Opening ${title}${note}: the page came to rest ${inset.map(Math.round).join(", ")}px in from the window's edges, not on its page.`);
+  }
   const back = page.getByRole("button", { name: BACK });
   const closed = await fly(page, title, () => back.click(), "grid");
   failures.push(...judgeFlight(`Opening ${title}${note}`, opened), ...judgeFlight(`Closing ${title}${note}`, closed));
+  if (title === "text/Letterpress") {
+    for (const [direction, { frames }] of [["Opening", opened], ["Closing", closed]] as const) {
+      let jump = 0;
+      for (const [index, frame] of frames.entries()) {
+        const previous = frames[index - 1];
+        if (!previous?.detail || !frame.detail || frame.moved > 3) continue;
+        const elapsed = frame.at - previous.at;
+        const frameShare = frame.flying && previous.flying ? Math.min(1, (1000 / 60) / elapsed) : 1;
+        jump = Math.max(jump, ...frame.detail.map((value, coordinate) => Math.abs(value - previous.detail![coordinate]!) * frameShare));
+      }
+      if (jump > 4) failures.push(`${direction} ${title}${note}: the glyph or scrubber jumped ${jump.toFixed(1)}px as the card came to rest.`);
+    }
+  }
   shiftInAll += opened.shiftInAll + closed.shiftInAll;
 }
 
@@ -78,7 +101,7 @@ async function turnBackWhilePlacing(page: Page, title: string, where: string) {
     });
     placing.observe(scroller, { attributes: true, attributeFilter: ["data-placing"] });
   }, BACK);
-  await tileOf(page, title).click();
+  await deckTile(page, title).click();
   await atRest(page, "grid").catch(() => {});
   if (!(await page.evaluate(() => (window as unknown as InPage).turnedBack === true))) {
     failures.push(`${where}, ${title} landed without hiding the pages it placed, so there was no moment to turn back in.`);
@@ -87,7 +110,7 @@ async function turnBackWhilePlacing(page: Page, title: string, where: string) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const hidden = await page.evaluate(() => ({
     placing: document.querySelector("[data-placing]") !== null,
-    cards: Array.from(document.querySelectorAll("article"))
+    cards: Array.from(document.querySelectorAll("article[data-deck-card]"))
       .filter(card => getComputedStyle(card).visibility !== "visible")
       .map(card => card.getAttribute("aria-label")),
   }));
@@ -103,7 +126,19 @@ try {
   await page.addInitScript(installFlightRecorder);
   await page.goto(url);
   await atRest(page, "grid");
-  for (const title of CARDS) await roundTrip(page, title);
+  // Every card, so a new one is flown wherever it joins the order.
+  const cards = await page.locator("article[data-deck-card]").evaluateAll(articles => articles.map(article => article.getAttribute("data-deck-card") ?? ""));
+  const newest = cards.at(-1);
+  if (!newest) throw new Error("The deck has no cards.");
+  for (const title of cards) await roundTrip(page, title);
+  // Wheel down to the last row, as a reader would, and open the newest card from there.
+  await page.mouse.move(640, 400);
+  await page.mouse.wheel(0, 20_000);
+  await page.waitForFunction(() => {
+    const scroller = document.querySelector("[data-layout]");
+    return scroller !== null && scroller.scrollTop >= scroller.scrollHeight - scroller.clientHeight - 1;
+  }, undefined, { timeout: SETTLE_TIMEOUT_MS });
+  await roundTrip(page, newest, ", the newest card, from the bottom of the grid");
 
   await page.setViewportSize(SHORTER);
   await page.waitForFunction(height => document.querySelector("[data-layout]")?.clientHeight === height, SHORTER.height, {
@@ -111,7 +146,7 @@ try {
   });
   await atRest(page, "grid");
   for (const title of AFTER_RESIZE) await roundTrip(page, title, " after the window grew shorter in the grid");
-  await turnBackWhilePlacing(page, "Controls", "On a desktop");
+  await turnBackWhilePlacing(page, "controls", "On a desktop");
 
   const phone = await (await browser.newContext(PHONE)).newPage();
   await phone.addInitScript(installFlightRecorder);
@@ -119,7 +154,32 @@ try {
   await atRest(phone, "grid");
   await roundTrip(phone, STEPPED, " on a phone");
   await roundTrip(phone, STEPPED, " on a phone, in steps");
-  await turnBackWhilePlacing(phone, "Controls", "On a phone");
+  await roundTrip(phone, "text/Letterpress", " on a phone");
+  await roundTrip(phone, "text/Letterpress", " on a phone after its page has been measured");
+  await turnBackWhilePlacing(phone, "controls", "On a phone");
+
+  const landscape = await (await browser.newContext({ ...PHONE, viewport: { width: 667, height: 375 } })).newPage();
+  await landscape.addInitScript(installFlightRecorder);
+  await landscape.goto(url);
+  await atRest(landscape, "grid");
+  await roundTrip(landscape, "particles/GandalfHologram", " on a landscape phone");
+
+  const shortLandscape = await (await browser.newContext({ ...PHONE, viewport: { width: 568, height: 320 } })).newPage();
+  await shortLandscape.addInitScript(installFlightRecorder);
+  await shortLandscape.goto(url);
+  await atRest(shortLandscape, "grid");
+  await roundTrip(shortLandscape, "buttons/ProfileButton", " on a short landscape phone");
+  await roundTrip(shortLandscape, "buttons/ProfileButton", " on a short landscape phone, reopened");
+
+  const compact = await (await browser.newContext({ ...PHONE, viewport: { width: 320, height: 280 } })).newPage();
+  await compact.addInitScript(installFlightRecorder);
+  await compact.addInitScript(() => document.addEventListener("DOMContentLoaded", () => {
+    document.documentElement.style.fontSize = "32px";
+  }, { once: true }));
+  await compact.goto(url);
+  await atRest(compact, "grid");
+  await roundTrip(compact, "particles/GandalfHologram", " at 200% text");
+  await roundTrip(compact, "particles/GandalfHologram", " at 200% text, in steps");
 } finally {
   await browser.close();
   await server.close();
@@ -130,5 +190,5 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(
-  `${CARDS.length + AFTER_RESIZE.length} cards on a desktop and one on a phone fly to their pages and back without a jump, a late layout, or a layout shift for the cards around them, and a flight turned back as it lands leaves nothing hidden. In all, with the flying cards' own motion, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
+  `Every card on a desktop (the newest from the bottom of the grid too), portrait phone, short landscape, and 200% text flights land without a jump or a stop short of the page, a late layout, or a layout shift for nearby cards, Letterpress among them on a desktop and a phone. Reversing during landing leaves nothing hidden. Across all flights, the browser scored a layout shift of ${shiftInAll.toFixed(3)}.`,
 );

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"ghosting":25,"refreshSpeed":50,"flashEvery":3};
 
@@ -158,9 +159,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
   let pageIndex = 0;
   let quickTurns = 0;
   let on = false;
-  let visible = true;
-  let frame = 0;
-  let timer = 0;
+  let nextTurnAt: number | null = null;
 
   const slider = (name: keyof typeof SLIDERS) => settings.current.sliders[name] ?? SLIDERS[name];
 
@@ -176,18 +175,22 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     ctx.putImageData(image, 0, 0);
   }
 
-  function tick(now: number) {
-    frame = 0;
+  function tick(now: number): FrameRequest {
     const progress = duration > 0 ? (now - startedAt) / duration : 1;
-    if (progress >= 1) {
-      pigment = goal;
+    if (progress < 1) {
+      pigment = from.map((level, i) => refreshLevel(kind, level, goal[i]!, progress));
       paint();
-      return;
+      return true;
     }
-    pigment = from.map((level, i) => refreshLevel(kind, level, goal[i]!, progress));
+    pigment = goal;
     paint();
-    if (visible) frame = requestAnimationFrame(tick);
+    if (nextTurnAt === null) return false;
+    if (now < nextTurnAt) return nextTurnAt - now;
+    turn();
+    return true;
   }
+
+  const loop = visibleLoop(canvas, tick, { onVisibleChange: () => schedule() });
 
   function refresh(target: Uint8Array, full: boolean) {
     const quick = 520 - (slider("refreshSpeed") / 100) * 400;
@@ -197,13 +200,12 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     duration = reducedMotion.matches ? 0 : full ? quick * 2.6 : quick;
     startedAt = performance.now();
     if (reducedMotion.matches) goal = Float32Array.from(target);
-    cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(tick);
+    loop.wake();
   }
 
   function schedule() {
-    window.clearTimeout(timer);
-    if (on && visible && !reducedMotion.matches) timer = window.setTimeout(turn, AUTO_TURN_MS);
+    nextTurnAt = on && !reducedMotion.matches ? performance.now() + AUTO_TURN_MS : null;
+    loop.wake();
   }
 
   function turn() {
@@ -230,12 +232,6 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     schedule();
   }
 
-  const intersectionObserver = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    if (visible && !frame) frame = requestAnimationFrame(tick);
-    schedule();
-  });
-  intersectionObserver.observe(canvas);
   reducedMotion.addEventListener("change", onMotionChange);
 
   on = settings.current.progress >= 0.5;
@@ -247,9 +243,7 @@ function startPanel(canvas: HTMLCanvasElement, settings: RefObject<Settings>): P
     sync,
     turn,
     stop() {
-      cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-      intersectionObserver.disconnect();
+      loop.stop();
       reducedMotion.removeEventListener("change", onMotionChange);
     },
   };

@@ -3,6 +3,7 @@
  * different component inside ConfigurableShell.
  */
 import { useEffect, useLayoutEffect, useRef, type PointerEvent } from "react";
+import { visibleLoop } from "@/live/kit/visibleLoop";
 import { blobPath } from "./exportExample";
 import styles from "./ExamplePreview.module.css";
 
@@ -34,34 +35,27 @@ export function ExamplePreview({
 
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const loop = { frame: 0 };
     const origin = performance.now();
 
-    const tick = (now: number) => {
+    const draw = (now: number) => {
       const { form: f, soft: s, drift: d } = paramsRef.current;
       const t = reduce ? 0 : (now - origin) / 1000;
       fillRef.current?.setAttribute("d", blobPath(f, s, d, t, 0));
       ghostRef.current?.setAttribute("d", blobPath(f, s, d, t + 0.55, 0.4));
-      if (!reduce) loop.frame = requestAnimationFrame(tick);
     };
 
     if (reduce) {
-      tick(origin);
+      draw(origin);
       return;
     }
 
-    // Only animate while the blob is on screen; rewriting paths nobody sees still costs frames.
     const target = fillRef.current?.ownerSVGElement;
-    const observer = new IntersectionObserver(([entry]) => {
-      cancelAnimationFrame(loop.frame);
-      if (entry?.isIntersecting) loop.frame = requestAnimationFrame(tick);
+    if (!target) return;
+    const loop = visibleLoop(target, now => {
+      draw(now);
+      return true;
     });
-    if (target) observer.observe(target);
-    else loop.frame = requestAnimationFrame(tick);
-    return () => {
-      observer.disconnect();
-      cancelAnimationFrame(loop.frame);
-    };
+    return loop.stop;
   }, []);
 
   function onPointerDown(event: PointerEvent<HTMLDivElement>) {

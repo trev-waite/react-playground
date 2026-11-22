@@ -1,8 +1,9 @@
 import path from "node:path";
-import { chromium, type Page } from "playwright";
+import { chromium, webkit, type Page } from "playwright";
 import { preview } from "vite";
 import { livePath, routeTitle, SITE_TITLE } from "../src/lib/liveRoutes.ts";
 import { readLiveCards } from "../vite/liveCards.ts";
+import { deckCard, deckTile } from "./deckCards.ts";
 
 /**
  * Drives the built app in a browser to hold the routing to what a reader
@@ -27,6 +28,7 @@ const MID_FLIGHT_MS = 160;
 const PAGE_EDGE = 24;
 /** How close a width must be to a tile's or a page's to count as one of them. */
 const SNAP = 2;
+const LETTERPRESS = "text/Letterpress";
 
 const webRoot = path.resolve(import.meta.dirname, "..");
 const cards = await readLiveCards(path.join(webRoot, "src/live"));
@@ -48,7 +50,7 @@ function expect(condition: boolean, failure: string) {
 async function state(page: Page) {
   return page.evaluate(() => {
     const scroller = document.querySelector("[data-layout]");
-    const card = Array.from(document.querySelectorAll("article")).find(article => {
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => {
       const box = article.getBoundingClientRect();
       return box.top < innerHeight / 2 && box.bottom > innerHeight / 2 && box.left < innerWidth / 2 && box.right > innerWidth / 2;
     });
@@ -60,7 +62,7 @@ async function state(page: Page) {
       flying: scroller?.hasAttribute("data-flying") ?? false,
       gliding: scroller?.hasAttribute("data-gliding") ?? false,
       entries: history.length,
-      card: { label: card?.getAttribute("aria-label") ?? null, left: box?.left ?? Infinity, right: box?.right ?? 0, viewport: innerWidth },
+      card: { label: card?.getAttribute("aria-label") ?? null, slug: card?.getAttribute("data-deck-card") ?? null, left: box?.left ?? Infinity, right: box?.right ?? 0, viewport: innerWidth },
     };
   });
 }
@@ -82,12 +84,12 @@ async function settle(page: Page, done: (current: State) => boolean): Promise<St
   }
 }
 
-const tile = (page: Page, title: string) => page.getByRole("article", { name: title, exact: true }).getByRole("link");
+const tile = deckTile;
 
 /** The card is the one asked for and spans the viewport as a page does. */
-function isPageOf(current: State, title: string): boolean {
+function isPageOf(current: State, slug: string): boolean {
   const { card } = current;
-  return card.label === title && card.left <= PAGE_EDGE && card.right >= card.viewport - PAGE_EDGE;
+  return card.slug === slug && card.left <= PAGE_EDGE && card.right >= card.viewport - PAGE_EDGE;
 }
 
 const tabs = await browser.newBrowserCDPSession();
@@ -119,10 +121,10 @@ async function openedTab(open: () => Promise<void>): Promise<string | null> {
 }
 
 /** Opens a tile from the grid on a stopped clock and runs the clock into the flight, so the next step interrupts it mid-air. */
-async function startFlight(page: Page, title: string) {
+async function startFlight(page: Page, slug: string) {
   await page.goto(`${origin}/`);
   await settle(page, current => current.layout === "grid");
-  await tile(page, title).click();
+  await tile(page, slug).click();
   await page.clock.runFor(MID_FLIGHT_MS);
 }
 
@@ -135,6 +137,337 @@ function clickMidFlight(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
+async function checkKeyboardFocus(page: Page) {
+  const slug = "particles/GandalfHologram";
+  const path = livePath(slug);
+  for (const entry of [path, "/"]) {
+    await page.goto(`${origin}${entry}`);
+    if (entry === "/") {
+      await tile(page, slug).focus();
+      await page.keyboard.press("Enter");
+    }
+    await settle(page, current => current.layout === "pages" && isPageOf(current, slug));
+    const card = deckCard(page, slug);
+    const scene = card.locator("[data-projecting], [data-still]");
+    await scene.waitFor({ state: "attached" });
+    const controls = await scene.locator('button[tabindex="0"]:visible').evaluateAll(buttons =>
+      buttons.map(button => button.getAttribute("aria-label")),
+    );
+    const reached: (string | null)[] = [];
+    let code = false;
+    for (let step = 0; step < 12 && !code; step++) {
+      await page.keyboard.press("Tab");
+      const focused = await page.evaluate(() => ({
+        card: document.activeElement?.closest("article[data-deck-card]")?.getAttribute("data-deck-card"),
+        label: document.activeElement?.getAttribute("aria-label") ?? null,
+        code: document.activeElement?.getAttribute("aria-haspopup") === "dialog",
+        path: location.pathname,
+      }));
+      if ((focused.card && focused.card !== slug) || focused.path !== path) break;
+      if (focused.card === slug && !focused.code) reached.push(focused.label);
+      code = focused.card === slug && focused.code;
+    }
+    expect(code && JSON.stringify(reached) === JSON.stringify(controls),
+      `Tab from ${entry} should reach the hat and Code without leaving the page. Reached ${JSON.stringify(reached)}, Code ${code}.`);
+    const hat = scene.getByRole("button", { name: "Drop the dots" });
+    if (await hat.count() === 0) continue;
+    await hat.click();
+    const focus = await hat.evaluate(button => ({
+      active: document.activeElement === button, visible: button.matches(":focus-visible"),
+    }));
+    expect(focus.active && !focus.visible, `Clicking the hat from ${entry} should focus it without a focus outline.`);
+    if (!focus.active) continue;
+    await page.keyboard.press("ArrowUp");
+    const turned = await page.waitForFunction(() => {
+      const gl = document.activeElement?.querySelector("canvas")?.getContext("webgl2");
+      const program = gl?.getParameter(gl.CURRENT_PROGRAM) as WebGLProgram | null;
+      if (!gl || !program) return false;
+      const pitch = gl.getUniformLocation(program, "uPitch");
+      return pitch !== null && (gl.getUniform(program, pitch) as Float32Array)[1]! < 0;
+    }, undefined, { timeout: 2000 }).then(() => true, () => false);
+    expect(turned && new URL(page.url()).pathname === path, `ArrowUp after clicking from ${entry} should tilt the hat without paging.`);
+  }
+}
+
+async function checkLetterpressRouting(page: Page) {
+  const route = livePath(LETTERPRESS);
+  const slider = page.getByRole("slider", { name: "Scroll to assemble" });
+  const letters = page.locator("article[data-deck-card='text/Letterpress'] [data-letter]");
+  await page.locator("article[data-deck-card='text/Letterpress'] [data-letterpress] [data-ready]").waitFor();
+  const stack = () => letters.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).style.zIndex).join(" "));
+  const initialStack = await stack();
+  const pile = await letters.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).style.transform));
+  const overlap = await page.addStyleTag({ content: `
+    article[data-deck-card='text/Letterpress'] [data-letter="0"] { transform: translate(-50%, -50%) translateX(1.75em) rotate(22deg) !important; }
+    article[data-deck-card='text/Letterpress'] [data-letter="9"] { transform: translate(-50%, -50%) translateX(1.75em) scale(1.75) !important; }
+  ` });
+  const stem = await letters.first().boundingBox();
+  if (!stem) throw new Error("Letterpress should show the T in its pile.");
+  const point = { x: stem.x + stem.width / 2, y: stem.y + stem.height / 2 };
+  const covered = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest("article[data-deck-card='text/Letterpress'] [data-letter]")?.getAttribute("data-letter"), point);
+  expect(covered === "9", "the period's transparent hit box should cover the T for the overlap check");
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  const held = page.locator("article[data-deck-card='text/Letterpress'] [data-letter][data-lifted]");
+  expect(await held.getAttribute("data-letter") === "0", "pressing the visible stem of T should lift T through the period's transparent hit box");
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await overlap.evaluate(node => node.parentNode?.removeChild(node));
+
+  const heldThroughLanding = await slider.evaluate(node => {
+    const port = node.closest("[data-scroll-scene]")!;
+    const press = (key: string) => node.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    let consumed = false;
+    port.addEventListener("wheel", event => { consumed = event.defaultPrevented; }, { once: true });
+    press("End");
+    node.dispatchEvent(new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true }));
+    press("Home");
+    return consumed;
+  });
+  expect(heldThroughLanding, "Letterpress should consume outward wheel input until its title has visibly landed");
+  const track = await slider.boundingBox();
+  if (!track) throw new Error("Letterpress should show its scrubber.");
+  await page.mouse.move(track.x + track.width / 2, track.y + track.height / 2);
+  await page.mouse.wheel(0, 120);
+  await page.waitForFunction(pathname => location.pathname !== pathname ||
+    Number(document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 0, route, { timeout: SETTLE_TIMEOUT_MS });
+  const played = (await state(page)).path === route;
+  expect(played, "a wheel step over the Letterpress scrubber should play the scene");
+  if (!played) return;
+
+  const stableStack = await page.evaluate(async initial => {
+    const glyphs = Array.from(document.querySelectorAll<HTMLElement>("article[data-deck-card='text/Letterpress'] [data-letter]"));
+    const range = document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")!;
+    const atPile = () => glyphs.every((glyph, index) => glyph.style.transform === initial[index]);
+    const readStack = () => glyphs.map(glyph => glyph.style.zIndex).join(" ");
+    const stack = readStack();
+    const clock = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const press = (key: string) => range.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    async function reach(value: number, ready: () => boolean) {
+      const reached = () => Number(range.getAttribute("aria-valuenow")) === value && ready();
+      const deadline = performance.now() + 2000;
+      while (!reached() && performance.now() < deadline) await clock();
+      return reached();
+    }
+    press("Home");
+    if (!(await reach(0, atPile))) return false;
+    press("ArrowRight");
+    press("ArrowRight");
+    if (!(await reach(2, atPile))) return false;
+    let stable = true;
+    const observer = new MutationObserver(() => { stable &&= readStack() === stack; });
+    glyphs.forEach(glyph => observer.observe(glyph, { attributeFilter: ["style"] }));
+    press("ArrowRight");
+    const departed = await reach(3, () => !atPile());
+    press("ArrowLeft");
+    const rewound = await reach(2, atPile);
+    observer.disconnect();
+    return departed && rewound && stable && readStack() === stack;
+  }, pile);
+  expect(stableStack, "Letterpress should keep the same stacking order over the first departure and reverse");
+
+  const playback = page.locator("article[data-deck-card='text/Letterpress'] [data-playback]");
+  const buttonLabel = () => playback.getAttribute("aria-label");
+  const progress = () => slider.getAttribute("aria-valuenow");
+  const tableOpacity = () => page.locator("article[data-deck-card='text/Letterpress'] [data-pile-plate]").evaluate(node => getComputedStyle(node).opacity);
+  await playback.press("Enter");
+  await page.waitForFunction(() => Number(document.querySelector("article[data-deck-card='text/Letterpress'] [role=slider]")?.getAttribute("aria-valuenow")) > 10);
+  await playback.click();
+  const paused = await progress();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(paused === await progress() && await buttonLabel() === "Play animation", "pausing Letterpress should hold the current frame");
+  expect(await tableOpacity() === "1", "Letterpress should keep the tabletop opaque during the reveal");
+  await playback.click();
+  await page.getByRole("button", { name: "Replay animation" }).waitFor();
+  expect(await progress() === "100" && await page.locator("article[data-deck-card='text/Letterpress'] [data-letter][data-home]").count() === 10,
+    "playing Letterpress should reach the assembled title without scrolling the page");
+  expect(await tableOpacity() === "1", "Letterpress should keep the tabletop visible behind the assembled title");
+  const startReplay = () => playback.evaluate(button => {
+    (button as HTMLButtonElement).click();
+    return button.closest("article[data-deck-card='text/Letterpress'] [data-letterpress]")?.querySelector("[role=slider]")?.getAttribute("aria-valuenow");
+  });
+  expect(await startReplay() === "100", "starting replay should keep the scrubber with the assembled title");
+  await page.waitForFunction(() => Number(document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) < 65);
+  await playback.press("Enter");
+  const pausedRewind = Number(await progress());
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(pausedRewind > 10 && pausedRewind === Number(await progress()) && await buttonLabel() === "Play animation",
+    "pausing replay should hold both the rewind and the scrubber");
+  await playback.press("Enter");
+  await page.waitForFunction(pausedAt => Number(document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) < pausedAt - 8,
+    pausedRewind, { timeout: 1000 });
+  await page.waitForFunction(() => document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow") === "0");
+  await page.waitForFunction(() => Number(document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow")) > 10);
+  await slider.press("Home");
+  expect(await buttonLabel() !== "Pause animation", "using the scrubber should stop Letterpress playback");
+
+  const trackY = track.y + track.height / 2;
+  await page.mouse.move(track.x + track.width * 0.9, trackY);
+  await page.mouse.down();
+  await page.mouse.move(track.x + track.width * 0.5, trackY, { steps: 6 });
+  // Measured once the drag has reached mid-track and the held thumb has grown to its full size.
+  await page.waitForFunction(() => {
+    const card = document.querySelector("article[data-deck-card='text/Letterpress']");
+    const value = Number(card?.querySelector("[data-letterpress] [role=slider]")?.getAttribute("aria-valuenow"));
+    const thumb = card?.querySelector("[data-scrubber-thumb]");
+    return value >= 40 && value <= 60 && thumb instanceof Element && getComputedStyle(thumb).scale === "1.15";
+  }, undefined, { timeout: SETTLE_TIMEOUT_MS });
+  const thumbGap = await page.evaluate(async () => {
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const card = document.querySelector("article[data-deck-card='text/Letterpress']");
+    const thumb = card?.querySelector("[data-scrubber-thumb]")?.getBoundingClientRect();
+    const fill = card?.querySelector("[data-scrubber-fill]")?.getBoundingClientRect();
+    return thumb && fill ? Math.abs(thumb.left + thumb.width / 2 - fill.right) : Infinity;
+  });
+  await page.mouse.up();
+  expect(thumbGap <= 1.5, `a held Letterpress thumb should sit on the end of the fill (${thumbGap.toFixed(1)}px off)`);
+  await slider.press("Home");
+
+  const waitForPile = () => page.waitForFunction(initial =>
+    Array.from(document.querySelectorAll<HTMLElement>("article[data-deck-card='text/Letterpress'] [data-letter]")).every((letter, index) => letter.style.transform === initial[index]),
+    pile, { timeout: SETTLE_TIMEOUT_MS });
+  await waitForPile();
+  for (const letter of await letters.all()) {
+    await letter.press("Space");
+    await letter.press("Space");
+  }
+  await page.waitForFunction(() => document.querySelectorAll("article[data-deck-card='text/Letterpress'] [data-letter][data-home]").length === 10);
+  expect(await progress() === "0" && await buttonLabel() === "Replay animation",
+    "completing the title by hand should offer Replay while the scrubber is still at the start");
+  expect(await startReplay() === "100", "replaying a hand-assembled title should rewind from the assembled position");
+  await waitForPile();
+
+  await letters.first().focus();
+  await slider.focus();
+  await page.keyboard.press("End");
+  await page.waitForFunction(() => !document.querySelector("article[data-deck-card='text/Letterpress'] [data-letter]:not([data-home])"), undefined, { timeout: SETTLE_TIMEOUT_MS });
+  expect(await stack() === initialStack, "scrolling Letterpress should keep overlapping letters in the same depth order");
+
+  const firstLetter = letters.first();
+  const restPose = await firstLetter.evaluate(node => (node as HTMLElement).style.transform);
+  await firstLetter.hover();
+  await page.mouse.down();
+  await held.waitFor();
+  await page.mouse.wheel(0, 120);
+  expect((await state(page)).path === route, "a wheel step during a Letterpress grab should keep the deck in place");
+  await page.keyboard.press("Escape");
+  expect(await held.count() === 0, "Escape should release the Letterpress pointer even while the scrubber has focus");
+  await page.mouse.up();
+
+  const waitForRest = () => page.waitForFunction(pose =>
+    document.querySelector<HTMLElement>('article[data-deck-card="text/Letterpress"] [data-letter="0"]')?.style.transform === pose, restPose, { timeout: SETTLE_TIMEOUT_MS });
+  await waitForRest();
+  await firstLetter.evaluate(node => {
+    node.addEventListener("pointerdown", event => {
+      if (event instanceof PointerEvent) node.dataset.testPointer = [event.pointerId, event.clientX, event.clientY].join(",");
+    }, { once: true });
+  });
+  await firstLetter.hover();
+  await page.mouse.down();
+  const releaseShift = await firstLetter.evaluate(node => {
+    const before = node.getBoundingClientRect();
+    const [pointerId, x, y] = (node.dataset.testPointer ?? "").split(",").map(Number);
+    node.dispatchEvent(new PointerEvent("pointerup", {
+      bubbles: true,
+      pointerId,
+      clientX: x! + 40,
+      clientY: y,
+    }));
+    const after = node.getBoundingClientRect();
+    return after.left + after.width / 2 - before.left - before.width / 2;
+  });
+  expect(Math.abs(releaseShift - 40) < 3, `Letterpress should spring from the release coordinates, shifting 40px here: ${releaseShift.toFixed(2)}px`);
+  await page.mouse.up();
+
+  await waitForRest();
+  const slot = await firstLetter.boundingBox();
+  if (!slot) throw new Error("Letterpress should show the first letter in its slot.");
+  await slider.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Shift+Tab");
+  expect(await firstLetter.evaluate(node => node.matches(":focus-visible")), "the first Letterpress letter should retain its keyboard focus ring");
+  const visibleDepth = () => letters.evaluateAll(nodes => nodes.slice(0, 2).map(node => Number(getComputedStyle(node).zIndex)));
+  await letters.nth(1).hover();
+  await page.mouse.down();
+  await page.mouse.move(slot.x + slot.width / 2, slot.y + slot.height / 2, { steps: 4 });
+  const liftedDepths = await visibleDepth();
+  expect(liftedDepths[1]! > liftedDepths[0]!, "a held Letterpress letter should stay in front of the focused letter");
+  await page.mouse.up();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const depths = await visibleDepth();
+  expect(depths[1]! > depths[0]!, "the latest overlapping drop should stay in front of the focused letter");
+  await page.mouse.down();
+  expect(await held.getAttribute("data-letter") === "1", "re-grabbing a visible returning letter should keep that letter");
+  await page.mouse.up();
+
+  const scene = page.locator("article[data-deck-card='text/Letterpress'] [data-letterpress]");
+  const handOff = async (delta: number, neighbor: string, edge: string) => {
+    const bounds = await scene.boundingBox();
+    if (!bounds) throw new Error("Letterpress should show its scene at the wheel boundary.");
+    await page.mouse.move(bounds.x + bounds.width / 4, bounds.y + bounds.height / 3);
+    await page.mouse.wheel(0, delta);
+    await page.waitForFunction(({ route, edge }) => location.pathname !== route ||
+      document.querySelector("article[data-deck-card='text/Letterpress'] [data-letterpress] [role=slider]")?.getAttribute("aria-valuenow") !== edge,
+    { route, edge }, { timeout: SETTLE_TIMEOUT_MS });
+    expect((await state(page)).path === neighbor, `a fresh outward wheel step should page from Letterpress to ${neighbor}`);
+    expect(await scene.locator("[role=slider]").getAttribute("aria-valuenow") === edge, "paging should leave Letterpress at the same boundary");
+  };
+  const index = cards.findIndex(card => card.slug === LETTERPRESS);
+  const neighbors = [[120, cards[index + 1], "100"], [-120, cards[index - 1], "0"]] as const;
+  for (const [step, [delta, neighbor, edge]] of neighbors.entries()) {
+    if (step > 0) {
+      await page.goto(`${origin}${route}`);
+      await settle(page, current => current.path === route && isPageOf(current, LETTERPRESS));
+      await scene.locator("[data-ready]").waitFor();
+    }
+    if (neighbor) {
+      await handOff(delta, livePath(neighbor.slug), edge);
+      continue;
+    }
+    const bounds = await scene.boundingBox();
+    if (!bounds) throw new Error("Letterpress should show its scene at the wheel boundary.");
+    await page.mouse.move(bounds.x + bounds.width / 4, bounds.y + bounds.height / 3);
+    await page.mouse.wheel(0, delta);
+    await page.waitForTimeout(800);
+    expect((await state(page)).path === route, "a wheel step past the end of the deck should leave it on Letterpress");
+  }
+}
+
+async function checkLetterpressInWebKit() {
+  const engine = await webkit.launch();
+  try {
+    const page = await engine.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
+    const route = livePath(LETTERPRESS);
+    await page.goto(`${origin}${route}`);
+    await settle(page, current => current.path === route && isPageOf(current, LETTERPRESS));
+    await page.locator("article[data-deck-card='text/Letterpress'] [data-letterpress] [data-ready]").waitFor();
+    for (const [glyph, overlap] of [["7", true], ["0", false]] as const) {
+      const point = await page.locator(`article[data-deck-card='text/Letterpress'] [data-letter="${glyph}"]`).evaluate((letter, overlap) => {
+        const bounds = letter.querySelector("[data-glyph-art]")!.getBoundingClientRect();
+        for (let y = Math.ceil(bounds.top); y < bounds.bottom; y += 2) {
+          for (let x = Math.ceil(bounds.left); x < bounds.right; x += 2) {
+            const hits = document.elementsFromPoint(x, y);
+            const ink = hits.find(node => node.matches("[data-glyph-art] path"));
+            const top = hits[0]?.closest("article[data-deck-card='text/Letterpress'] [data-letter]");
+            if (ink && letter.contains(ink) && (!overlap || (top && top !== letter))) return { x, y };
+          }
+        }
+        return null;
+      }, overlap);
+      expect(point !== null, `WebKit should expose painted ink for glyph ${glyph}${overlap ? " under an overlapping letter" : ""}`);
+      if (!point) continue;
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.down();
+      const lifted = await page.locator("article[data-deck-card='text/Letterpress'] [data-lifted]").evaluateAll(nodes => nodes[0]?.getAttribute("data-letter"));
+      expect(lifted === glyph, `the visible glyph at (${point.x}, ${point.y}) should lift in WebKit; expected ${glyph}, picked ${lifted}`);
+      await page.keyboard.press("Escape");
+      await page.mouse.up();
+    }
+  } finally {
+    await engine.close();
+  }
+}
+
 try {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
@@ -143,18 +476,18 @@ try {
   await page.goto(`${origin}/`);
   const grid = await settle(page, current => current.layout === "grid");
   expect(grid.layout === "grid" && grid.title === SITE_TITLE, `/ should show the grid titled ${SITE_TITLE}: ${JSON.stringify(grid)}`);
-  expect((await tile(page, second.title).getAttribute("href")) === livePath(second.slug), `the ${second.title} tile should link to ${livePath(second.slug)}`);
+  expect((await tile(page, second.slug).getAttribute("href")) === livePath(second.slug), `the ${second.title} tile should link to ${livePath(second.slug)}`);
 
-  await tile(page, second.title).click();
-  const opened = await settle(page, current => current.layout === "pages" && isPageOf(current, second.title));
+  await tile(page, second.slug).click();
+  const opened = await settle(page, current => current.layout === "pages" && isPageOf(current, second.slug));
   expect(
     opened.path === livePath(second.slug) && opened.layout === "pages" && !opened.flying && opened.title === routeTitle(second) && opened.entries === grid.entries + 1,
     `a tile click should open ${livePath(second.slug)} as a new history entry: ${JSON.stringify(opened)}`,
   );
-  expect(isPageOf(opened, second.title), `a tile click should fill the page with ${second.title}`);
+  expect(isPageOf(opened, second.slug), `a tile click should fill the page with ${second.title}`);
 
   await page.keyboard.press("ArrowUp");
-  const paged = await settle(page, current => isPageOf(current, first.title));
+  const paged = await settle(page, current => isPageOf(current, first.slug));
   expect(
     paged.path === livePath(first.slug) && paged.title === routeTitle(first) && paged.entries === opened.entries,
     `paging should move the URL without adding history: ${JSON.stringify(paged)}`,
@@ -165,13 +498,13 @@ try {
   expect(back.path === "/" && back.layout === "grid" && back.title === SITE_TITLE, `Back should return to the grid: ${JSON.stringify(back)}`);
 
   await page.goForward();
-  const forward = await settle(page, current => current.layout === "pages" && isPageOf(current, first.title));
+  const forward = await settle(page, current => current.layout === "pages" && isPageOf(current, first.slug));
   expect(forward.path === paged.path && forward.layout === "pages", `Forward should reopen the page: ${JSON.stringify(forward)}`);
-  expect(isPageOf(forward, first.title), `Forward should fill the page with ${first.title}`);
+  expect(isPageOf(forward, first.slug), `Forward should fill the page with ${first.title}`);
 
   await page.goto(`${origin}/`);
   await settle(page, current => current.layout === "grid");
-  const tab = await openedTab(() => tile(page, first.title).click({ modifiers: ["ControlOrMeta"] }));
+  const tab = await openedTab(() => tile(page, first.slug).click({ modifiers: ["ControlOrMeta"] }));
   expect(tab !== null && new URL(tab).pathname === livePath(first.slug), `a modified click should open ${livePath(first.slug)} in a new tab, not ${tab}`);
   expect((await state(page)).path === "/", "a modified click should leave this tab on the grid");
 
@@ -179,11 +512,13 @@ try {
   for (const card of cards) {
     for (const slug of new Set([card.slug, ...card.members.map(member => member.slug)])) {
       await page.goto(`${origin}${livePath(slug)}`);
-      const direct = await settle(page, current => current.layout === "pages" && isPageOf(current, card.title));
+      const direct = await settle(page, current => current.layout === "pages" && isPageOf(current, card.slug));
       expect(direct.title === routeTitle(card), `${livePath(slug)} should be titled for ${card.title}: ${JSON.stringify(direct)}`);
-      expect(isPageOf(direct, card.title), `${livePath(slug)} should fill the page with ${card.title}`);
+      expect(isPageOf(direct, card.slug), `${livePath(slug)} should fill the page with ${card.title}`);
+      if (slug === LETTERPRESS) await checkLetterpressRouting(page);
     }
   }
+  await checkKeyboardFocus(page);
   await context.close();
 
   // The camera interrupted mid-flight, on a clock stopped before the page loads.
@@ -196,12 +531,12 @@ try {
   flight.on("pageerror", error => failures.push(`page error: ${error.message}`));
 
   // Paging on while the camera is still flying in: the page that lands must be the one asked for, whole, in every frame.
-  await startFlight(flight, first.title);
+  await startFlight(flight, first.slug);
   await flight.evaluate(() => {
     const frames: { layout: string | null; left: number; right: number }[] = [];
     Object.assign(window, { __frames: frames });
     const sample = () => {
-      const card = Array.from(document.querySelectorAll("article")).find(article => {
+      const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => {
         const box = article.getBoundingClientRect();
         return box.top < innerHeight / 2 && box.bottom > innerHeight / 2 && box.left < innerWidth / 2 && box.right > innerWidth / 2;
       });
@@ -216,9 +551,9 @@ try {
     requestAnimationFrame(sample);
   });
   expect(await clickMidFlight(flight, "Next component"), "the check should page on while the camera is still flying");
-  const landed = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.title));
+  const landed = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.slug));
   expect(landed.path === livePath(second.slug) && landed.layout === "pages" && !landed.flying, `paging mid-flight should land on ${livePath(second.slug)}: ${JSON.stringify(landed)}`);
-  expect(isPageOf(landed, second.title), `paging mid-flight should fill the page with ${second.title}`);
+  expect(isPageOf(landed, second.slug), `paging mid-flight should fill the page with ${second.title}`);
   const frames: { layout: string | null; left: number; right: number }[] = await flight.evaluate(
     () => (window as unknown as { __frames: never[] }).__frames,
   );
@@ -229,18 +564,18 @@ try {
   );
 
   // Turning back to the grid mid-flight.
-  await startFlight(flight, second.title);
+  await startFlight(flight, second.slug);
   expect(await clickMidFlight(flight, "Show all components"), "the check should turn back while the camera is still flying");
   const reversed = await settle(flight, current => current.layout === "grid");
   expect(reversed.path === "/" && reversed.layout === "grid" && !reversed.flying, `turning back mid-flight should rest on the grid: ${JSON.stringify(reversed)}`);
 
   // A resize mid-flight: the page lands at the new size.
-  await startFlight(flight, second.title);
+  await startFlight(flight, second.slug);
   expect((await state(flight)).layout === "flight", "the check should resize while the camera is still flying");
   await flight.setViewportSize({ width: 1100, height: 700 });
-  const resized = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.title));
+  const resized = await settle(flight, current => current.layout === "pages" && isPageOf(current, second.slug));
   expect(resized.layout === "pages" && !resized.flying, `a resize mid-flight should still land the page: ${JSON.stringify(resized)}`);
-  expect(isPageOf(resized, second.title), `a resize mid-flight should fill the new viewport with ${second.title}`);
+  expect(isPageOf(resized, second.slug), `a resize mid-flight should fill the new viewport with ${second.title}`);
   await flights.close();
 
   // Reduced motion: the same places, and the card is only ever a tile or a page, never a size in between.
@@ -249,20 +584,20 @@ try {
   calm.on("pageerror", error => failures.push(`page error: ${error.message}`));
   await calm.goto(`${origin}/`);
   await settle(calm, current => current.layout === "grid");
-  await calm.evaluate(title => {
+  await calm.evaluate(slug => {
     const widths: number[] = [];
     Object.assign(window, { __widths: widths });
-    const card = Array.from(document.querySelectorAll("article")).find(article => article.getAttribute("aria-label") === title);
+    const card = Array.from(document.querySelectorAll("article[data-deck-card]")).find(article => article.getAttribute("data-deck-card") === slug);
     const sample = () => {
       if (card) widths.push(Math.round(card.getBoundingClientRect().width));
       requestAnimationFrame(sample);
     };
     sample();
-  }, second.title);
-  await tile(calm, second.title).click();
-  const calmOpened = await settle(calm, current => current.layout === "pages" && isPageOf(current, second.title));
+  }, second.slug);
+  await tile(calm, second.slug).click();
+  const calmOpened = await settle(calm, current => current.layout === "pages" && isPageOf(current, second.slug));
   expect(calmOpened.path === livePath(second.slug) && calmOpened.layout === "pages" && !calmOpened.flying, `with reduced motion a tile should still open its page: ${JSON.stringify(calmOpened)}`);
-  expect(isPageOf(calmOpened, second.title), `with reduced motion the page should be filled with ${second.title}`);
+  expect(isPageOf(calmOpened, second.slug), `with reduced motion the page should be filled with ${second.title}`);
   await calm.goBack();
   const calmBack = await settle(calm, current => current.layout === "grid");
   expect(calmBack.path === "/" && calmBack.layout === "grid" && !calmBack.flying, `with reduced motion Back should return to the grid: ${JSON.stringify(calmBack)}`);
@@ -272,6 +607,7 @@ try {
   const between = widths.filter(width => Math.abs(width - tileWidth) > SNAP && Math.abs(width - pageWidth) > SNAP);
   expect(pageWidth > tileWidth * 2, `with reduced motion the card should still grow from a tile to a page: ${tileWidth}px to ${pageWidth}px`);
   expect(between.length === 0, `with reduced motion the card should jump between tile and page, but ${between.length} frames showed it in between (first: ${between[0]}px)`);
+  if (process.argv.includes("--webkit")) await checkLetterpressInWebKit();
 } finally {
   await browser.close();
   await server.close();

@@ -66,6 +66,30 @@ describe("judgeFlight", () => {
     ]);
   });
 
+  test("fails a card that stops short of its page and then jumps the rest of the way", () => {
+    const short = flight(60, (frame, index) => {
+      if (index >= 20 && index < 50) frame.moved = 0;
+      if (index === 50) frame.moved = 246;
+    });
+    expect(judgeFlight("Opening Focus Pull", short)).toEqual(["Opening Focus Pull: the card stopped short of its place, then jumped 246px."]);
+  });
+
+  test("reads one long frame after slow ones as the motion it covers, not a jump", () => {
+    const sparse = flight(60, (frame, index) => {
+      if (index > 40 && index <= 60) frame.moved = 2;
+      if (index > 50) frame.at += 64;
+      if (index === 51) frame.moved = 17;
+    });
+    expect(judgeFlight("Opening Controls", sparse)).toEqual([]);
+  });
+
+  test("lets a card ease the last pixels into place", () => {
+    const easing = flight(60, (frame, index) => {
+      if (index > 40 && index <= 60) frame.moved = 6;
+    });
+    expect(judgeFlight("Opening Controls", easing)).toEqual([]);
+  });
+
   test("says so when no flight was seen, rather than pass an empty recording", () => {
     const still = flight(60, frame => {
       frame.flying = false;

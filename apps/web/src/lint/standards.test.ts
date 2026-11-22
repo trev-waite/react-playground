@@ -10,6 +10,8 @@ import { allowedNear, cssRules, declarations, lineOf, report, sources, stripCssC
 
 const OWNED_DIRS = ["app", "studio", "experimental", "live", "lib", "gpu", "lint"];
 const STYLED_DIRS = ["app", "studio", "experimental", "live"];
+/** Shared parts Live components build on; each component decides what its own motion does. */
+const KIT = "live/kit";
 
 const LIVE_IMPORTS = [
   /^\.\.?\//,
@@ -54,8 +56,9 @@ describe("standards lint: Live components", () => {
     }
     const violations: string[] = [];
     for (const [folder, folderFiles] of folders) {
+      if (folder === KIT) continue;
       const moving = folderFiles.find(({ text }) =>
-        /\btransition\s*:|\banimation\s*:|requestAnimationFrame\(|\.animate\(/.test(stripCssComments(text)),
+        /\btransition\s*:|\banimation\s*:|requestAnimationFrame\(|\b(?:visibleLoop|pausableLoop)\b[^;]*from\s*["'](?:[^"']*kit\/visibleLoop|@\/gpu)["']|\.animate\(/.test(stripCssComments(text)),
       );
       if (!moving) continue;
       if (folderFiles.some(({ text }) => /prefers-reduced-motion|useReducedMotion/.test(text))) continue;
@@ -63,6 +66,23 @@ describe("standards lint: Live components", () => {
         `${folder} animates (${moving.file}) but never checks prefers-reduced-motion. ` +
           "Turn transitions off in a `@media (prefers-reduced-motion: reduce)` block, or skip the effect in code.",
       );
+    }
+    report(violations);
+  });
+  test("Live components lay out in their card's box, never the viewport", async () => {
+    const violations: string[] = [];
+    const viewport =
+      /(?<![\w-])\d*\.?\d+[dsl]?v(?:w|h|i|b|min|max)\b|\bposition\s*[:=]\s*["']?fixed\b|setProperty\(\s*["']position["']\s*,\s*["']fixed/g;
+    for (const { file, text } of await sources(["live"], "**/*.{ts,tsx,css}")) {
+      const comments = file.endsWith(".css") ? /\/\*[\s\S]*?\*\//g : /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+      const code = text.replace(comments, comment => comment.replace(/[^\n]/g, " "));
+      for (const match of code.matchAll(viewport)) {
+        if (allowedNear(text, match.index, "lint-allow:")) continue;
+        violations.push(
+          `${file}:${lineOf(code, match.index)} uses "${match[0]}". A card lays its preview out in the card's box, ` +
+            "as a grid tile, in flight, and as a page: size from it with %, or cqw/cqh under `container-type: size`.",
+        );
+      }
     }
     report(violations);
   });
@@ -139,6 +159,21 @@ describe("standards lint: CSS", () => {
                 "layer blurred; use `backwards` fill, or drop the filter from the last keyframe.",
             );
           }
+        }
+      }
+    }
+    report(violations);
+  });
+
+  test("light-dark() picks between two whole colors, never two numbers", async () => {
+    const violations: string[] = [];
+    for (const { file, text } of await sources(STYLED_DIRS, "**/*.css")) {
+      for (const rule of cssRules(text)) {
+        if (/\blight-dark\(\s*-?[\d.]+%?\s*,/.test(stripCssComments(rule.body))) {
+          violations.push(
+            `${file}:${rule.line} passes numbers to light-dark(). It takes two colors, so the browser drops the ` +
+              "whole declaration and the property falls back (often to black); write `light-dark(rgb(… / 0.2), rgb(… / 0.6))`.",
+          );
         }
       }
     }

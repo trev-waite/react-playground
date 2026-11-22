@@ -13,7 +13,8 @@ A thin checklist. The detail lives in the skills and docs it links.
 - [ ] Pick a route (below): straight into Live, or an idea in Experimental first
 - [ ] Straight in: write apps/web/src/live/<folder>/<Name>/<Name>.tsx and its preview.tsx (never `shells`)
 - [ ] As an idea: follow the `new-experiment` skill (and `gpu-idea` for shaders), then Make Live into apps/web/src/live/<folder>/<Name>/; after that, change the component in the idea and Update Live (below)
-- [ ] preview.tsx renders only <Name />; its `meta` sets the card's size, description, reset, and `surface` (below)
+- [ ] Fill the slot (below): preview.tsx exports `meta: CardMeta` (or `FamilyMemberMeta` in a family folder) and `default function <Name>Preview()`, which renders only <Name /> and takes no props; `meta` sets the card's size, description, reset, and `surface`
+- [ ] Animate on the kit (below): a canvas, SVG, or DOM loop runs on `visibleLoop` from `@/live/kit/visibleLoop`; a WebGPU loop runs on `pausableLoop` from `@/gpu`; either way it reads sizes in a `ResizeObserver`, never per frame, and lays out in the card's box, never the viewport
 - [ ] Write the `description` for a stranger: it is also the page's description, the text under a shared link, and the overview in the agent prompt, so say what it does and how it behaves
 - [ ] Pick a `size` and a place in live/order.ts where the grid still packs, and make it fit a phone page (below)
 - [ ] Grouping several components into one card? Add or update live/<folder>/family.ts
@@ -22,10 +23,48 @@ A thin checklist. The detail lives in the skills and docs it links.
 - [ ] Look at it in every state a visitor can reach (below)
 - [ ] Refresh the link-preview images (below): the card's own, and the site's
 - [ ] `bun run lint`, `bun run typecheck`, and `bun run test`
-- [ ] Check the card's page as shipped (below): `bun run build`, then `check:deploy`, `check:routes`, and `check:phone`
+- [ ] Check the card's page as shipped (below): `bun run build`, then `check:deploy`, `check:routes`, `check:flights`, `check:phone`, `check:idle`, and `check:gpu`
 ```
 
 Card `meta` and `family.ts`: [Using the playground](../../../docs/USING_THE_PLAYGROUND.md).
+
+## The slot it fills
+
+The deck does the rest: it discovers the folder, lays out the card from `meta` before the component loads, warms it, flies it between tile and page, fits it, pages to it, remounts it for `reset`, and publishes its code. A component brings only itself and must leave that machinery alone. `bun run test` holds it to the slot (`src/lint/cards.test.ts`) and the house rules (`standards.test.ts`, `performance.test.ts`), and names the file and line of anything that does not fit:
+
+```tsx
+// live/<folder>/<Name>/preview.tsx
+import { Name } from "./Name";
+import type { CardMeta } from "@/lib/types";
+
+export const meta: CardMeta = {
+  description: "What it does and how it behaves, for a stranger.",
+  size: "wide",
+  surface: {
+    light: { swatch: "paper", content: ["#171c25"] },
+    dark: { swatch: "orange", content: ["#171c25"] },
+  },
+};
+
+export default function NamePreview() {
+  return <Name />;
+}
+```
+
+Anything that moves on its own runs on the kit's loop, which sleeps while the card is off screen. The deck keeps every card mounted, so a loop of its own would run for every card at once:
+
+```ts
+import { visibleLoop } from "@/live/kit/visibleLoop";
+
+const loop = visibleLoop(canvas, (now, delta) => {
+  step(delta);
+  draw(now);
+  return stillMoving;
+});
+// loop.wake() after input or a resize; loop.stop() on unmount
+```
+
+A frame returns `true` for another frame, milliseconds to wait (an idle tick, in place of `setInterval`), or nothing to sleep until `wake()`. Call `wake()` as the component mounts to draw its first frame at once; the loop also wakes itself when the browser first reports the card on screen. A card that should not draw until it is seen, such as a WebGL scene, passes `initiallyVisible: false`, and that first sighting calls `onVisibleChange(true)`. Otherwise `onVisibleChange` is only for what leaving and returning change, such as a timer. `sleep()` holds until the next `wake()`, even through the card coming back on screen. The lint parses the callback handed to `visibleLoop` (inline, named, bound, or typed) and follows the functions and `this.` methods of the same file it calls, two calls deep. It does not follow calls on other objects or into other files, so keep per-frame code in the component's own file, and read sizes in a `ResizeObserver` and keep them. Shared parts like this live in `live/kit/`, which the one-file download inlines; `kit` holds no cards.
 
 ## Straight into Live, or an idea first
 
@@ -119,7 +158,10 @@ bun run --cwd apps/web og         # the site's og.png and og.mp4
 bun run build
 bun run --cwd apps/web check:deploy   # a page for every route, each the app with its own tags
 bun run --cwd apps/web check:routes   # tile links, Back and Forward, paging, every card's path
+bun run --cwd apps/web check:flights  # every card flies to its page and back without a jump
 bun run --cwd apps/web check:phone    # no preview shrinks on a phone page
+bun run --cwd apps/web check:idle     # no card keeps working while it is off screen
+bun run --cwd apps/web check:gpu      # every card mounts with and without WebGPU
 ```
 
 `bun run dev` serves the same tags on the path it is asked for, so `view-source:` on `http://localhost:3000/<slug>` shows the title and link preview the build will write.

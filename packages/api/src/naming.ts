@@ -1,9 +1,12 @@
 export const SHELLS_FOLDER = "shells";
 export const EXPERIMENTAL_FOLDER = "experimental";
+/** Shared parts Live components build on (`live/kit/`), never a card. */
+export const KIT_FOLDER = "kit";
 
 export const RESERVED_LIVE_FOLDERS = new Set([
   SHELLS_FOLDER,
   EXPERIMENTAL_FOLDER,
+  KIT_FOLDER,
 ]);
 
 const COMPONENT_NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;

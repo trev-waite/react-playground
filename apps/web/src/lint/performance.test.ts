@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  ALLOW,
   allowedNear,
   cssRules,
   declarations,
@@ -12,6 +11,7 @@ import {
   stripCssComments,
   transitionedProperties,
 } from "./source";
+import { frameFindings, selfSchedulingTimeouts } from "./syntax";
 
 /**
  * Performance lint. Each rule guards a fix that took a transition from
@@ -39,28 +39,9 @@ function lastCompound(selector: string): string {
   return selector.slice(start);
 }
 
-/** Bodies of the functions handed to requestAnimationFrame, by name or inline. */
-function frameCallbacks(text: string): { body: string; index: number }[] {
-  const callbacks: { body: string; index: number }[] = [];
-  const names = new Set(
-    [...text.matchAll(/requestAnimationFrame\(\s*([A-Za-z_$][\w$]*)\s*\)/g)].map(call => call[1]!),
-  );
-  for (const name of names) {
-    const declaration = new RegExp(
-      `(?:const|let)\\s+${name}\\s*=\\s*(?:\\([^)]*\\)|\\w+)\\s*=>\\s*\\{|function\\s+${name}\\s*\\(`,
-    ).exec(text);
-    if (!declaration) continue;
-    const open = text.indexOf("{", declaration.index + declaration[0].length - 1);
-    let depth = 0;
-    for (let i = open; i < text.length; i++) {
-      if (text[i] === "{") depth++;
-      else if (text[i] === "}" && --depth === 0) {
-        callbacks.push({ body: text.slice(open, i + 1), index: declaration.index });
-        break;
-      }
-    }
-  }
-  return callbacks;
+/** `// …` and `/* … *\/` comments blanked to spaces, so offsets still line up. */
+function blankComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, comment => comment.replace(/[^\n]/g, " "));
 }
 
 describe("performance lint: CSS", () => {
@@ -85,7 +66,7 @@ describe("performance lint: CSS", () => {
 
   test("backdrop blurs never animate", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.css")) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.css")) {
       for (const rule of cssRules(text)) {
         if (transitionedProperties(rule).some(p => p.endsWith("backdrop-filter"))) {
           violations.push(`${file}:${rule.line} transitions backdrop-filter; keep the blur fixed and fade opacity.`);
@@ -148,16 +129,27 @@ describe("performance lint: code", () => {
 
   test("frame loops never set React state", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.{ts,tsx}")) {
-      for (const { body, index } of frameCallbacks(text)) {
-        if (body.includes(ALLOW) || allowedNear(text, index)) continue;
-        const setter = /(?<![.\w])set[A-Z]\w*\(/.exec(body);
-        if (setter) {
-          violations.push(
-            `${file}:${lineOf(text, index)} calls ${setter[0]}) every frame, re-rendering React 60 times a second. ` +
-              "Write to a motion value or the DOM instead.",
-          );
-        }
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
+      for (const { index, code, fnStart } of frameFindings(file, text).setters) {
+        if (allowedNear(text, fnStart) || allowedNear(text, index)) continue;
+        violations.push(
+          `${file}:${lineOf(text, index)} calls ${code.split("(")[0]}() every frame, re-rendering React 60 times a second. ` +
+            "Write to a motion value, a ref, or the DOM instead.",
+        );
+      }
+    }
+    report(violations);
+  });
+
+  test("frame loops read no layout and set no font, which would restyle the page after the deck moves a card", async () => {
+    const violations: string[] = [];
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
+      for (const { index, code } of frameFindings(file, text).reads) {
+        if (allowedNear(text, index)) continue;
+        violations.push(
+          `${file}:${lineOf(text, index)} runs \`${code.split("\n")[0]}\` every frame. Read sizes in a ResizeObserver callback and keep them, ` +
+            "and set the font when the canvas resizes; or add `perf-allow: <reason>`.",
+        );
       }
     }
     report(violations);
@@ -170,7 +162,7 @@ describe("performance lint: code", () => {
       /useMotionValueEvent\([^)]*,\s*["']change["']\s*,\s*(?:\([^)]*\)|\w+)\s*=>\s*\{?\s*set[A-Z]/g,
       /\.on\(\s*["']change["']\s*,\s*(?:\([^)]*\)|\w+)\s*=>\s*\{?\s*set[A-Z]/g,
     ];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.{ts,tsx}")) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.{ts,tsx}")) {
       for (const pattern of mirrors) {
         for (const match of text.matchAll(pattern)) {
           if (allowedNear(text, match.index!)) continue;
@@ -183,7 +175,7 @@ describe("performance lint: code", () => {
 
   test("blur radii are never set from script", async () => {
     const violations: string[] = [];
-    for (const { file, text } of await sources(CHROME_DIRS, "**/*.tsx")) {
+    for (const { file, text } of await sources([...CHROME_DIRS, "live"], "**/*.tsx")) {
       for (const match of text.matchAll(/\b(Webkit)?[bB]ackdropFilter\s*:/g)) {
         violations.push(`${file}:${lineOf(text, match.index!)} sets backdrop-filter inline; keep blurs fixed in CSS.`);
       }
@@ -193,15 +185,23 @@ describe("performance lint: code", () => {
 });
 
 describe("performance lint: Live components", () => {
-  test("frame loops pause while off screen, since the deck keeps every card mounted", async () => {
+  test("frame loops run on visibleLoop, which sleeps while the card is off screen, since the deck keeps every card mounted", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx}")) {
-      const loop = /requestAnimationFrame\(|\bframeLoop\(/.exec(text);
-      if (!loop || allowedNear(text, loop.index)) continue;
-      if (!/IntersectionObserver|pausableLoop/.test(text)) {
+      if (file.startsWith("live/kit/")) continue;
+      for (const match of blankComments(text).matchAll(/\b(requestAnimationFrame|setInterval)\b/g)) {
+        if (allowedNear(text, match.index)) continue;
         violations.push(
-          `${file}:${lineOf(text, loop.index)} animates without pausing off screen. ` +
-            "Gate the loop on an IntersectionObserver.",
+          `${file}:${lineOf(text, match.index)} reaches for ${match[1]} itself. Run frames on visibleLoop from ` +
+            "@/live/kit/visibleLoop (a frame can return milliseconds to wait), or say why a short, input-driven " +
+            "animation needs its own with `perf-allow: <reason>`.",
+        );
+      }
+      for (const index of selfSchedulingTimeouts(file, text)) {
+        if (allowedNear(text, index)) continue;
+        violations.push(
+          `${file}:${lineOf(text, index)} loops on setTimeout, scheduling the function it runs in. Run it on visibleLoop, ` +
+            "whose frame can return the milliseconds to wait, or say why with `perf-allow: <reason>`.",
         );
       }
     }
@@ -211,8 +211,8 @@ describe("performance lint: Live components", () => {
   test("GPU components loop through pausableLoop, which pauses off screen and primes pipelines", async () => {
     const violations: string[] = [];
     for (const { file, text } of await sources(["live"], "**/*.{ts,tsx}")) {
-      for (const match of text.matchAll(/\bframeLoop\(/g)) {
-        violations.push(`${file}:${lineOf(text, match.index!)} calls vgpu frameLoop directly; use pausableLoop from @/gpu.`);
+      for (const match of text.matchAll(/\bimport\s*(?:type\s*)?\{[^}]*\bframeLoop\b[^}]*\}\s*from\s*["']vgpu["']|\bimport\s*\*\s*as\s+\w+\s+from\s*["']vgpu["']/g)) {
+        violations.push(`${file}:${lineOf(text, match.index!)} imports vgpu's frameLoop, under any name; loop through pausableLoop from @/gpu.`);
       }
     }
     report(violations);

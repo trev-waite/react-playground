@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useGpu } from "@/gpu";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 import { createGooRenderer, type GooRenderer } from "./gpuGoo";
 import {
   BASELINE,
@@ -91,10 +92,7 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
   const cycles = lines.words.map(word => phases(word.letters.length).total);
   let wordIndex = 0;
   let elapsed = 0;
-  let previous = 0;
-  let frame = 0;
-  let timer = 0;
-  let visible = true;
+  let nextStillAt = 0;
   let lastDropX: number | null = null;
   /** The drop's stretch rides a spring toward the stretch its speed asks for, so it wobbles like jelly when it starts and stops. */
   let stretch = 0;
@@ -181,63 +179,46 @@ function startFlow(svg: SVGSVGElement, lines: Lines, paint: (state: GooFrame) =>
     }
   }
 
-  function tick(now: number) {
-    frame = 0;
-    const dt = Math.min(48, now - previous);
-    previous = now;
+  function tick(now: number, delta: number): FrameRequest {
+    if (reducedMotion.matches) {
+      if (now < nextStillAt) return nextStillAt - now;
+      wordIndex = (wordIndex + 1) % lines.words.length;
+      still();
+      nextStillAt = now + STILL_MS;
+      return STILL_MS;
+    }
+    const dt = Math.min(48, delta);
     advance(dt);
     play(wordIndex, elapsed, dt);
-    if (visible) frame = requestAnimationFrame(tick);
+    return true;
   }
 
-  function resume() {
-    previous = performance.now();
-    frame = requestAnimationFrame(tick);
-  }
+  const loop = visibleLoop(svg, tick, { onVisibleChange: visible => visible && wake() });
 
   function still() {
-    window.clearTimeout(timer);
     show(wordIndex);
     lastDropX = null;
     draw(wordIndex, restingPose(lines.words[wordIndex]!, FONT_SIZE), 0);
-    timer = window.setTimeout(() => {
-      wordIndex = (wordIndex + 1) % lines.words.length;
-      still();
-    }, STILL_MS);
   }
 
   function wake() {
-    cancelAnimationFrame(frame);
-    frame = 0;
-    window.clearTimeout(timer);
-    if (!visible) return;
+    loop.sleep();
+    if (!loop.visible) return;
     if (reducedMotion.matches) {
       still();
-      return;
+      nextStillAt = performance.now() + STILL_MS;
+    } else {
+      show(wordIndex);
     }
-    show(wordIndex);
-    resume();
+    loop.wake();
   }
 
-  const observer = new IntersectionObserver(([entry]) => {
-    const was = visible;
-    visible = entry?.isIntersecting ?? true;
-    if (visible && !was) wake();
-    if (!visible) {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      window.clearTimeout(timer);
-    }
-  });
-  observer.observe(svg);
   reducedMotion.addEventListener("change", wake);
   play(0, 0, 0);
   wake();
 
   return () => {
-    cancelAnimationFrame(frame);
-    window.clearTimeout(timer);
-    observer.disconnect();
+    loop.stop();
     reducedMotion.removeEventListener("change", wake);
   };
 }
@@ -307,10 +288,12 @@ export function GooeyText({ words = DEFAULT_WORDS }: GooeyTextProps) {
     width: `${((lines.width + SPILL_X * 2) / lines.width) * 100}%`,
     height: `${((HEIGHT + SPILL_Y * 2) / HEIGHT) * 100}%`,
   };
+  // Narrower by the goo's spill, so the goo stays in the stage and the deck never sees it overflow.
+  const line: CSSProperties = { width: `min(${(lines.width / (lines.width + SPILL_X * 2)) * 100}%, 880px)` };
 
   return (
     <div className={styles.stage}>
-      <div className={styles.line}>
+      <div className={styles.line} style={line}>
         <canvas ref={canvasRef} className={styles.goo} style={spill} aria-hidden="true" />
         <svg
           ref={svgRef}

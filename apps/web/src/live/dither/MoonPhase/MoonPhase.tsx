@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"pixelSize":50,"earthshine":50,"stars":50};
 
@@ -129,16 +130,14 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
   let scrub = 0;
   let drag: { pointerId: number; startX: number; startScrub: number } | null = null;
   let holdUntil = 0;
-  let visible = true;
-  let frame = 0;
-  let timer = 0;
   let lastTime = performance.now();
 
   const slider = (key: keyof typeof SLIDERS) => (settings.current.sliders[key] ?? SLIDERS[key]) / 100;
 
+  let width = root.clientWidth;
+  let height = root.clientHeight;
+
   function layout() {
-    const width = root.clientWidth;
-    const height = root.clientHeight;
     const key = [width, height, slider("pixelSize"), slider("stars")].join("|");
     if (key === layoutKey || width < 2 || height < 2) return;
     layoutKey = key;
@@ -229,8 +228,7 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
     }
   }
 
-  function tick(time: number) {
-    frame = 0;
+  function tick(time: number): FrameRequest {
     const elapsed = Math.min(64, time - lastTime);
     lastTime = time;
     layout();
@@ -253,15 +251,12 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
       describe(age, new Date(now.getTime() + days * DAY_MS));
     }
 
-    if (!visible) return;
-    if (drag || returning || (reveal > 0 && reveal < 1)) frame = requestAnimationFrame(tick);
-    else timer = window.setTimeout(wake, IDLE_FRAME_MS);
+    if (drag || returning || (reveal > 0 && reveal < 1)) return true;
+    return IDLE_FRAME_MS;
   }
 
-  function wake() {
-    window.clearTimeout(timer);
-    if (!frame && visible) frame = requestAnimationFrame(tick);
-  }
+  const loop = visibleLoop(root, tick);
+  const wake = loop.wake;
 
   function onPointerDown(event: PointerEvent) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -294,14 +289,12 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
     wake();
   }
 
-  const resizeObserver = new ResizeObserver(wake);
-  const intersectionObserver = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    if (visible) wake();
-    else window.clearTimeout(timer);
+  const resizeObserver = new ResizeObserver(() => {
+    width = root.clientWidth;
+    height = root.clientHeight;
+    wake();
   });
   resizeObserver.observe(root);
-  intersectionObserver.observe(root);
   root.addEventListener("pointerdown", onPointerDown);
   root.addEventListener("pointermove", onPointerMove);
   root.addEventListener("pointerup", onPointerEnd);
@@ -310,10 +303,8 @@ function startMoon({ root, canvas, name, detail }: Elements, settings: RefObject
   wake();
 
   return () => {
-    cancelAnimationFrame(frame);
-    window.clearTimeout(timer);
+    loop.stop();
     resizeObserver.disconnect();
-    intersectionObserver.disconnect();
     root.removeEventListener("pointerdown", onPointerDown);
     root.removeEventListener("pointermove", onPointerMove);
     root.removeEventListener("pointerup", onPointerEnd);

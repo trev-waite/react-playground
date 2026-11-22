@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { visibleLoop } from "@/live/kit/visibleLoop";
 
 const SLIDERS = {"windSpeed":8,"turbulence":10,"smokeLines":92};
 
@@ -168,10 +169,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
   let travelled = 0;
   let clock = 0;
   let pointer = { x: 0, y: 0, strength: 0, inside: false };
-  let visible = true;
-  let frame = 0;
   let settle = 0;
-  let lastTime = 0;
   let screenScale = 1;
   let viewMin = 800;
   let screenCheckedAt = -Infinity;
@@ -319,6 +317,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
   function draw(time: number) {
     if (time - inkCheckedAt > INK_CHECK_MS) {
       inkCheckedAt = time;
+      // perf-allow: reads the ink at most once every INK_CHECK_MS.
       ink = getComputedStyle(root).color || ink;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -361,22 +360,19 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
     ctx.fillText(WORD, word.left, word.baseline);
   }
 
-  function tick(time: number) {
-    frame = 0;
-    const seconds = Math.min(0.034, Math.max(0, (time - lastTime) / 1000));
-    lastTime = time;
+  function tick(time: number, delta: number) {
+    const seconds = Math.min(0.034, delta / 1000);
+    // perf-allow: rebuilds only when the smoke-lines slider has moved.
     if (builtFor.split("|")[2] !== String(slider("smokeLines"))) build();
+    // perf-allow: measures at most once every SCREEN_CHECK_MS.
     measureScreen(time);
     if (!reducedMotion.matches) step(seconds);
     draw(time);
-    if (visible && !reducedMotion.matches) frame = requestAnimationFrame(tick);
+    return !reducedMotion.matches;
   }
 
-  function wake() {
-    if (frame || !visible) return;
-    lastTime = performance.now();
-    frame = requestAnimationFrame(tick);
-  }
+  const loop = visibleLoop(root, tick);
+  const wake = loop.wake;
 
   function onPointerMove(event: PointerEvent) {
     const rect = root.getBoundingClientRect();
@@ -401,12 +397,7 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
       wake();
     }, builtFor ? RESIZE_SETTLE_MS : 0);
   });
-  const intersectionObserver = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? true;
-    wake();
-  });
   resizeObserver.observe(root);
-  intersectionObserver.observe(root);
   root.addEventListener("pointermove", onPointerMove);
   root.addEventListener("pointerdown", onPointerMove);
   root.addEventListener("pointerleave", onPointerLeave);
@@ -415,10 +406,9 @@ function startTunnel(root: HTMLElement, canvas: HTMLCanvasElement, settings: Ref
   reducedMotion.addEventListener("change", wake);
 
   return () => {
-    cancelAnimationFrame(frame);
+    loop.stop();
     window.clearTimeout(settle);
     resizeObserver.disconnect();
-    intersectionObserver.disconnect();
     root.removeEventListener("pointermove", onPointerMove);
     root.removeEventListener("pointerdown", onPointerMove);
     root.removeEventListener("pointerleave", onPointerLeave);

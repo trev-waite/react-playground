@@ -35,7 +35,7 @@ apps/web/src/experimental/ideas/<IdeaName>/
 
 - `<IdeaName>` is a PascalCase component name (`QuietButton`). If that folder exists, use `QuietButton2`.
 - Write portable React in `source.tsx` with exactly one `export function Example({ sliders = SLIDERS, progress = 1 } = {})` and a `const SLIDERS = { ... }` block the dock can bake. The optional `progress` prop drives form, unform, and replay actions.
-- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`, and any idea may import Live code by `@/live/`. See [WebGPU with vgpu](../../../docs/WEBGPU.md).
+- Do not import from `apps/web/src/app/` or `apps/web/src/lib/`. GPU ideas may import `@/gpu`, and any idea may import Live code by `@/live/`. Animate on the loop Live requires once the idea is made Live: a canvas, SVG, or DOM loop runs on `visibleLoop` from `@/live/kit/visibleLoop`; a WebGPU idea runs on `pausableLoop` from `@/gpu` (the `gpu-idea` skill). See [WebGPU with vgpu](../../../docs/WEBGPU.md).
 - Skip `project.json` unless you are copying a complete existing file. Do not invent `id`, `revision`, or `sourceDigest`.
 - After writing files, the next Experimental list or Open adopts the folder and writes `project.json`. Vite’s glob picks up new `source.tsx` folders; do not add a registry file.
 - The minted dock is generic: sliders `slider1` to `slider3` and three actions that do nothing. Once `project.json` exists, fill in `draft.sliders` (ids that match your `SLIDERS` keys, labels, ranges, values) and `draft.actions` (labels and `mock`) there, or set them in the studio. Until the ids match, the dock moves nothing, and a Save from the studio bakes the generic ids over your `SLIDERS`.
