@@ -323,18 +323,34 @@ try {
   const poem = focusPull.locator("[data-line]");
   const [from, to] = await Promise.all([poem.nth(1).boundingBox(), poem.nth(6).boundingBox()]);
   if (!from || !to) throw new Error("Focus Pull should show its poem's lines.");
+  const slider = focusPull.getByRole("slider", { name: "Line in focus" });
+  const focusStage = await slider.boundingBox();
+  if (!focusStage) throw new Error("Focus Pull should show its stage.");
+  await page.evaluate(() => {
+    const held = window as unknown as { heldMoves: boolean[] };
+    held.heldMoves = [];
+    document.addEventListener("touchmove", event => held.heldMoves.push(event.defaultPrevented));
+  });
+  const dragDown = async (x: number) => {
+    await page.evaluate(() => { (window as unknown as { heldMoves: boolean[] }).heldMoves.length = 0; });
+    await send("touchStart", { x, y: from.y + from.height / 2 });
+    for (let step = 1; step <= 10; step++) {
+      await send("touchMove", { x, y: from.y + from.height / 2 + ((to.y - from.y) * step) / 10 });
+    }
+    await send("touchEnd");
+    await page.waitForTimeout(400);
+    return page.evaluate(() => (window as unknown as { heldMoves: boolean[] }).heldMoves);
+  };
   const placeBefore = await page.evaluate(() => ({ path: location.pathname, top: document.scrollingElement!.scrollTop }));
-  const x = from.x + from.width / 2;
-  await send("touchStart", { x, y: from.y + from.height / 2 });
-  for (let step = 1; step <= 10; step++) {
-    await send("touchMove", { x, y: from.y + from.height / 2 + ((to.y - from.y) * step) / 10 });
-  }
-  await send("touchEnd");
-  await page.waitForTimeout(400);
+  const onPoem = await dragDown(from.x + from.width / 2);
   const placeAfter = await page.evaluate(() => ({ path: location.pathname, top: document.scrollingElement!.scrollTop }));
-  const inFocus = await focusPull.getByRole("slider", { name: "Line in focus" }).getAttribute("aria-valuenow");
-  if (inFocus !== "7" || placeAfter.path !== placeBefore.path || placeAfter.top !== placeBefore.top) {
+  const inFocus = await slider.getAttribute("aria-valuenow");
+  if (inFocus !== "7" || !onPoem.every(Boolean) || placeAfter.path !== placeBefore.path || placeAfter.top !== placeBefore.top) {
     failures.push(`A finger dragged down Focus Pull's poem should leave line 7 in focus without paging; line ${inFocus} was in focus.`);
+  }
+  const beside = await dragDown(focusStage.x + 6);
+  if (beside.length === 0 || beside.some(Boolean)) {
+    failures.push("A finger swiping beside Focus Pull's poem should be free to page the deck.");
   }
   await page.addInitScript(() => { Math.random = () => 0; });
   for (const [width, height] of [[320, 320], [360, 360], [667, 375], [375, 375], [390, 390]] as const) {

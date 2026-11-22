@@ -255,6 +255,9 @@ function runFallbackRack(page: HTMLElement, rack: Rack): () => void {
   measure();
   rack.aim(place => {
     const bounds = page.parentElement!.getBoundingClientRect();
+    const poem = page.getBoundingClientRect();
+    const x = bounds.left + place.x * bounds.width;
+    if (x < poem.left || x > poem.right) return null;
     const y = bounds.top + place.y * bounds.height;
     let best: number | null = null;
     let gap = Infinity;
