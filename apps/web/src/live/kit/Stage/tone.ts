@@ -8,20 +8,23 @@ export function isDarkTone(element: Element): boolean {
 
 export type PointerPlace = { x: number; y: number };
 
+/** Where a point on the screen falls over `element`, as shares of its size. */
+export function placeIn(element: Element, clientX: number, clientY: number): PointerPlace {
+  const bounds = element.getBoundingClientRect();
+  return {
+    x: Math.min(1, Math.max(0, (clientX - bounds.left) / Math.max(1, bounds.width))),
+    y: Math.min(1, Math.max(0, (clientY - bounds.top) / Math.max(1, bounds.height))),
+  };
+}
+
 /**
  * Follows a pointer over `element` as shares of its size: a mouse while it
  * hovers, a finger or pen while it presses. Lifting the finger, or a press the
- * browser takes back to scroll, lets go (`null`).
+ * browser takes back to scroll, lets go (`null`); only a lift is `lifted`.
  */
-export function followPointer(element: HTMLElement, onMove: (place: PointerPlace | null) => void): () => void {
+export function followPointer(element: HTMLElement, onMove: (place: PointerPlace | null, lifted?: boolean) => void): () => void {
   let pressed: number | null = null;
-  const place = (event: PointerEvent): PointerPlace => {
-    const bounds = element.getBoundingClientRect();
-    return {
-      x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / Math.max(1, bounds.width))),
-      y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / Math.max(1, bounds.height))),
-    };
-  };
+  const place = (event: PointerEvent): PointerPlace => placeIn(element, event.clientX, event.clientY);
   const onDown = (event: PointerEvent) => {
     if (event.pointerType === "mouse") return;
     pressed = event.pointerId;
@@ -33,7 +36,7 @@ export function followPointer(element: HTMLElement, onMove: (place: PointerPlace
   const onEnd = (event: PointerEvent) => {
     if (event.pointerId !== pressed) return;
     pressed = null;
-    onMove(null);
+    onMove(null, event.type === "pointerup");
   };
   const onLeave = (event: PointerEvent) => {
     if (event.pointerType === "mouse") onMove(null);
