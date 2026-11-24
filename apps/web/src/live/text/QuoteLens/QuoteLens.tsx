@@ -205,30 +205,37 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     rest();
   };
 
-  const heldTouch = (event: TouchEvent) => {
+  const heldTouch = (touches: TouchList) => {
     if (!hold?.touch) return undefined;
-    for (let index = 0; index < event.changedTouches.length; index++) {
-      const touch = event.changedTouches[index];
+    for (let index = 0; index < touches.length; index++) {
+      const touch = touches[index];
       if (touch?.identifier === hold.id) return touch;
     }
     return undefined;
   };
 
+  /** A finger hold whose end never arrived would keep the deck from paging, so a hold without its finger on the screen lets go. */
+  const dropLostTouch = (event: TouchEvent) => {
+    if (hold?.touch && !heldTouch(event.touches)) release(event, true);
+  };
+
   /** One finger on the glass, its rim, or its handle holds it in every direction; a swipe that starts anywhere else still pages the deck. */
   const onTouchStart = (event: TouchEvent) => {
+    dropLostTouch(event);
     const touch = event.changedTouches[0];
     if (event.touches.length === 1 && touch) press(touch.clientX, touch.clientY, touch.identifier, true);
   };
 
   const onTouchMove = (event: TouchEvent) => {
+    dropLostTouch(event);
     if (!hold) return;
     if (event.cancelable) event.preventDefault();
-    const touch = heldTouch(event);
+    const touch = heldTouch(event.changedTouches);
     if (touch) drag(touch.clientX, touch.clientY);
   };
 
   const onTouchEnd = (event: TouchEvent) => {
-    if (heldTouch(event)) release(event, event.type === "touchcancel");
+    if (heldTouch(event.changedTouches)) release(event, event.type === "touchcancel");
   };
 
   const onScroll = () => {
