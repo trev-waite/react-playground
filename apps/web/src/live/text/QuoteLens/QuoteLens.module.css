@@ -53,23 +53,21 @@
   color: inherit;
   background: none;
   font: inherit;
-  cursor: pointer;
-  touch-action: pan-y;
+  pointer-events: none;
 }
 
-/* With a mouse the glass is the pointer: it floats under it, so the arrow would sit in the middle of the lens. */
-@media (hover: hover) and (pointer: fine) {
-  .lens {
-    pointer-events: none;
-  }
+/* The page finds the glass under a press itself, rim and handle included, so it also shows what a press there would do. */
+.page[data-cursor="grab"],
+.page[data-cursor="grab"] * {
+  cursor: grab;
+}
 
-  .stage:has(.lens[data-shown]) .page {
-    cursor: none;
-  }
-
-  .page a {
-    cursor: pointer;
-  }
+.page[data-cursor="grabbing"],
+.page[data-cursor="grabbing"] * {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .lens:not([data-shown]) {
@@ -79,6 +77,7 @@
 .body {
   position: absolute;
   inset: 0;
+  transform-origin: var(--held-x, 50%) var(--held-y, 50%);
   transition: transform var(--stage-turn) var(--stage-spring-ease);
 }
 

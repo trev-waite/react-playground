@@ -3,7 +3,7 @@ import { visibleLoop, type FrameRequest } from "@/live/kit/visibleLoop";
 import { cascadeDelays, play, prefersReducedMotion } from "@/live/kit/Stage/choreography";
 import { Stage, Words } from "@/live/kit/Stage/Stage";
 import stageStyles from "@/live/kit/Stage/Stage.module.css";
-import { approach, clampCenter, cloneTransform, driftAt, follow, type Point, type Size } from "./lens";
+import { approach, clampCenter, cloneTransform, driftAt, follow, grabOffset, heldAt, lensPart, MIN_GRIP, type Point, type Size } from "./lens";
 import styles from "./QuoteLens.module.css";
 
 export type Quote = { text: string; author: string; source: string; href?: string };
@@ -19,9 +19,11 @@ const QUOTE: Quote = {
 /** The glass's two strengths; pressing it switches between them. */
 const MAGNIFY = 1.6;
 const MAGNIFY_CLOSE = 2.4;
-/** Movement that makes a press a drag rather than a press of the glass. */
+/** Movement that makes a press on the glass a drag rather than a press of it. */
 const DRAG_SLOP = 6;
-/** How quickly the glass catches the hand, how gently it drifts back into its idle path, and how fast it zooms, per second. */
+/** A click this soon after a drag ends belongs to the drag. */
+const CLICK_GRACE_MS = 400;
+/** How quickly the glass catches up with a tap or a key, how gently it drifts back into its idle path, and how fast it zooms, per second. */
 const FOLLOW_RATE = 16;
 const DRIFT_RATE = 2.5;
 const ZOOM_RATE = 12;
@@ -38,6 +40,11 @@ type LensParts = {
   clone: HTMLSpanElement;
 };
 
+/** Where the page is on screen, and how much the deck has scaled it. */
+type Frame = { left: number; top: number; ratio: number };
+
+type Hold = { id: number; touch: boolean; offset: Point; from: Point; moved: boolean; frame: Frame | null };
+
 function startLens({ page, lens, clone }: LensParts): Lens {
   const reduced = prefersReducedMotion();
   let size: Size = { width: page.clientWidth, height: page.clientHeight };
@@ -49,12 +56,9 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   let shown = false;
   let last = 0;
   let driftFrom = 0;
-  let touchedAt = 0;
-  let grab: { id: number; offset: Point; from: Point; claimed: boolean } | null = null;
-  let tap: { id: number; from: Point } | null = null;
+  let hold: Hold | null = null;
+  let clickAfterDragUntil = -Infinity;
   let mouseInside = false;
-  const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
-  let dragged = false;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
 
   const zoomed = () => lens.getAttribute("aria-pressed") === "true";
@@ -69,7 +73,7 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     const seconds = last ? Math.min(0.05, (now - last) / 1000) : 0;
     last = now;
     if (drifting) target = driftAt((now - driftFrom) / 1000, size);
-    current = reduced ? target : follow(current, target, seconds, drifting ? DRIFT_RATE : FOLLOW_RATE);
+    current = reduced || hold ? target : follow(current, target, seconds, drifting ? DRIFT_RATE : FOLLOW_RATE);
     const strength = zoomed() ? MAGNIFY_CLOSE : MAGNIFY;
     scale = reduced ? strength : approach(scale, strength, seconds, ZOOM_RATE);
     draw();
@@ -92,9 +96,9 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   const rest = () => {
     clearTimeout(idleTimer);
     if (reduced) return;
-    // perf-allow: re-arms only while someone holds, hovers over, or focuses the lens.
+    // perf-allow: re-arms only while someone holds the glass, has a mouse over the card, or focuses the lens.
     idleTimer = setTimeout(() => {
-      if (grab || mouseInside || lens.matches(":focus-visible")) return rest();
+      if (hold || mouseInside || lens.matches(":focus-visible")) return rest();
       drifting = true;
       driftFrom = performance.now() - 2000;
       wake();
@@ -108,100 +112,160 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     wake();
   };
 
-  const local = (event: PointerEvent): Point => {
+  /** Holds the glass where it is now, as a hand reaches for it. */
+  const still = () => {
+    if (drifting) aim(current);
+  };
+
+  const toggle = () => {
+    lens.setAttribute("aria-pressed", String(!zoomed()));
+    wake();
+  };
+
+  const measure = (): Frame => {
     const bounds = page.getBoundingClientRect();
-    const ratio = bounds.width / Math.max(1, page.offsetWidth);
-    return { x: (event.clientX - bounds.left) / ratio, y: (event.clientY - bounds.top) / ratio };
+    return { left: bounds.left, top: bounds.top, ratio: bounds.width / Math.max(1, page.offsetWidth) };
   };
 
-  const onHover = (event: PointerEvent) => {
-    if (event.pointerType !== "mouse" || grab || !shown) return;
-    aim(local(event));
+  const onPage = (x: number, y: number, frame: Frame): Point => ({ x: (x - frame.left) / frame.ratio, y: (y - frame.top) / frame.ratio });
+
+  const partAt = (point: Point, frame: Frame) => lensPart(point, current, radius, MIN_GRIP / frame.ratio);
+
+  const setCursor = (cursor: "grab" | "grabbing" | null) => {
+    if (cursor) page.dataset.cursor = cursor;
+    else delete page.dataset.cursor;
   };
 
-  const onMouseEnter = (event: PointerEvent) => {
-    if (event.pointerType === "mouse") mouseInside = true;
+  /** A press on the glass, its rim, or its handle takes hold of it where it was pressed; anywhere else it is not the glass's. */
+  const press = (x: number, y: number, id: number, touch: boolean): boolean => {
+    if (hold || !shown) return false;
+    const frame = measure();
+    const hand = onPage(x, y, frame);
+    if (!partAt(hand, frame)) return false;
+    drifting = false;
+    target = current;
+    hold = { id, touch, offset: grabOffset(current, hand), from: { x, y }, moved: false, frame };
+    lens.style.setProperty("--held-x", `${hand.x - current.x + radius}px`);
+    lens.style.setProperty("--held-y", `${hand.y - current.y + radius}px`);
+    lens.dataset.lifted = "";
+    setCursor("grabbing");
+    clearTimeout(idleTimer);
+    wake();
+    return true;
   };
 
-  const onMouseLeave = (event: PointerEvent) => {
+  const drag = (x: number, y: number) => {
+    if (!hold) return;
+    hold.moved ||= Math.hypot(x - hold.from.x, y - hold.from.y) > DRAG_SLOP;
+    hold.frame ??= measure();
+    aim(heldAt(onPage(x, y, hold.frame), hold.offset, size));
+  };
+
+  const release = (event: Event, cancelled: boolean) => {
+    if (!hold) return;
+    if (hold.moved || cancelled) clickAfterDragUntil = event.timeStamp + CLICK_GRACE_MS;
+    hold = null;
+    delete lens.dataset.lifted;
+    setCursor(mouseInside ? "grab" : null);
+    rest();
+  };
+
+  /** A mouse or pen: a finger is followed by its touch events instead, which Safari on an iPhone delivers where it can drop a pointer press. */
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === "touch" || event.button !== 0) return;
+    if (!press(event.clientX, event.clientY, event.pointerId, false)) return;
+    event.preventDefault();
+    page.setPointerCapture(event.pointerId);
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (event.pointerType === "touch" || !shown) return;
+    if (hold) {
+      if (!hold.touch && event.pointerId === hold.id) drag(event.clientX, event.clientY);
+      return;
+    }
+    const frame = measure();
+    setCursor(partAt(onPage(event.clientX, event.clientY, frame), frame) ? "grab" : null);
+  };
+
+  const onPointerUp = (event: PointerEvent) => {
+    if (hold && !hold.touch && event.pointerId === hold.id) release(event, event.type !== "pointerup");
+  };
+
+  const onPointerEnter = (event: PointerEvent) => {
+    if (event.pointerType !== "mouse") return;
+    mouseInside = true;
+    still();
+  };
+
+  const onPointerLeave = (event: PointerEvent) => {
     if (event.pointerType !== "mouse") return;
     mouseInside = false;
+    if (!hold) setCursor(null);
     rest();
   };
 
-  /** A finger on the page places the glass where it lifts, unless it moved: then it was a swipe for the deck. */
-  const onPageDown = (event: PointerEvent) => {
-    if (event.pointerType === "mouse" || !shown || lens.contains(event.target as Node)) return;
-    if ((event.target as Element).closest("a")) return;
-    tap = { id: event.pointerId, from: local(event) };
-  };
-
-  const onPageUp = (event: PointerEvent) => {
-    if (!tap || event.pointerId !== tap.id) return;
-    const at = local(event);
-    const still = Math.hypot(at.x - tap.from.x, at.y - tap.from.y) <= DRAG_SLOP;
-    tap = null;
-    if (!still) return;
-    touchedAt = event.timeStamp;
-    aim(at);
-  };
-
-  const onPageCancel = () => {
-    tap = null;
-  };
-
-  /** A finger on the glass drags it only once it moves sideways; a vertical swipe is left to page the deck. */
-  const onDown = (event: PointerEvent) => {
-    if (event.pointerType === "mouse" || grab || !shown) return;
-    const at = local(event);
-    grab = { id: event.pointerId, offset: { x: current.x - at.x, y: current.y - at.y }, from: at, claimed: false };
-  };
-
-  const onMove = (event: PointerEvent) => {
-    if (!grab || event.pointerId !== grab.id) return;
-    const at = local(event);
-    if (!grab.claimed) {
-      const dx = at.x - grab.from.x;
-      const dy = at.y - grab.from.y;
-      if (Math.hypot(dx, dy) <= DRAG_SLOP) return;
-      if (Math.abs(dy) > Math.abs(dx)) {
-        grab = null;
-        return;
-      }
-      grab.claimed = true;
-      lens.setPointerCapture(event.pointerId);
-      lens.dataset.lifted = "";
+  const heldTouch = (touches: TouchList) => {
+    if (!hold?.touch) return undefined;
+    for (let index = 0; index < touches.length; index++) {
+      const touch = touches[index];
+      if (touch?.identifier === hold.id) return touch;
     }
-    aim({ x: at.x + grab.offset.x, y: at.y + grab.offset.y });
+    return undefined;
   };
 
-  const onUp = (event: PointerEvent) => {
-    if (!grab || event.pointerId !== grab.id) return;
-    dragged = grab.claimed;
-    grab = null;
-    delete lens.dataset.lifted;
-    rest();
+  /** A finger hold whose end never arrived would keep the deck from paging, so a hold without its finger on the screen lets go. */
+  const dropLostTouch = (event: TouchEvent) => {
+    if (hold?.touch && !heldTouch(event.touches)) release(event, true);
+  };
+
+  /** One finger on the glass, its rim, or its handle holds it in every direction; a swipe that starts anywhere else still pages the deck. */
+  const onTouchStart = (event: TouchEvent) => {
+    dropLostTouch(event);
+    const touch = event.changedTouches[0];
+    if (event.touches.length === 1 && touch) press(touch.clientX, touch.clientY, touch.identifier, true);
   };
 
   const onTouchMove = (event: TouchEvent) => {
-    if (grab?.claimed) event.preventDefault();
+    dropLostTouch(event);
+    if (!hold) return;
+    if (event.cancelable) event.preventDefault();
+    const touch = heldTouch(event.changedTouches);
+    if (touch) drag(touch.clientX, touch.clientY);
   };
 
-  /** A mouse never presses the glass itself, which floats under it: a click anywhere on the page but a link looks closer. */
-  const onPageClick = (event: MouseEvent) => {
-    if (!fine.matches || !shown || (event.target as Element).closest("a") || lens.contains(event.target as Node)) return;
-    lens.setAttribute("aria-pressed", String(!zoomed()));
-    wake();
+  const onTouchEnd = (event: TouchEvent) => {
+    if (heldTouch(event.changedTouches)) release(event, event.type === "touchcancel");
   };
 
+  const onScroll = () => {
+    if (hold) hold.frame = null;
+  };
+
+  /**
+   * A press of the glass that stayed put looks closer, as Enter and Space do; a press anywhere
+   * else on the page but a link brings the glass there. A click that ends a drag is the drag's.
+   */
   const onClick = (event: MouseEvent) => {
-    if (dragged || event.timeStamp - touchedAt < 50) {
-      dragged = false;
+    if (!shown) return;
+    if (event.timeStamp < clickAfterDragUntil) {
+      clickAfterDragUntil = -Infinity;
       event.preventDefault();
       return;
     }
-    lens.setAttribute("aria-pressed", String(!zoomed()));
-    wake();
+    if (event.detail === 0) {
+      if (event.target === lens) toggle();
+      return;
+    }
+    const frame = measure();
+    const at = onPage(event.clientX, event.clientY, frame);
+    if (partAt(at, frame)) {
+      event.preventDefault();
+      toggle();
+      return;
+    }
+    if ((event.target as Element).closest("a") || window.getSelection()?.isCollapsed === false) return;
+    aim(at);
   };
 
   const onKey = (event: KeyboardEvent) => {
@@ -226,6 +290,7 @@ function startLens({ page, lens, clone }: LensParts): Lens {
     clone.style.height = `${size.height}px`;
     target = drifting ? target : clampCenter(target, size);
     current = clampCenter(current, size);
+    if (hold) hold.frame = null;
     draw();
     wake();
   });
@@ -233,20 +298,24 @@ function startLens({ page, lens, clone }: LensParts): Lens {
   resize.observe(lens);
 
   const surface = page.parentElement!;
-  surface.addEventListener("pointermove", onHover);
-  surface.addEventListener("pointerenter", onMouseEnter);
-  surface.addEventListener("pointerleave", onMouseLeave);
-  page.addEventListener("pointerdown", onPageDown);
-  page.addEventListener("pointerup", onPageUp);
-  page.addEventListener("click", onPageClick);
-  page.addEventListener("pointercancel", onPageCancel);
-  lens.addEventListener("pointerdown", onDown);
-  lens.addEventListener("pointermove", onMove);
-  lens.addEventListener("pointerup", onUp);
-  lens.addEventListener("pointercancel", onUp);
-  lens.addEventListener("touchmove", onTouchMove, { passive: false });
-  lens.addEventListener("keydown", onKey);
-  lens.addEventListener("click", onClick);
+  const listeners: [EventTarget, string, (event: never) => void, AddEventListenerOptions?][] = [
+    [surface, "pointerdown", onPointerDown],
+    [surface, "pointermove", onPointerMove],
+    [surface, "pointerup", onPointerUp],
+    [surface, "pointercancel", onPointerUp],
+    [surface, "lostpointercapture", onPointerUp],
+    [surface, "pointerenter", onPointerEnter],
+    [surface, "pointerleave", onPointerLeave],
+    // A press must reach a non-passive listener for Safari on an iPhone to deliver it, and a held finger's moves are cancelled so the deck stays put.
+    [surface, "touchstart", onTouchStart, { passive: false }],
+    [surface, "touchmove", onTouchMove, { passive: false }],
+    [surface, "touchend", onTouchEnd],
+    [surface, "touchcancel", onTouchEnd],
+    [surface, "click", onClick],
+    [lens, "keydown", onKey],
+    [window, "scroll", onScroll, { capture: true, passive: true }],
+  ];
+  for (const [target, type, listener, options] of listeners) target.addEventListener(type, listener as EventListener, options);
   draw();
 
   return {
@@ -256,26 +325,14 @@ function startLens({ page, lens, clone }: LensParts): Lens {
       lens.dataset.shown = "";
       driftFrom = performance.now();
       play(lens.firstElementChild ? [lens.firstElementChild] : [], "arrive");
+      if (mouseInside) still();
       wake();
     },
     stop: () => {
       loop.stop();
       clearTimeout(idleTimer);
       resize.disconnect();
-      surface.removeEventListener("pointermove", onHover);
-      surface.removeEventListener("pointerenter", onMouseEnter);
-      surface.removeEventListener("pointerleave", onMouseLeave);
-      page.removeEventListener("pointerdown", onPageDown);
-      page.removeEventListener("pointerup", onPageUp);
-      page.removeEventListener("click", onPageClick);
-      page.removeEventListener("pointercancel", onPageCancel);
-      lens.removeEventListener("pointerdown", onDown);
-      lens.removeEventListener("pointermove", onMove);
-      lens.removeEventListener("pointerup", onUp);
-      lens.removeEventListener("pointercancel", onUp);
-      lens.removeEventListener("touchmove", onTouchMove);
-      lens.removeEventListener("keydown", onKey);
-      lens.removeEventListener("click", onClick);
+      for (const [target, type, listener, options] of listeners) target.removeEventListener(type, listener as EventListener, options);
     },
   };
 }
@@ -454,7 +511,7 @@ export function QuoteLens({ quote = QUOTE }: { quote?: Quote }) {
         type="button"
         className={styles.lens}
         aria-pressed="false"
-        aria-label="Magnifying glass. Press to look closer; move it with the arrow keys, or by pointing, tapping, or dragging."
+        aria-label="Magnifying glass. Press to look closer; move it with the arrow keys, by dragging its glass or handle, or by tapping the page."
       >
         <span className={styles.body}>
           <LensShadow />
