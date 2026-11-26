@@ -12,6 +12,6 @@
     "@react-playground/api": "workspace:*"
   },
   "devDependencies": {
-    "@types/bun": "1.4.0"
+    "@types/bun": "1.4.4"
   }
 }
